@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 14,
     alignItems: 'center', marginTop: 10, minHeight: 48, justifyContent: 'center',
   },
-  buttonText: { color: '#fff', fontWeight: '700' },
+  buttonText: { color: colors.onPrimary, fontWeight: '700' },
   smallBtn: {
     borderWidth: 1, borderColor: colors.border, borderRadius: 10, paddingVertical: 10,
     alignItems: 'center', marginTop: 8,

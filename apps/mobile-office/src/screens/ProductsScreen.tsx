@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
     borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, color: colors.text,
   },
   addBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center' },
-  addBtnText: { color: '#fff', fontWeight: '700' },
+  addBtnText: { color: colors.onPrimary, fontWeight: '700' },
   card: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card,
     borderRadius: 12, padding: 14, gap: 10, borderWidth: 1, borderColor: colors.border,
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   meta: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
   price: { color: colors.primary, fontSize: 15, fontWeight: '700' },
   empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18,
   },
@@ -188,5 +188,5 @@ const styles = StyleSheet.create({
   },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
   sheetBtn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  sheetBtnText: { color: '#fff', fontWeight: '700' },
+  sheetBtnText: { color: colors.onPrimary, fontWeight: '700' },
 })

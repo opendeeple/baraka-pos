@@ -86,7 +86,7 @@ export function CashMovementModal({ type, onClose, onDone }: Props) {
                   if (type === 'cash_in' && r === 'Customer debt payment' && !customer) setPickerOpen(true)
                 }}
               >
-                <Text style={[styles.reasonText, reason === r && { color: '#fff' }]}>{r}</Text>
+                <Text style={[styles.reasonText, reason === r && { color: colors.onPrimary }]}>{r}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -137,7 +137,7 @@ export function CashMovementModal({ type, onClose, onDone }: Props) {
 
 const styles = StyleSheet.create({
   overlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 20,
+    flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center', padding: 20,
   },
   sheet: { backgroundColor: colors.surface, borderRadius: 18, padding: 18, width: '100%', maxWidth: 400 },
   title: { color: colors.text, fontSize: 17, fontWeight: '700', marginBottom: 12 },
@@ -159,5 +159,5 @@ const styles = StyleSheet.create({
   },
   amount: { color: colors.text, fontSize: 26, fontWeight: '800', textAlign: 'center', marginVertical: 10 },
   btn: { flex: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center', minHeight: 48, justifyContent: 'center' },
-  btnText: { color: '#fff', fontWeight: '700' },
+  btnText: { color: colors.onPrimary, fontWeight: '700' },
 })

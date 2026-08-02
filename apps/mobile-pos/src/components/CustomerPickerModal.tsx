@@ -106,7 +106,7 @@ export function CustomerPickerModal({ visible, onClose, onSelect }: Props) {
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
     padding: 16, maxHeight: '80%',
@@ -129,6 +129,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center', minHeight: 46,
   },
   newBtn: { backgroundColor: colors.border, marginTop: 8 },
-  btnText: { color: '#fff', fontWeight: '700' },
+  btnText: { color: colors.onPrimary, fontWeight: '700' },
   createBox: { marginTop: 8 },
 })

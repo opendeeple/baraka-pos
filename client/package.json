@@ -21,7 +21,10 @@
     "test:smoke": "node scripts/electron-smoke.mjs"
   },
   "dependencies": {
+    "@baraka/db-schema": "workspace:*",
     "@baraka/shared": "workspace:*",
+    "@baraka/sync-engine": "workspace:*",
+    "@baraka/ui-tokens": "workspace:*",
     "@electron-toolkit/utils": "^4.0.0",
     "@tanstack/react-query": "^5.50.1",
     "better-sqlite3": "^11.0.0",
@@ -38,9 +41,7 @@
     "socket.io-client": "^4.7.5",
     "sonner": "^2.0.7",
     "uuid": "^10.0.0",
-    "zustand": "^4.5.4",
-    "@baraka/db-schema": "workspace:*",
-    "@baraka/sync-engine": "workspace:*"
+    "zustand": "^4.5.4"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.0.4",

@@ -177,7 +177,7 @@ export function RegisterScreen({ navigation }: Props) {
               style={[
                 styles.productStock,
                 item.stock <= 0 && { color: colors.danger },
-                item.stock > 0 && item.alertQuantity > 0 && item.stock <= item.alertQuantity && { color: '#f59e0b' },
+                item.stock > 0 && item.alertQuantity > 0 && item.stock <= item.alertQuantity && { color: colors.warning },
               ]}
             >
               {item.isStockManaged
@@ -297,7 +297,7 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
       style={[styles.chip, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
       onPress={onPress}
     >
-      <Text style={[styles.chipText, active && { color: '#fff' }]}>{label}</Text>
+      <Text style={[styles.chipText, active && { color: colors.onPrimary }]}>{label}</Text>
     </TouchableOpacity>
   )
 }
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 16,
     alignItems: 'center', justifyContent: 'center',
   },
-  scanBtnText: { color: '#fff', fontWeight: '700' },
+  scanBtnText: { color: colors.onPrimary, fontWeight: '700' },
   chips: { flexGrow: 0, marginBottom: 10 },
   chip: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.card,
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
   discountLabel: { color: colors.textMuted, fontSize: 13 },
   discountValue: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   discountOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 24,
+    flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center', padding: 24,
   },
   discountSheet: {
     backgroundColor: colors.surface, borderRadius: 18, padding: 18, width: '100%', maxWidth: 380,
@@ -369,15 +369,15 @@ const styles = StyleSheet.create({
   heldBtnText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
   holdBtn: { backgroundColor: colors.border },
   payBtn: { backgroundColor: colors.primary, flex: 2 },
-  actionBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  actionBtnText: { color: colors.onPrimary, fontSize: 15, fontWeight: '700' },
   cartBar: {
     position: 'absolute', left: 12, right: 12, bottom: 16, backgroundColor: colors.primary,
     borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
-  cartBarText: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  cartBarTotal: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  cartBarText: { color: colors.onPrimary, fontSize: 15, fontWeight: '700' },
+  cartBarTotal: { color: colors.onPrimary, fontSize: 16, fontWeight: '800' },
+  modalOverlay: { flex: 1, backgroundColor: colors.overlay },
   cartModal: {
     backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
     maxHeight: '75%', padding: 14,

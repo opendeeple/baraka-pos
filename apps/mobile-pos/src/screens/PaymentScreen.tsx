@@ -147,7 +147,7 @@ export function PaymentScreen({ navigation }: Props) {
               if (m === 'Debt' && !customer) setPickerOpen(true)
             }}
           >
-            <Text style={[styles.methodText, method === m && { color: '#fff' }]}>{m}</Text>
+            <Text style={[styles.methodText, method === m && { color: colors.onPrimary }]}>{m}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -271,5 +271,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.success, borderRadius: 14, paddingVertical: 16,
     alignItems: 'center', marginTop: 18, minHeight: 54, justifyContent: 'center',
   },
-  completeText: { color: '#fff', fontSize: 17, fontWeight: '800' },
+  completeText: { color: colors.onPrimary, fontSize: 17, fontWeight: '800' },
 })

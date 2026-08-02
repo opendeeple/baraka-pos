@@ -54,5 +54,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 15, paddingHorizontal: 48,
     marginTop: 24, minHeight: 50, justifyContent: 'center',
   },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  buttonText: { color: colors.onPrimary, fontSize: 16, fontWeight: '700' },
 })

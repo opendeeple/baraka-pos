@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 15,
     alignItems: 'center', marginTop: 16, minHeight: 50, justifyContent: 'center',
   },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  buttonText: { color: colors.onPrimary, fontSize: 16, fontWeight: '700' },
   cancel: { alignItems: 'center', marginTop: 12 },
   cancelText: { color: colors.textMuted },
 })

@@ -29,6 +29,9 @@ importers:
       '@baraka/sync-engine':
         specifier: workspace:*
         version: link:../../packages/sync-engine
+      '@baraka/ui-tokens':
+        specifier: workspace:*
+        version: link:../../packages/ui-tokens
       '@react-navigation/bottom-tabs':
         specifier: ^7.0.0
         version: 7.18.14(@react-navigation/native@7.3.14(react-native@0.86.2(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native-safe-area-context@5.7.0(react-native@0.86.2(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native-screens@4.26.2(react-native@0.86.2(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
@@ -102,6 +105,9 @@ importers:
       '@baraka/sync-engine':
         specifier: workspace:*
         version: link:../../packages/sync-engine
+      '@baraka/ui-tokens':
+        specifier: workspace:*
+        version: link:../../packages/ui-tokens
       '@react-navigation/native':
         specifier: ^7.3.14
         version: 7.3.14(react-native@0.86.2(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
@@ -172,6 +178,9 @@ importers:
       '@baraka/sync-engine':
         specifier: workspace:*
         version: link:../packages/sync-engine
+      '@baraka/ui-tokens':
+        specifier: workspace:*
+        version: link:../packages/ui-tokens
       '@electron-toolkit/utils':
         specifier: ^4.0.0
         version: 4.0.0(electron@31.7.7)
@@ -304,6 +313,8 @@ importers:
       '@baraka/shared':
         specifier: workspace:*
         version: link:../../shared
+
+  packages/ui-tokens: {}
 
   server:
     dependencies:

@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 },
   hint: { color: colors.text, textAlign: 'center' },
   grantBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 24 },
-  grantText: { color: '#fff', fontWeight: '700' },
+  grantText: { color: colors.onPrimary, fontWeight: '700' },
   frame: {
     position: 'absolute', top: '30%', left: '15%', right: '15%', height: 180,
     borderWidth: 2, borderColor: colors.primary, borderRadius: 16,
@@ -66,5 +66,5 @@ const styles = StyleSheet.create({
     position: 'absolute', bottom: 40, alignSelf: 'center', backgroundColor: colors.primary,
     borderRadius: 999, paddingVertical: 14, paddingHorizontal: 40,
   },
-  closeText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  closeText: { color: colors.onPrimary, fontSize: 16, fontWeight: '700' },
 })
