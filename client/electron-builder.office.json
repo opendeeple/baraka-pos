@@ -1,0 +1,68 @@
+{
+  "appId": "com.baraka.office",
+  "productName": "BarakaPOS Office",
+  "copyright": "Copyright © 2025 BarakaPOS",
+  "extraMetadata": {
+    "main": "./out-office/main/index.js"
+  },
+  "directories": {
+    "buildResources": "resources",
+    "output": "dist-office"
+  },
+  "files": [
+    "out-office/**/*",
+    "node_modules/**/*",
+    "!node_modules/.cache/**/*",
+    "!**/*.{iobj,ipdb,pdb}"
+  ],
+  "extraResources": [
+    {
+      "from": "resources/",
+      "to": "resources/",
+      "filter": ["**/*"]
+    }
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "resources/icon.ico",
+    "artifactName": "BarakaPOS-Office-${version}-Setup.${ext}",
+    "requestedExecutionLevel": "asInvoker"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": true,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "BarakaPOS Office",
+    "uninstallDisplayName": "BarakaPOS Office",
+    "installerIcon": "resources/icon.ico",
+    "uninstallerIcon": "resources/icon.ico",
+    "installerHeaderIcon": "resources/icon.ico"
+  },
+  "mac": {
+    "target": "dmg",
+    "icon": "resources/icon.icns",
+    "category": "public.app-category.business"
+  },
+  "linux": {
+    "target": "AppImage",
+    "icon": "resources/icon.png",
+    "category": "Office"
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "baraka",
+    "repo": "baraka-pos-releases"
+  },
+  "asar": true,
+  "asarUnpack": [
+    "node_modules/better-sqlite3/**/*",
+    "node_modules/keytar/**/*"
+  ]
+}

@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-dark text-white font-sans;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+  }
+
+  /* Eliminate 300ms tap delay on all interactive elements */
+  button, [role="button"], input, select, a {
+    touch-action: manipulation;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-dark-surface;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-dark-border rounded;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary;
+  }
+}
+
+@layer utilities {
+  .no-select {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Touch-safe active state — works on touch + mouse */
+  .touch-btn {
+    @apply active:scale-95 transition-transform;
+  }
+}

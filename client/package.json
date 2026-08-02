@@ -1,0 +1,136 @@
+{
+  "name": "client",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "dev:pos": "electron-vite dev",
+    "dev:office": "electron-vite dev --config electron.vite.office.config.ts",
+    "build": "electron-vite build",
+    "build:pos": "electron-vite build",
+    "build:office": "electron-vite build --config electron.vite.office.config.ts",
+    "preview": "electron-vite preview",
+    "package": "electron-builder",
+    "package:pos": "electron-builder",
+    "package:office": "electron-builder --config electron-builder.office.json",
+    "postinstall": "electron-rebuild -f -w better-sqlite3,keytar",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:sync": "ELECTRON_RUN_AS_NODE=1 electron --require tsx/cjs scripts/sync-e2e.ts",
+    "test:smoke": "node scripts/electron-smoke.mjs"
+  },
+  "dependencies": {
+    "@baraka/shared": "workspace:*",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@tanstack/react-query": "^5.50.1",
+    "better-sqlite3": "^11.0.0",
+    "electron-updater": "^6.8.9",
+    "escpos": "^3.0.0-alpha",
+    "escpos-network": "^3.0.0-alpha",
+    "escpos-usb": "^3.0.0-alpha",
+    "keytar": "^7.9.0",
+    "lucide-react": "^0.400.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.24.1",
+    "recharts": "^2.12.7",
+    "socket.io-client": "^4.7.5",
+    "sonner": "^2.0.7",
+    "uuid": "^10.0.0",
+    "zustand": "^4.5.4",
+    "@baraka/db-schema": "workspace:*",
+    "@baraka/sync-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "@playwright/test": "^1.61.0",
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.14.9",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "electron": "^31.1.0",
+    "electron-builder": "^24.13.3",
+    "electron-vite": "^2.3.0",
+    "playwright": "^1.61.0",
+    "postcss": "^8.4.39",
+    "serve": "^14.2.6",
+    "tailwindcss": "^3.4.6",
+    "typescript": "^5.4.5",
+    "vite": "^5.3.3"
+  },
+  "build": {
+    "appId": "com.baraka.pos",
+    "productName": "BarakaPOS",
+    "copyright": "Copyright \u00a9 2025 BarakaPOS",
+    "directories": {
+      "buildResources": "resources",
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "node_modules/**/*",
+      "!node_modules/.cache/**/*",
+      "!**/*.{iobj,ipdb,pdb}"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/",
+        "to": "resources/",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "resources/icon.ico",
+      "artifactName": "BarakaPOS-${version}-Setup.${ext}",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BarakaPOS",
+      "uninstallDisplayName": "BarakaPOS",
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "installerHeaderIcon": "resources/icon.ico",
+      "include": "resources/installer.nsh"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "resources/icon.icns",
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "resources/icon.png",
+      "category": "Office"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "baraka",
+      "repo": "baraka-pos-releases"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/escpos-usb/**/*",
+      "node_modules/keytar/**/*"
+    ]
+  }
+}

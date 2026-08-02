@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: barakapos-server
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: >-
+      corepack enable &&
+      corepack prepare pnpm@10.18.2 --activate &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @baraka/shared build &&
+      pnpm --filter server exec prisma generate &&
+      pnpm --filter server exec prisma migrate deploy &&
+      pnpm --filter server build
+    startCommand: pnpm --filter server start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.20.0
+      - key: NODE_ENV
+        value: production
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      # Real values for the four below are set once in the Render dashboard
+      # (Environment tab) after the first deploy — see DEPLOYMENT.md.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SYNC_API_KEY
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false

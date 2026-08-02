@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+
+# Env files — never commit real secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Reference repos (cloned third-party POS apps — not our code)
+repos/
+
+# Build output
+dist/
+out/
+out-office/
+*.tsbuildinfo
+
+# Android build outputs (android/ sources stay tracked)
+apps/*/android/app/build/
+apps/*/android/build/
+apps/*/android/.gradle/
+apps/*/android/local.properties
+apps/*/android/app/.cxx/
+apps/*/.expo/
+.expo/
+
+# Electron packaging
+client/dist/
+client/build/
+
+# Local SQLite (desktop offline DB)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Test artifacts
+client/test-results/
+client/playwright-report/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

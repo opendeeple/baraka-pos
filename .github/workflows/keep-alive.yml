@@ -1,0 +1,22 @@
+name: Keep server + database awake
+
+on:
+  schedule:
+    # Every 10 minutes, 06:00-22:00 UTC (adjust to your store's hours/timezone).
+    # Render free services sleep after 15 min idle, and Supabase pauses a
+    # project after 7 days with zero DB traffic — this ping prevents both.
+    - cron: '*/10 6-22 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping server health endpoint
+        run: |
+          url="${{ vars.RENDER_HEALTH_URL }}"
+          if [ -z "$url" ]; then
+            echo "Set the RENDER_HEALTH_URL repository variable (Settings > Secrets and variables > Actions > Variables) to e.g. https://barakapos-server.onrender.com/api/health"
+            exit 1
+          fi
+          curl -sf --max-time 30 "$url" || echo "Ping failed (server may be waking up — this is normal on the first ping after a long idle period)"

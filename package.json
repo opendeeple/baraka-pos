@@ -1,0 +1,23 @@
+{
+  "name": "baraka-pos",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter server dev\" \"pnpm --filter client dev\"",
+    "build": "pnpm --filter shared build && pnpm --filter server build && pnpm --filter client build",
+    "server:dev": "pnpm --filter server dev",
+    "client:dev": "pnpm --filter client dev",
+    "db:migrate": "pnpm --filter server db:migrate",
+    "db:seed": "pnpm --filter server db:seed",
+    "db:studio": "pnpm --filter server db:studio",
+    "mobile:pos": "pnpm --filter mobile-pos start",
+    "mobile:office": "pnpm --filter mobile-office start",
+    "mobile:pos:android": "pnpm --filter mobile-pos exec expo run:android",
+    "mobile:office:android": "pnpm --filter mobile-office exec expo run:android",
+    "mobile:build:pos": "pnpm --filter mobile-pos exec eas build -p android",
+    "mobile:build:office": "pnpm --filter mobile-office exec eas build -p android"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
