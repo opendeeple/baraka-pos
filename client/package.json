@@ -18,7 +18,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:sync": "ELECTRON_RUN_AS_NODE=1 electron --require tsx/cjs scripts/sync-e2e.ts",
-    "test:smoke": "node scripts/electron-smoke.mjs"
+    "test:smoke": "node scripts/electron-smoke.mjs",
+    "test:interactive": "node scripts/electron-interactive.mjs"
   },
   "dependencies": {
     "@baraka/db-schema": "workspace:*",
