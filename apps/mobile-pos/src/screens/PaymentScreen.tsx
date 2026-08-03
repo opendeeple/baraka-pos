@@ -1,16 +1,29 @@
-import { useMemo, useState } from 'react'
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useState } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
-import { fmtUZS } from '@baraka/app-core'
+import { fmtUZS, renderReceiptText, type ReceiptDoc } from '@baraka/app-core'
 import type { PaymentMethod } from '@baraka/shared'
+import type { ContactListItem } from '@baraka/data'
+import {
+  Button,
+  Card,
+  Chip,
+  Dialog,
+  IconButton,
+  NumPad,
+  Row,
+  Screen,
+  Sheet,
+  applyNumKey,
+  toast,
+  useTheme,
+} from '@baraka/mobile-ui'
+import { radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
-import { NumPad, applyNumKey } from '../components/NumPad'
 import { CustomerPickerModal } from '../components/CustomerPickerModal'
 import { printReceipt, type PrinterConfig } from '../printing'
-import { colors } from '../theme'
 import type { RootStackParamList } from '../navigation'
-import type { ContactListItem } from '@baraka/data'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Payment'>
 
@@ -28,6 +41,7 @@ function suggestedCash(due: number): number[] {
 }
 
 export function PaymentScreen({ navigation }: Props) {
+  const theme = useTheme()
   const { repos, engine, useCartStore } = getServices()
   const cart = useCartStore()
   const { user, store, session } = useAuthStore()
@@ -39,6 +53,8 @@ export function PaymentScreen({ navigation }: Props) {
   const [processing, setProcessing] = useState(false)
   const [customer, setCustomer] = useState<ContactListItem | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [largeAmount, setLargeAmount] = useState<number | null>(null)
+  const [receipt, setReceipt] = useState<{ doc: ReceiptDoc; change: number } | null>(null)
 
   const hasDebt = payments.some((p) => p.paymentMethod === 'Debt') || method === 'Debt'
 
@@ -48,25 +64,14 @@ export function PaymentScreen({ navigation }: Props) {
   const fullyPaid = paid >= total && total > 0
 
   function addPayment(amount?: number) {
-    const value = amount ?? Number(entry)
+    // Empty manual entry means "exact remaining" — matches how the reference
+    // POS apps behave and saves a tap on the most common flow.
+    const value = amount ?? (entry ? Number(entry) : remaining)
     if (!value || value <= 0) return
     // Fat-finger guard (Odoo's large-amount check): a manually keyed amount
     // wildly above what's due is almost always a missed decimal or extra zero.
-    if (amount === undefined && total > 0 && value > total * 100) {
-      Alert.alert(
-        'Confirm large amount',
-        `${fmtUZS(value)} entered for a ${fmtUZS(total)} sale. Add it anyway?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Add',
-            onPress: () => {
-              setPayments((prev) => [...prev, { paymentMethod: method, amount: value }])
-              setEntry('')
-            },
-          },
-        ]
-      )
+    if (amount === undefined && entry && total > 0 && value > total * 100) {
+      setLargeAmount(value)
       return
     }
     setPayments((prev) => [...prev, { paymentMethod: method, amount: value }])
@@ -77,7 +82,7 @@ export function PaymentScreen({ navigation }: Props) {
     if (!fullyPaid || processing) return
     // Debt sales must be attached to a customer whose balance carries the debt.
     if (payments.some((p) => p.paymentMethod === 'Debt') && !customer) {
-      Alert.alert('Customer required', 'Select a customer for debt payments')
+      toast.error('Select a customer for debt payments')
       setPickerOpen(true)
       return
     }
@@ -96,75 +101,87 @@ export function PaymentScreen({ navigation }: Props) {
         payments,
         invoiceNumber,
       })
+      const doc: ReceiptDoc = {
+        invoiceNumber: result.invoiceNumber,
+        storeName: store?.name ?? 'Store',
+        storeAddress: store?.address,
+        storePhone: store?.phone,
+        cashierName: user?.name ?? 'Cashier',
+        timestamp: new Date().toISOString(),
+        items: cart.items.map((i) => ({
+          name: i.name,
+          quantity: i.quantity,
+          price: i.unitPrice,
+          discount: i.discount,
+        })),
+        charges: [],
+        discount: cart.discount,
+        total: result.total,
+        payments: payments.map((p) => ({ method: p.paymentMethod, amount: p.amount })),
+        change: result.changeAmount,
+        openDrawer: payments.some((p) => p.paymentMethod === 'Cash'),
+      }
       const printerConfig = repos.settings.getJson<PrinterConfig>('printer_config')
-      printReceipt(
-        {
-          invoiceNumber: result.invoiceNumber,
-          storeName: store?.name ?? 'Store',
-          storeAddress: store?.address,
-          storePhone: store?.phone,
-          cashierName: user?.name ?? 'Cashier',
-          timestamp: new Date().toISOString(),
-          items: cart.items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.unitPrice, discount: i.discount })),
-          charges: [],
-          discount: cart.discount,
-          total: result.total,
-          payments: payments.map((p) => ({ method: p.paymentMethod, amount: p.amount })),
-          change: result.changeAmount,
-          openDrawer: payments.some((p) => p.paymentMethod === 'Cash'),
-        },
-        printerConfig
-      ).catch((err) => console.warn('Print failed:', err))
+      printReceipt(doc, printerConfig).catch(() => {
+        // A failed print must never be invisible at the counter.
+        toast.error('Receipt print failed — check the printer')
+      })
       cart.clearCart()
       engine.flushOutbox().catch(() => {})
-      Alert.alert(
-        'Sale complete',
-        `${result.invoiceNumber}\nTotal: ${fmtUZS(result.total)}${result.changeAmount > 0 ? `\nChange: ${fmtUZS(result.changeAmount)}` : ''}`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      )
+      setReceipt({ doc, change: result.changeAmount })
     } catch (err) {
-      Alert.alert('Payment failed', err instanceof Error ? err.message : 'Please retry')
+      toast.error(err instanceof Error ? err.message : 'Payment failed — please retry')
     } finally {
       setProcessing(false)
     }
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.summary}>
+    <Screen scroll maxWidth={560}>
+      <Card>
         <Row label="Total" value={fmtUZS(total)} big />
         <Row label="Paid" value={fmtUZS(paid)} />
-        <Row label={change > 0 ? 'Change' : 'Remaining'} value={fmtUZS(change > 0 ? change : remaining)} accent />
-      </View>
+        <Row
+          label={change > 0 ? 'Change' : 'Remaining'}
+          value={fmtUZS(change > 0 ? change : remaining)}
+          accent
+          valueColor={change > 0 ? theme.success : undefined}
+        />
+      </Card>
 
       <View style={styles.methods}>
         {METHODS.map((m) => (
-          <TouchableOpacity
+          <Chip
             key={m}
-            style={[styles.methodBtn, method === m && styles.methodActive]}
+            label={m}
+            selected={method === m}
             onPress={() => {
               setMethod(m)
               if (m === 'Debt' && !customer) setPickerOpen(true)
             }}
-          >
-            <Text style={[styles.methodText, method === m && { color: colors.onPrimary }]}>{m}</Text>
-          </TouchableOpacity>
+          />
         ))}
       </View>
 
-      <TouchableOpacity
-        style={[styles.customerChip, hasDebt && !customer && { borderColor: colors.danger }]}
-        onPress={() => setPickerOpen(true)}
-      >
-        <Text style={styles.customerChipText}>
-          {customer ? `👤 ${customer.name}` : hasDebt ? '👤 Select customer (required for debt)' : '👤 Add customer (optional)'}
-        </Text>
+      <View style={styles.customerRow}>
+        <Button
+          title={
+            customer
+              ? customer.name
+              : hasDebt
+                ? 'Select customer (required for debt)'
+                : 'Add customer (optional)'
+          }
+          variant="secondary"
+          icon="user"
+          size="sm"
+          onPress={() => setPickerOpen(true)}
+          style={[styles.flex1, hasDebt && !customer ? { borderColor: theme.danger, borderWidth: 1 } : null]}
+        />
         {customer && (
-          <TouchableOpacity onPress={() => setCustomer(null)}>
-            <Text style={{ color: colors.danger, fontSize: 16 }}>✕</Text>
-          </TouchableOpacity>
+          <IconButton icon="x" accessibilityLabel="Clear customer" color={theme.danger} onPress={() => setCustomer(null)} />
         )}
-      </TouchableOpacity>
+      </View>
 
       <CustomerPickerModal
         visible={pickerOpen}
@@ -175,101 +192,130 @@ export function PaymentScreen({ navigation }: Props) {
       {method === 'Cash' && remaining > 0 && (
         <View style={styles.denomRow}>
           {suggestedCash(remaining).map((d) => (
-            <TouchableOpacity key={d} style={styles.denomBtn} onPress={() => addPayment(d)}>
-              <Text style={styles.denomText}>{d >= 1000 ? `${d / 1000}k` : d}</Text>
-            </TouchableOpacity>
+            <Chip key={d} label={d >= 1000 ? `${d / 1000}k` : String(d)} onPress={() => addPayment(d)} />
           ))}
         </View>
       )}
 
-      <Text style={styles.entry}>{entry ? fmtUZS(Number(entry)) : fmtUZS(remaining)}</Text>
+      <Text
+        style={[typeScale.moneyDisplay, styles.entry, { color: entry ? theme.text : theme.textFaint }]}
+        accessibilityLabel={`Amount ${entry || String(remaining)}`}
+      >
+        {entry ? fmtUZS(Number(entry)) : fmtUZS(remaining)}
+      </Text>
       <View style={styles.padWrap}>
         <NumPad onKey={(k) => setEntry((v) => applyNumKey(v, k))} />
       </View>
 
       <View style={styles.quickRow}>
-        <TouchableOpacity style={styles.quickBtn} onPress={() => addPayment(remaining)}>
-          <Text style={styles.quickText}>Exact</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickBtn} onPress={() => addPayment()}>
-          <Text style={styles.quickText}>Add {method}</Text>
-        </TouchableOpacity>
+        <Button title="Exact" variant="secondary" onPress={() => addPayment(remaining)} style={styles.flex1} />
+        <Button title={`Add ${method}`} onPress={() => addPayment()} style={styles.flex2} />
       </View>
 
       {payments.map((p, i) => (
-        <View key={i} style={styles.paymentRow}>
-          <Text style={styles.paymentText}>{p.paymentMethod}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Text style={styles.paymentText}>{fmtUZS(p.amount)}</Text>
-            <TouchableOpacity onPress={() => setPayments((prev) => prev.filter((_, j) => j !== i))}>
-              <Text style={{ color: colors.danger, fontSize: 18 }}>✕</Text>
-            </TouchableOpacity>
+        <View key={i} style={[styles.paymentRow, { backgroundColor: theme.surfaceRaised }]}>
+          <Text style={[typeScale.md, { color: theme.text, fontWeight: '600' }]}>{p.paymentMethod}</Text>
+          <View style={styles.paymentRight}>
+            <Text style={[typeScale.money, { color: theme.text }]}>{fmtUZS(p.amount)}</Text>
+            <IconButton
+              icon="x"
+              size={20}
+              accessibilityLabel={`Remove ${p.paymentMethod} payment`}
+              color={theme.danger}
+              onPress={() => setPayments((prev) => prev.filter((_, j) => j !== i))}
+            />
           </View>
         </View>
       ))}
 
-      <TouchableOpacity
-        style={[styles.completeBtn, !fullyPaid && { opacity: 0.4 }]}
-        disabled={!fullyPaid || processing}
+      <Button
+        title={processing ? 'Processing…' : 'Complete Sale'}
+        variant="success"
+        size="lg"
+        fullWidth
+        loading={processing}
+        disabled={!fullyPaid}
         onPress={complete}
-      >
-        <Text style={styles.completeText}>{processing ? 'Processing…' : 'Complete Sale'}</Text>
-      </TouchableOpacity>
-    </ScrollView>
-  )
-}
+        style={styles.completeBtn}
+        testID="complete-sale"
+      />
 
-function Row({ label, value, big, accent }: { label: string; value: string; big?: boolean; accent?: boolean }) {
-  return (
-    <View style={styles.row}>
-      <Text style={[styles.rowLabel, big && { fontSize: 16 }]}>{label}</Text>
-      <Text style={[styles.rowValue, big && { fontSize: 24 }, accent && { color: colors.primary }]}>{value}</Text>
-    </View>
+      <Dialog
+        visible={largeAmount !== null}
+        onClose={() => setLargeAmount(null)}
+        title="Confirm large amount"
+        message={largeAmount !== null ? `${fmtUZS(largeAmount)} entered for a ${fmtUZS(total)} sale. Add it anyway?` : ''}
+        actions={[
+          { label: 'Cancel', onPress: () => setLargeAmount(null) },
+          {
+            label: 'Add',
+            tone: 'primary',
+            onPress: () => {
+              if (largeAmount !== null) {
+                setPayments((prev) => [...prev, { paymentMethod: method, amount: largeAmount }])
+                setEntry('')
+              }
+              setLargeAmount(null)
+            },
+          },
+        ]}
+      />
+
+      {/* Post-sale receipt: on-screen preview of exactly what printed. */}
+      <Sheet
+        visible={receipt !== null}
+        onClose={() => { setReceipt(null); navigation.goBack() }}
+        title="Sale complete"
+      >
+        {receipt && (
+          <>
+            {receipt.change > 0 && (
+              <Card style={styles.changeCard}>
+                <Row label="Change due" value={fmtUZS(receipt.change)} big valueColor={theme.success} />
+              </Card>
+            )}
+            <View style={[styles.receiptBox, { backgroundColor: theme.bg, borderColor: theme.border }]}>
+              <Text style={[styles.receiptText, { color: theme.textMuted }]}>
+                {renderReceiptText(receipt.doc, 32)}
+              </Text>
+            </View>
+            <Button
+              title="Done"
+              size="lg"
+              fullWidth
+              onPress={() => { setReceipt(null); navigation.goBack() }}
+              style={styles.doneBtn}
+              testID="receipt-done"
+            />
+          </>
+        )}
+      </Sheet>
+    </Screen>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: 16, paddingBottom: 40, maxWidth: 520, width: '100%', alignSelf: 'center' },
-  summary: { backgroundColor: colors.card, borderRadius: 14, padding: 16, gap: 6, marginBottom: 14 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rowLabel: { color: colors.textMuted, fontSize: 14 },
-  rowValue: { color: colors.text, fontSize: 17, fontWeight: '700' },
-  methods: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  customerChip: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: 1, borderColor: colors.border, borderRadius: 10,
-    paddingHorizontal: 14, paddingVertical: 11, marginBottom: 12,
-  },
-  customerChipText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
-  methodBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: colors.card,
-    borderWidth: 1, borderColor: colors.border, alignItems: 'center', minHeight: 48,
-  },
-  methodActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  methodText: { color: colors.textMuted, fontWeight: '700' },
-  entry: { color: colors.text, fontSize: 32, fontWeight: '800', textAlign: 'center', marginBottom: 12 },
-  denomRow: { flexDirection: 'row', gap: 6, marginBottom: 10 },
-  denomBtn: {
-    flex: 1, borderWidth: 1, borderColor: colors.primary, borderRadius: 10,
-    paddingVertical: 10, alignItems: 'center',
-  },
-  denomText: { color: colors.primary, fontWeight: '700', fontSize: 13 },
+  methods: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, marginBottom: spacing.md },
+  customerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
+  denomRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.md },
+  entry: { textAlign: 'center', marginBottom: spacing.md },
   padWrap: { alignSelf: 'center', width: '100%', maxWidth: 380 },
-  quickRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
-  quickBtn: {
-    flex: 1, backgroundColor: colors.border, borderRadius: 12, paddingVertical: 13,
-    alignItems: 'center', minHeight: 48, justifyContent: 'center',
-  },
-  quickText: { color: colors.text, fontWeight: '700' },
+  quickRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
   paymentRow: {
-    flexDirection: 'row', justifyContent: 'space-between', backgroundColor: colors.card,
-    borderRadius: 10, padding: 12, marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    marginTop: spacing.sm,
   },
-  paymentText: { color: colors.text, fontWeight: '600' },
-  completeBtn: {
-    backgroundColor: colors.success, borderRadius: 14, paddingVertical: 16,
-    alignItems: 'center', marginTop: 18, minHeight: 54, justifyContent: 'center',
-  },
-  completeText: { color: colors.onPrimary, fontSize: 17, fontWeight: '800' },
+  paymentRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  completeBtn: { marginTop: spacing.xl },
+  changeCard: { marginBottom: spacing.sm },
+  receiptBox: { borderWidth: 1, borderRadius: radius.md, padding: spacing.md },
+  receiptText: { fontFamily: 'monospace', fontSize: 11, lineHeight: 16 },
+  doneBtn: { marginTop: spacing.md },
+  flex1: { flex: 1 },
+  flex2: { flex: 2 },
 })

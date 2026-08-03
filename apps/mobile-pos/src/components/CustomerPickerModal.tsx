@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { FlatList, StyleSheet, View } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
 import type { ContactListItem } from '@baraka/data'
+import { Badge, Button, EmptyState, Icon, Input, ListRow, Sheet, toast, useTheme } from '@baraka/mobile-ui'
+import { spacing } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
-import { colors } from '../theme'
 
 interface Props {
   visible: boolean
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function CustomerPickerModal({ visible, onClose, onSelect }: Props) {
+  const theme = useTheme()
   const { repos, engine } = getServices()
   const [search, setSearch] = useState('')
   const [results, setResults] = useState<ContactListItem[]>([])
@@ -24,7 +26,10 @@ export function CustomerPickerModal({ visible, onClose, onSelect }: Props) {
   }, [visible, search])
 
   function createAndSelect() {
-    if (!newName.trim()) return
+    if (!newName.trim()) {
+      toast.error('Customer name is required')
+      return
+    }
     const contact = repos.contacts.create({
       name: newName.trim(),
       phone: newPhone.trim() || null,
@@ -37,98 +42,59 @@ export function CustomerPickerModal({ visible, onClose, onSelect }: Props) {
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <TouchableOpacity style={{ flex: 1 }} onPress={onClose} />
-        <View style={styles.sheet}>
-          <Text style={styles.title}>Select customer</Text>
-          <TextInput
-            style={styles.input}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search by name or phone…"
-            placeholderTextColor={colors.textMuted}
+    <Sheet visible={visible} onClose={onClose} title="Select customer">
+      <Input
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search by name or phone…"
+        left={<Icon name="search" size={16} color={theme.textFaint} />}
+        returnKeyType="search"
+      />
+      <FlatList
+        data={results}
+        keyExtractor={(c) => String(c.id)}
+        style={styles.results}
+        contentContainerStyle={styles.resultsInner}
+        keyboardShouldPersistTaps="handled"
+        renderItem={({ item }) => (
+          <ListRow
+            title={item.name}
+            subtitle={item.phone ?? '—'}
+            onPress={() => onSelect(item)}
+            right={item.balance > 0 ? <Badge label={`Debt ${fmtUZS(item.balance)}`} tone="danger" /> : undefined}
           />
-          <FlatList
-            data={results}
-            keyExtractor={(c) => String(c.id)}
-            style={{ maxHeight: 300 }}
-            contentContainerStyle={{ gap: 6 }}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={styles.row} onPress={() => onSelect(item)}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{item.name}</Text>
-                  <Text style={styles.meta}>{item.phone ?? '—'}</Text>
-                </View>
-                {item.balance > 0 && (
-                  <Text style={styles.debt}>Debt {fmtUZS(item.balance)}</Text>
-                )}
-              </TouchableOpacity>
-            )}
-            ListEmptyComponent={<Text style={styles.empty}>No customers found</Text>}
-          />
+        )}
+        ListEmptyComponent={<EmptyState icon="users" title="No customers found" />}
+      />
 
-          {creating ? (
-            <View style={styles.createBox}>
-              <TextInput
-                style={styles.input}
-                value={newName}
-                onChangeText={setNewName}
-                placeholder="Customer name"
-                placeholderTextColor={colors.textMuted}
-              />
-              <TextInput
-                style={styles.input}
-                value={newPhone}
-                onChangeText={setNewPhone}
-                placeholder="Phone (optional)"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="phone-pad"
-              />
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity style={[styles.btn, { backgroundColor: colors.border }]} onPress={() => setCreating(false)}>
-                  <Text style={styles.btnText}>Back</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, { backgroundColor: colors.primary, flex: 2 }]} onPress={createAndSelect}>
-                  <Text style={styles.btnText}>Create & select</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <TouchableOpacity style={[styles.btn, styles.newBtn]} onPress={() => setCreating(true)}>
-              <Text style={styles.btnText}>＋ New customer</Text>
-            </TouchableOpacity>
-          )}
+      {creating ? (
+        <View style={styles.createBox}>
+          <Input value={newName} onChangeText={setNewName} placeholder="Customer name" autoFocus />
+          <Input value={newPhone} onChangeText={setNewPhone} placeholder="Phone (optional)" keyboardType="phone-pad" />
+          <View style={styles.createActions}>
+            <Button title="Back" variant="secondary" onPress={() => setCreating(false)} style={styles.flex1} />
+            <Button title="Create & select" onPress={createAndSelect} style={styles.flex2} />
+          </View>
         </View>
-      </View>
-    </Modal>
+      ) : (
+        <Button
+          title="New customer"
+          icon="plus"
+          variant="secondary"
+          onPress={() => setCreating(true)}
+          style={styles.newBtn}
+        />
+      )}
+    </Sheet>
   )
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    padding: 16, maxHeight: '80%',
-  },
-  title: { color: colors.text, fontSize: 16, fontWeight: '700', marginBottom: 10 },
-  input: {
-    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 10, color: colors.text, marginBottom: 8,
-  },
-  row: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card,
-    borderRadius: 10, padding: 12, gap: 8,
-  },
-  name: { color: colors.text, fontWeight: '600' },
-  meta: { color: colors.textMuted, fontSize: 12 },
-  debt: { color: colors.danger, fontSize: 12, fontWeight: '700' },
-  empty: { color: colors.textMuted, textAlign: 'center', marginVertical: 16 },
-  btn: {
-    flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center',
-    justifyContent: 'center', minHeight: 46,
-  },
-  newBtn: { backgroundColor: colors.border, marginTop: 8 },
-  btnText: { color: colors.onPrimary, fontWeight: '700' },
-  createBox: { marginTop: 8 },
+  results: { maxHeight: 320, marginTop: spacing.sm },
+  resultsInner: { gap: spacing.xs },
+  createBox: { marginTop: spacing.sm, gap: spacing.sm },
+  createActions: { flexDirection: 'row', gap: spacing.sm },
+  newBtn: { marginTop: spacing.sm },
+  flex1: { flex: 1 },
+  flex2: { flex: 2 },
 })

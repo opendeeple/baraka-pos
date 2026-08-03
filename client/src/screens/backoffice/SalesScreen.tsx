@@ -5,8 +5,7 @@ import { useAuthStore } from '../../store/auth.store'
 import { v4 as uuidv4 } from 'uuid'
 import { fmtUZS } from '../../lib/currency'
 import { toast } from 'sonner'
-import { Select } from '../../components/ui/Select'
-import { DatePicker } from '../../components/ui/DatePicker'
+import { Modal, Button, EmptyState, SkeletonRow, Select, DatePicker } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 
 interface Sale {
@@ -46,6 +45,7 @@ export default function SalesScreen() {
   const [returnItems, setReturnItems] = useState<ReturnItem[]>([])
   const [returnMethod, setReturnMethod] = useState('Cash')
   const [processingReturn, setProcessingReturn] = useState(false)
+  const [loading, setLoading] = useState(true)
   const { user, store } = useAuthStore()
   const debouncedSearch = useDebouncedValue(search)
 
@@ -69,7 +69,10 @@ export default function SalesScreen() {
       const q = `%${debouncedSearch}%`; params.push(q, q)
     }
     sql += ` ORDER BY s.created_at DESC LIMIT 100`
-    setSales(await window.electronAPI.db.query(sql, params) as Sale[])
+    setLoading(true)
+    try {
+      setSales(await window.electronAPI.db.query(sql, params) as Sale[])
+    } finally { setLoading(false) }
   }
 
   async function loadDetail(id: number) {
@@ -228,7 +231,8 @@ export default function SalesScreen() {
               ))}</tr>
             </thead>
             <tbody className="divide-y divide-dark-border">
-              {sales.map((sale) => (
+              {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={7} />)}
+              {!loading && sales.map((sale) => (
                 <tr key={sale.id} onClick={() => loadDetail(sale.id)} className="hover:bg-dark-card/40 cursor-pointer group">
                   <td className="px-4 py-3 text-primary text-sm font-mono font-medium">{sale.invoice_number}</td>
                   <td className="px-4 py-3 text-gray-400 text-sm">{sale.sale_date} <span className="text-gray-600 text-xs">
@@ -251,10 +255,8 @@ export default function SalesScreen() {
               ))}
             </tbody>
           </table>
-          {sales.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-600">
-              <ShoppingBag size={40} className="mb-3 opacity-30" /><p className="text-sm">No sales found</p>
-            </div>
+          {!loading && sales.length === 0 && (
+            <EmptyState icon={ShoppingBag} title="No sales found" />
           )}
         </div>
 
@@ -345,18 +347,33 @@ export default function SalesScreen() {
       </div>
 
       {/* Return Items Modal */}
-      {showReturnModal && detail && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-dark-surface border border-dark-border rounded-2xl w-full max-w-lg">
-            <div className="flex items-center justify-between p-5 border-b border-dark-border">
-              <div>
-                <h2 className="text-white font-semibold">Return Items</h2>
-                <p className="text-gray-500 text-xs mt-0.5">From {detail.invoice_number}</p>
-              </div>
-              <button onClick={() => setShowReturnModal(false)} className="text-gray-400 hover:text-white">
-                <XCircle size={18} />
-              </button>
+      {detail && (
+        <Modal
+          open={showReturnModal}
+          onClose={() => setShowReturnModal(false)}
+          maxWidth="max-w-lg"
+          title={
+            <div>
+              <h2 className="text-white font-semibold">Return Items</h2>
+              <p className="text-gray-500 text-xs mt-0.5">From {detail.invoice_number}</p>
             </div>
+          }
+          footer={
+            <>
+              <Button variant="secondary" className="flex-1" onClick={() => setShowReturnModal(false)}>
+                Cancel
+              </Button>
+              <button
+                onClick={processReturn}
+                disabled={processingReturn || returnItems.every((i) => i.returnQty === 0)}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
+              >
+                <RotateCcw size={14} />
+                {processingReturn ? 'Processing…' : 'Process Return'}
+              </button>
+            </>
+          }
+        >
             <div className="p-5">
               <table className="w-full text-sm mb-4">
                 <thead>
@@ -416,22 +433,7 @@ export default function SalesScreen() {
                 </div>
               </div>
             </div>
-            <div className="flex gap-3 p-5 pt-0">
-              <button onClick={() => setShowReturnModal(false)}
-                className="flex-1 border border-dark-border text-gray-400 rounded-xl py-2.5 text-sm">
-                Cancel
-              </button>
-              <button
-                onClick={processReturn}
-                disabled={processingReturn || returnItems.every((i) => i.returnQty === 0)}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
-              >
-                <RotateCcw size={14} />
-                {processingReturn ? 'Processing…' : 'Process Return'}
-              </button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </BackOfficeLayout>
   )

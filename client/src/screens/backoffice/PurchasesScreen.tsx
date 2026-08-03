@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Search, Truck, Check, X } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
-import { Select } from '../../components/ui/Select'
+import { Modal, Button, Input, EmptyState, PageHeader, Select } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 
 interface Purchase {
@@ -119,13 +119,14 @@ export default function PurchasesScreen() {
 
   return (
     <BackOfficeLayout>
-      <div className="shrink-0 px-6 py-4 border-b border-dark-border bg-dark-surface flex items-center justify-between">
-        <h1 className="text-lg font-bold text-white">Purchases</h1>
-        <button onClick={() => { setShowForm(true); setLines([{ id: crypto.randomUUID(), productId: '', batchId: '', qty: '1', cost: '', name: '' }]) }}
-          className="flex items-center gap-2 bg-primary hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">
-          <Plus size={15} /> New Purchase Order
-        </button>
-      </div>
+      <PageHeader
+        title="Purchases"
+        actions={
+          <Button icon={Plus} onClick={() => { setShowForm(true); setLines([{ id: crypto.randomUUID(), productId: '', batchId: '', qty: '1', cost: '', name: '' }]) }}>
+            New Purchase Order
+          </Button>
+        }
+      />
       <div className="shrink-0 px-6 py-3 border-b border-dark-border">
         <div className="relative max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -161,9 +162,7 @@ export default function PurchasesScreen() {
             </tbody>
           </table>
           {purchases.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-600">
-              <Truck size={40} className="mb-3 opacity-30" /><p className="text-sm">No purchase orders yet</p>
-            </div>
+            <EmptyState icon={Truck} title="No purchase orders yet" />
           )}
         </div>
 
@@ -219,25 +218,26 @@ export default function PurchasesScreen() {
         )}
       </div>
 
-      {showForm && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 overflow-auto">
-          <div className="bg-dark-surface border border-dark-border rounded-2xl w-full max-w-2xl my-4">
-            <div className="flex items-center justify-between p-5 border-b border-dark-border">
-              <h2 className="text-white font-semibold">New Purchase Order</h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white"><X size={18} /></button>
-            </div>
+      <Modal
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        title="New Purchase Order"
+        maxWidth="max-w-2xl"
+        footer={
+          <>
+            <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button className="flex-1" onClick={savePO} loading={saving} disabled={lines.length === 0}>
+              {saving ? 'Saving…' : 'Create PO'}
+            </Button>
+          </>
+        }
+      >
             <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">PO Number</label>
-                  <input value={refNumber} onChange={(e) => setRefNumber(e.target.value)} placeholder="AUTO"
-                    className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Vendor</label>
-                  <input value={vendorName} onChange={(e) => setVendorName(e.target.value)} placeholder="Vendor name"
-                    className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
-                </div>
+                <Input label="PO Number" placeholder="AUTO" value={refNumber}
+                  onChange={(e) => setRefNumber(e.target.value)} />
+                <Input label="Vendor" placeholder="Vendor name" value={vendorName}
+                  onChange={(e) => setVendorName(e.target.value)} />
               </div>
 
               <div>
@@ -281,20 +281,10 @@ export default function PurchasesScreen() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Note</label>
-                <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note"
-                  className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
-              </div>
+              <Input label="Note" placeholder="Optional note" value={note}
+                onChange={(e) => setNote(e.target.value)} />
             </div>
-            <div className="p-5 pt-0 flex gap-3">
-              <button onClick={() => setShowForm(false)} className="flex-1 border border-dark-border text-gray-400 rounded-xl py-2.5 text-sm">Cancel</button>
-              <button onClick={savePO} disabled={saving || lines.length === 0}
-                className="flex-1 bg-primary disabled:opacity-40 text-white rounded-xl py-2.5 text-sm font-semibold">{saving ? 'Saving…' : 'Create PO'}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </BackOfficeLayout>
   )
 }

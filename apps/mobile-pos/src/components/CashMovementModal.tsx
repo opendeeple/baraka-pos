@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react'
-import { Alert, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
 import type { ContactListItem } from '@baraka/data'
+import {
+  Button,
+  Chip,
+  Dialog,
+  Input,
+  NumPad,
+  applyNumKey,
+  toast,
+  useTheme,
+} from '@baraka/mobile-ui'
+import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
-import { NumPad, applyNumKey } from './NumPad'
 import { CustomerPickerModal } from './CustomerPickerModal'
-import { colors } from '../theme'
 
 // Reason picklists (analysis takeaway: free text alone makes Z-reports
 // unreadable — a short picklist plus an optional note reads at a glance).
@@ -22,6 +31,7 @@ interface Props {
 }
 
 export function CashMovementModal({ type, onClose, onDone }: Props) {
+  const theme = useTheme()
   const { repos } = getServices()
   const { user, store, session } = useAuthStore()
   const [amount, setAmount] = useState('')
@@ -45,11 +55,11 @@ export function CashMovementModal({ type, onClose, onDone }: Props) {
   function save() {
     const value = Number(amount) || 0
     if (value <= 0) {
-      Alert.alert('Enter an amount')
+      toast.error('Enter an amount')
       return
     }
     if (isDebtPayment && !customer) {
-      Alert.alert('Customer required', 'Select whose debt is being paid')
+      toast.error('Select whose debt is being paid')
       setPickerOpen(true)
       return
     }
@@ -64,100 +74,72 @@ export function CashMovementModal({ type, onClose, onDone }: Props) {
         note: note.trim() || null,
         contactId: isDebtPayment ? customer!.id : null,
       })
+      toast.success(`${type === 'cash_in' ? 'Cash in' : 'Cash out'} recorded — ${fmtUZS(value)}`)
       onDone()
     } catch (err) {
-      Alert.alert('Cannot record', err instanceof Error ? err.message : 'Failed')
+      toast.error(err instanceof Error ? err.message : 'Cannot record movement')
     }
   }
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <Text style={styles.title}>{type === 'cash_in' ? '↓ Cash In' : '↑ Cash Out'}</Text>
-
-          <View style={styles.reasonRow}>
-            {REASONS[type].map((r) => (
-              <TouchableOpacity
-                key={r}
-                style={[styles.reasonChip, reason === r && styles.reasonActive]}
-                onPress={() => {
-                  setReason(r)
-                  if (type === 'cash_in' && r === 'Customer debt payment' && !customer) setPickerOpen(true)
-                }}
-              >
-                <Text style={[styles.reasonText, reason === r && { color: colors.onPrimary }]}>{r}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {isDebtPayment && (
-            <TouchableOpacity style={styles.customerChip} onPress={() => setPickerOpen(true)}>
-              <Text style={styles.customerText}>
-                {customer
-                  ? `👤 ${customer.name} — owes ${fmtUZS(customer.balance)}`
-                  : '👤 Select customer'}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          <TextInput
-            style={styles.noteInput}
-            value={note}
-            onChangeText={setNote}
-            placeholder="Note (optional)"
-            placeholderTextColor={colors.textMuted}
-          />
-
-          <Text style={styles.amount}>{amount ? fmtUZS(Number(amount)) : '0.00'}</Text>
-          <NumPad onKey={(k) => setAmount((v) => applyNumKey(v, k))} />
-
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-            <TouchableOpacity style={[styles.btn, { backgroundColor: colors.border }]} onPress={onClose}>
-              <Text style={styles.btnText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.btn, { backgroundColor: type === 'cash_in' ? colors.success : colors.danger, flex: 2 }]}
-              onPress={save}
-            >
-              <Text style={styles.btnText}>Record</Text>
-            </TouchableOpacity>
-          </View>
+    <>
+      <Dialog
+        visible={!pickerOpen}
+        onClose={onClose}
+        title={type === 'cash_in' ? 'Cash In' : 'Cash Out'}
+        actions={[
+          { label: 'Cancel', onPress: onClose },
+          { label: 'Record', tone: type === 'cash_in' ? 'primary' : 'danger', onPress: save },
+        ]}
+      >
+        <View style={styles.reasonRow}>
+          {REASONS[type].map((r) => (
+            <Chip
+              key={r}
+              label={r}
+              selected={reason === r}
+              onPress={() => {
+                setReason(r)
+                if (type === 'cash_in' && r === 'Customer debt payment' && !customer) setPickerOpen(true)
+              }}
+            />
+          ))}
         </View>
-      </View>
+
+        {isDebtPayment && (
+          <Button
+            title={customer ? `${customer.name} — owes ${fmtUZS(customer.balance)}` : 'Select customer'}
+            variant="secondary"
+            icon="user"
+            size="sm"
+            onPress={() => setPickerOpen(true)}
+          />
+        )}
+
+        <Input value={note} onChangeText={setNote} placeholder="Note (optional)" />
+
+        <Text
+          style={[typeScale.moneyDisplay, styles.amount, { color: theme.text }]}
+          accessibilityLabel={`Amount ${amount || '0'}`}
+        >
+          {amount ? fmtUZS(Number(amount)) : fmtUZS(0)}
+        </Text>
+        <NumPad onKey={(k) => setAmount((v) => applyNumKey(v, k))} />
+      </Dialog>
 
       <CustomerPickerModal
         visible={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        onSelect={(c) => { setCustomer(c); setPickerOpen(false) }}
+        onSelect={(c) => {
+          setCustomer(c)
+          setPickerOpen(false)
+        }}
       />
-    </Modal>
+    </>
   )
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center', padding: 20,
-  },
-  sheet: { backgroundColor: colors.surface, borderRadius: 18, padding: 18, width: '100%', maxWidth: 400 },
-  title: { color: colors.text, fontSize: 17, fontWeight: '700', marginBottom: 12 },
-  reasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
-  reasonChip: {
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
-    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-  },
-  reasonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  reasonText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
-  customerChip: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8,
-  },
-  customerText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
-  noteInput: {
-    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 9, color: colors.text, marginBottom: 10,
-  },
-  amount: { color: colors.text, fontSize: 26, fontWeight: '800', textAlign: 'center', marginVertical: 10 },
-  btn: { flex: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center', minHeight: 48, justifyContent: 'center' },
-  btnText: { color: colors.onPrimary, fontWeight: '700' },
+  reasonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  amount: { textAlign: 'center', marginVertical: spacing.sm },
 })

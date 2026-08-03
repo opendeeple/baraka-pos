@@ -7,26 +7,40 @@ import { AuthUser } from '@baraka/shared'
 
 const DEFAULT_SERVER_URL = 'http://localhost:3001'
 
-export default function LoginScreen() {
+export interface LoginScreenProps {
+  /**
+   * 'pos' (default): offline-capable restore from cached user/store, then
+   * routes to /pos or /session/open and caches the login for offline restore.
+   * 'office': restores via auth.me over the network and routes to /backoffice.
+   */
+  variant?: 'pos' | 'office'
+}
+
+export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
+  const isOffice = variant === 'office'
   const navigate = useNavigate()
   const { setAuth, isAuthenticated } = useAuthStore()
   const { setSession } = useSessionStore()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [restoring, setRestoring] = useState(true)
+  // Only the POS variant blocks the form behind the restore spinner — the
+  // office variant shows the form immediately while it restores in background.
+  const [restoring, setRestoring] = useState(!isOffice)
   const [error, setError] = useState('')
   const [serverUrl, setServerUrl] = useState(DEFAULT_SERVER_URL)
 
   useEffect(() => {
     if (isAuthenticated) {
-      checkAndNavigate()
+      if (isOffice) navigate('/backoffice', { replace: true })
+      else checkAndNavigate()
     } else {
-      restoreSession()
+      if (isOffice) restoreOfficeSession()
+      else restorePosSession()
     }
   }, [])
 
-  async function restoreSession() {
+  async function restorePosSession() {
     try {
       // Read cached user + store from SQLite — works even when server is offline
       const rows = await window.electronAPI.db.query(
@@ -54,6 +68,32 @@ export default function LoginScreen() {
     } catch {
       setRestoring(false)
     }
+  }
+
+  async function restoreOfficeSession() {
+    // The saved server URL belongs to the terminal — restore it for both the
+    // form and the token check (the useState default is just a placeholder).
+    let effectiveUrl = serverUrl
+    try {
+      const rows = await window.electronAPI.db.query(
+        `SELECT meta_value FROM settings WHERE meta_key='server_url' LIMIT 1`, []
+      ) as Array<{ meta_value: string }>
+      if (rows[0]?.meta_value) {
+        effectiveUrl = rows[0].meta_value
+        setServerUrl(effectiveUrl)
+      }
+    } catch { /* fresh DB — keep default */ }
+
+    const token = await window.electronAPI.auth.getToken()
+    if (!token) return
+    try {
+      const result = await window.electronAPI.auth.me(effectiveUrl, token)
+      if (result.status === 200) {
+        const data = result.data as { user: AuthUser; store: { id: number; name: string; address?: string; phone?: string; salePrefix: string } }
+        setAuth(data.user, token, data.store)
+        navigate('/backoffice', { replace: true })
+      }
+    } catch { /* Token expired or server offline */ }
   }
 
   async function checkAndNavigate() {
@@ -101,8 +141,10 @@ export default function LoginScreen() {
 
       await upsert('server_url', serverUrl)
       await upsert('store_id', String(sid))
-      await upsert('cached_user', JSON.stringify(data.user))
-      await upsert('cached_store', JSON.stringify(data.store))
+      if (!isOffice) {
+        await upsert('cached_user', JSON.stringify(data.user))
+        await upsert('cached_store', JSON.stringify(data.store))
+      }
       if (data.syncApiKey) await upsert('sync_api_key', data.syncApiKey)
 
       // Register this terminal for sync v2 before entering the app — the sync
@@ -113,7 +155,8 @@ export default function LoginScreen() {
         if (!reg.registered && reg.error) console.warn('Device registration pending:', reg.error)
       } catch { /* offline or non-manager — sync will surface it */ }
 
-      await checkAndNavigate()
+      if (isOffice) navigate('/backoffice', { replace: true })
+      else await checkAndNavigate()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Login failed'
       setError(msg)
@@ -140,7 +183,9 @@ export default function LoginScreen() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="text-5xl font-bold text-primary mb-2">BarakaPOS</div>
-          <div className="text-dark-border text-sm">Mini Market Point of Sale</div>
+          <div className="text-dark-border text-sm">
+            {isOffice ? 'Back Office Management' : 'Mini Market Point of Sale'}
+          </div>
         </div>
 
         <div className="bg-dark-surface rounded-2xl p-8 shadow-2xl border border-dark-border">
@@ -199,7 +244,9 @@ export default function LoginScreen() {
         </div>
 
         <div className="text-center mt-4 text-xs text-dark-border">
-          BarakaPOS v1.0.0 — © 2026 Baraka Mini Market
+          {isOffice
+            ? 'BarakaPOS Office v1.0.0 — © 2026 Baraka Mini Market'
+            : 'BarakaPOS v1.0.0 — © 2026 Baraka Mini Market'}
         </div>
       </div>
     </div>

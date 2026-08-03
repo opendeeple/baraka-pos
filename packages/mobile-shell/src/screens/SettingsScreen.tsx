@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
 import {
@@ -17,8 +17,9 @@ import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
 import { outboxCounts } from '../platform/maintenance'
 
-/** Shared settings screen — identical needs in both apps. */
-export function SettingsScreen() {
+/** Shared settings screen — identical needs in both apps; `extras` lets an
+ * app append its own sections (e.g. the POS printer setup link). */
+export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
   const theme = useTheme()
   const { repos, engine } = getServices()
   const logoutStore = useAuthStore((s) => s.logout)
@@ -134,6 +135,8 @@ export function SettingsScreen() {
           style={styles.gapTop}
         />
       )}
+
+      {extras}
 
       <View style={styles.logoutWrap}>
         <Button title="Log out" variant="secondary" icon="logout" onPress={logout} fullWidth />

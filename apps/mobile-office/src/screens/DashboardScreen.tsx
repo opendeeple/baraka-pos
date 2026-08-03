@@ -3,25 +3,34 @@ import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
+import { Badge, Card, EmptyState, KpiTile, Row, SectionHeader, useTheme } from '@baraka/mobile-ui'
+import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
-import { colors } from '../theme'
+
+function today() {
+  return new Date().toISOString().split('T')[0]
+}
+function daysAgo(n: number) {
+  return new Date(Date.now() - n * 86400_000).toISOString().split('T')[0]
+}
+
+function pctDelta(current: number, previous: number): number | null {
+  if (!previous) return null
+  return ((current - previous) / previous) * 100
+}
 
 export function DashboardScreen() {
+  const theme = useTheme()
   const { repos, engine } = getServices()
   const [refreshing, setRefreshing] = useState(false)
   const [summary, setSummary] = useState(() => repos.reports.dailySummary(today()))
+  const [series, setSeries] = useState(() => repos.reports.revenueSeries(daysAgo(13), today()))
   const [top, setTop] = useState(() => repos.reports.topProducts(daysAgo(7), today()))
   const [low, setLow] = useState(() => repos.reports.lowStock(10))
 
-  function today() {
-    return new Date().toISOString().split('T')[0]
-  }
-  function daysAgo(n: number) {
-    return new Date(Date.now() - n * 86400_000).toISOString().split('T')[0]
-  }
-
   const load = useCallback(() => {
     setSummary(repos.reports.dailySummary(today()))
+    setSeries(repos.reports.revenueSeries(daysAgo(13), today()))
     setTop(repos.reports.topProducts(daysAgo(7), today()))
     setLow(repos.reports.lowStock(10))
   }, [])
@@ -38,78 +47,97 @@ export function DashboardScreen() {
     setRefreshing(false)
   }
 
+  const revenueSpark = series.map((d) => d.revenue)
+  const salesSpark = series.map((d) => d.salesCount)
+  const yesterday = series[series.length - 2]
+
   return (
     <ScrollView
-      style={styles.container}
+      style={{ backgroundColor: theme.bg }}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.primary} />}
     >
-      <Text style={styles.heading}>Today</Text>
+      <SectionHeader title="Today" />
       <View style={styles.tiles}>
-        <Tile label="Sales" value={String(summary.salesCount)} />
-        <Tile label="Revenue" value={fmtUZS(summary.grossSales)} />
-        <Tile label="Discounts" value={fmtUZS(summary.discounts)} />
+        <KpiTile
+          label="Sales"
+          value={String(summary.salesCount)}
+          deltaPct={pctDelta(summary.salesCount, yesterday?.salesCount ?? 0)}
+          sparkline={salesSpark}
+        />
+        <KpiTile
+          label="Revenue"
+          value={fmtUZS(summary.grossSales)}
+          deltaPct={pctDelta(summary.grossSales, yesterday?.revenue ?? 0)}
+          sparkline={revenueSpark}
+        />
+      </View>
+      <View style={[styles.tiles, styles.tilesGap]}>
+        <KpiTile label="Discounts" value={fmtUZS(summary.discounts)} />
+        <KpiTile
+          label="Avg sale"
+          value={summary.salesCount ? fmtUZS(summary.grossSales / summary.salesCount) : '—'}
+        />
       </View>
 
-      <Text style={styles.heading}>By payment method</Text>
-      <View style={styles.card}>
-        {summary.byMethod.length === 0 && <Text style={styles.muted}>No sales yet today</Text>}
-        {summary.byMethod.map((m) => (
-          <Row key={m.paymentMethod} left={m.paymentMethod} right={fmtUZS(m.total)} />
-        ))}
-      </View>
+      <SectionHeader title="By payment method" />
+      <Card>
+        {summary.byMethod.length === 0 ? (
+          <Text style={[typeScale.sm, { color: theme.textFaint }]}>No sales yet today</Text>
+        ) : (
+          summary.byMethod.map((m) => <Row key={m.paymentMethod} label={m.paymentMethod} value={fmtUZS(m.total)} />)
+        )}
+      </Card>
 
-      <Text style={styles.heading}>Top products (7 days)</Text>
-      <View style={styles.card}>
-        {top.length === 0 && <Text style={styles.muted}>No sales in the last week</Text>}
-        {top.map((p) => (
-          <Row key={p.productId} left={p.name} right={fmtUZS(p.revenue)} sub={`${p.quantity} sold`} />
-        ))}
-      </View>
+      <SectionHeader title="Top products (7 days)" />
+      {top.length === 0 ? (
+        <Card>
+          <EmptyState icon="barChart" title="No sales in the last week" />
+        </Card>
+      ) : (
+        <Card>
+          {top.map((p) => (
+            <View key={p.productId} style={styles.topRow}>
+              <View style={styles.topLeft}>
+                <Text style={[typeScale.md, { color: theme.text, fontWeight: '600' }]} numberOfLines={1}>
+                  {p.name}
+                </Text>
+                <Text style={[typeScale.xs, { color: theme.textFaint }]}>{p.quantity} sold</Text>
+              </View>
+              <Text style={[typeScale.money, { color: theme.text }]}>{fmtUZS(p.revenue)}</Text>
+            </View>
+          ))}
+        </Card>
+      )}
 
-      <Text style={styles.heading}>Low stock</Text>
-      <View style={styles.card}>
-        {low.length === 0 && <Text style={styles.muted}>All stocked up</Text>}
-        {low.map((p) => (
-          <Row key={p.productId} left={p.name} right={`${p.stock} left`} warn />
-        ))}
-      </View>
+      <SectionHeader title="Low stock" />
+      {low.length === 0 ? (
+        <Card>
+          <View style={styles.stockedUp}>
+            <Badge label="All stocked up" tone="success" />
+          </View>
+        </Card>
+      ) : (
+        <Card>
+          {low.map((p) => (
+            <View key={p.productId} style={styles.topRow}>
+              <Text style={[typeScale.md, styles.topLeft, { color: theme.text, fontWeight: '600' }]} numberOfLines={1}>
+                {p.name}
+              </Text>
+              <Badge label={`${p.stock} left`} tone={p.stock <= 0 ? 'danger' : 'warning'} />
+            </View>
+          ))}
+        </Card>
+      )}
     </ScrollView>
   )
 }
 
-function Tile({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.tile}>
-      <Text style={styles.tileValue} numberOfLines={1}>{value}</Text>
-      <Text style={styles.tileLabel}>{label}</Text>
-    </View>
-  )
-}
-
-function Row({ left, right, sub, warn }: { left: string; right: string; sub?: string; warn?: boolean }) {
-  return (
-    <View style={styles.row}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowLeft} numberOfLines={1}>{left}</Text>
-        {sub ? <Text style={styles.muted}>{sub}</Text> : null}
-      </View>
-      <Text style={[styles.rowRight, warn && { color: colors.danger }]}>{right}</Text>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: 16, paddingBottom: 40 },
-  heading: { color: colors.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginTop: 18, marginBottom: 8 },
-  tiles: { flexDirection: 'row', gap: 10 },
-  tile: { flex: 1, backgroundColor: colors.card, borderRadius: 14, padding: 14 },
-  tileValue: { color: colors.text, fontSize: 17, fontWeight: '800' },
-  tileLabel: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
-  card: { backgroundColor: colors.card, borderRadius: 14, padding: 14, gap: 10 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rowLeft: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  rowRight: { color: colors.text, fontSize: 14, fontWeight: '700' },
-  muted: { color: colors.textMuted, fontSize: 12 },
+  content: { padding: spacing.lg, paddingBottom: spacing.x4l, maxWidth: 720, width: '100%', alignSelf: 'center' },
+  tiles: { flexDirection: 'row', gap: spacing.md },
+  tilesGap: { marginTop: spacing.md },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xxs },
+  topLeft: { flex: 1 },
+  stockedUp: { alignItems: 'flex-start' },
 })

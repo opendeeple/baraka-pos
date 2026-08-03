@@ -4,7 +4,7 @@ import { useSessionStore } from './store/session.store'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { TrainingBanner } from './components/layout/TrainingBanner'
 import { UpdateBanner } from './components/layout/UpdateBanner'
-import { Toaster } from 'sonner'
+import { AppToaster } from './components/ui/AppToaster'
 import { AppModeProvider } from './contexts/AppModeContext'
 import LoginScreen from './screens/auth/LoginScreen'
 import OpenSessionScreen from './screens/session/OpenSessionScreen'
@@ -28,14 +28,7 @@ function RequireSession({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <AppModeProvider value="pos">
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          style: { background: '#1e2130', border: '1px solid #2a2d3e', color: '#fff' },
-          duration: 4000,
-        }}
-        richColors
-      />
+      <AppToaster />
       <ErrorBoundary>
         <div className="flex flex-col h-screen">
           <TrainingBanner />

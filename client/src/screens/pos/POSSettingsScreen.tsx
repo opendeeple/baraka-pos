@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Pencil, Trash2, X, Globe } from 'lucide-react'
+import { ArrowLeft, Plus, Pencil, Trash2, Globe } from 'lucide-react'
+import { Modal, Button, Input } from '../../components/ui'
 import { PosApp, DEFAULT_APPS, APPS_STORAGE_KEY, loadApps, saveApps } from '../../components/pos/AppLauncherBar'
 
 type FormState = { name: string; url: string; color: string }
@@ -92,13 +93,9 @@ export default function POSSettingsScreen() {
               <h2 className="text-white font-semibold text-base">Mini Apps</h2>
               <p className="text-gray-500 text-xs mt-0.5">Payment apps and web tools shown in the POS sidebar</p>
             </div>
-            <button
-              onClick={openAdd}
-              className="flex items-center gap-2 h-10 px-4 bg-primary hover:bg-orange-600 text-white font-medium rounded-xl text-sm transition-colors"
-            >
-              <Plus size={15} />
+            <Button icon={Plus} onClick={openAdd}>
               Add App
-            </button>
+            </Button>
           </div>
 
           {apps.length === 0 ? (
@@ -153,26 +150,28 @@ export default function POSSettingsScreen() {
       </div>
 
       {/* Add / Edit modal */}
-      {showModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={closeModal}
-        >
-          <div
-            className="bg-dark-surface border border-dark-border rounded-2xl p-6 w-full max-w-sm shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal header */}
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-white font-bold text-base">{editing ? 'Edit App' : 'Add App'}</h3>
+      <Modal
+        open={showModal}
+        onClose={closeModal}
+        title={<h3 className="text-white font-bold text-base">{editing ? 'Edit App' : 'Add App'}</h3>}
+        maxWidth="max-w-sm"
+        footer={
+          <>
+            {editing && (
               <button
-                onClick={closeModal}
-                className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white rounded-xl transition-colors"
+                onClick={() => deleteApp(editing.id)}
+                className="w-12 h-12 flex items-center justify-center border border-red-500/40 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors shrink-0"
               >
-                <X size={18} />
+                <Trash2 size={17} />
               </button>
-            </div>
-
+            )}
+            <Button size="lg" className="flex-1" onClick={submitForm}>
+              {editing ? 'Save Changes' : 'Add App'}
+            </Button>
+          </>
+        }
+      >
+          <div className="p-5">
             {/* Preview */}
             <div className="flex items-center gap-3 bg-dark-card rounded-xl px-4 py-3 mb-5">
               <div
@@ -188,27 +187,21 @@ export default function POSSettingsScreen() {
             </div>
 
             <div className="space-y-4">
-              <div>
-                <label className="text-xs text-gray-500 font-medium block mb-1.5">App Name</label>
-                <input
-                  autoFocus
-                  className="w-full bg-dark-card border border-dark-border rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-primary"
-                  placeholder="e.g. Payme"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                />
-              </div>
+              <Input
+                label="App Name"
+                autoFocus
+                placeholder="e.g. Payme"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
 
-              <div>
-                <label className="text-xs text-gray-500 font-medium block mb-1.5">URL</label>
-                <input
-                  className="w-full bg-dark-card border border-dark-border rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-primary"
-                  placeholder="https://payme.uz"
-                  value={form.url}
-                  onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
-                  onKeyDown={(e) => e.key === 'Enter' && submitForm()}
-                />
-              </div>
+              <Input
+                label="URL"
+                placeholder="https://payme.uz"
+                value={form.url}
+                onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
+                onKeyDown={(e) => e.key === 'Enter' && submitForm()}
+              />
 
               <div>
                 <label className="text-xs text-gray-500 font-medium block mb-1.5">Icon Color</label>
@@ -228,28 +221,9 @@ export default function POSSettingsScreen() {
                   {error}
                 </p>
               )}
-
-              {/* Actions */}
-              <div className="flex gap-3 pt-1">
-                {editing && (
-                  <button
-                    onClick={() => deleteApp(editing.id)}
-                    className="w-12 h-12 flex items-center justify-center border border-red-500/40 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors shrink-0"
-                  >
-                    <Trash2 size={17} />
-                  </button>
-                )}
-                <button
-                  onClick={submitForm}
-                  className="flex-1 h-12 bg-primary hover:bg-orange-600 text-white font-semibold rounded-xl text-sm transition-colors"
-                >
-                  {editing ? 'Save Changes' : 'Add App'}
-                </button>
-              </div>
             </div>
           </div>
-        </div>
-      )}
+      </Modal>
     </div>
   )
 }

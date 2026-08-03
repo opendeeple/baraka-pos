@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { Plus, Search, Edit2, Package, AlertTriangle, X, Check } from 'lucide-react'
+import { Plus, Search, Edit2, Package, AlertTriangle, Check } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
-import { Select } from '../../components/ui/Select'
+import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader, Select } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 
 interface Product {
@@ -37,6 +37,7 @@ export default function ProductsScreen() {
   const [adjustId, setAdjustId] = useState<number | null>(null)
   const [adjustQty, setAdjustQty] = useState('')
   const [adjustReason, setAdjustReason] = useState('')
+  const [loading, setLoading] = useState(true)
   const debouncedSearch = useDebouncedValue(search)
 
   useEffect(() => { loadAll() }, [debouncedSearch, catFilter])
@@ -61,7 +62,10 @@ export default function ProductsScreen() {
     }
     if (catFilter) { sql += ` AND p.category_id = ?`; params.push(catFilter) }
     sql += ` ORDER BY p.name LIMIT 200`
-    setProducts(await window.electronAPI.db.query(sql, params) as Product[])
+    setLoading(true)
+    try {
+      setProducts(await window.electronAPI.db.query(sql, params) as Product[])
+    } finally { setLoading(false) }
   }
 
   async function loadCategories() {
@@ -149,13 +153,10 @@ export default function ProductsScreen() {
 
   return (
     <BackOfficeLayout>
-      <div className="shrink-0 px-6 py-4 border-b border-dark-border bg-dark-surface flex items-center justify-between">
-        <h1 className="text-lg font-bold text-white">Products</h1>
-        <button onClick={openCreate}
-          className="flex items-center gap-2 bg-primary hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">
-          <Plus size={15} /> Add Product
-        </button>
-      </div>
+      <PageHeader
+        title="Products"
+        actions={<Button icon={Plus} onClick={openCreate}>Add Product</Button>}
+      />
 
       <div className="shrink-0 px-6 py-3 border-b border-dark-border flex gap-3">
         <div className="relative flex-1 max-w-xs">
@@ -181,7 +182,8 @@ export default function ProductsScreen() {
             ))}</tr>
           </thead>
           <tbody className="divide-y divide-dark-border">
-            {products.map((p) => (
+            {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={7} />)}
+            {!loading && products.map((p) => (
               <tr key={p.id} className="hover:bg-dark-card/40 group">
                 <td className="px-4 py-3">
                   <p className="text-white text-sm font-medium">{p.name}</p>
@@ -212,44 +214,37 @@ export default function ProductsScreen() {
             ))}
           </tbody>
         </table>
-        {products.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-600">
-            <Package size={40} className="mb-3 opacity-30" /><p className="text-sm">No products found</p>
-          </div>
+        {!loading && products.length === 0 && (
+          <EmptyState icon={Package} title="No products found" />
         )}
       </div>
 
-      {showForm && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-dark-surface border border-dark-border rounded-2xl w-full max-w-md">
-            <div className="flex items-center justify-between p-5 border-b border-dark-border">
-              <h2 className="text-white font-semibold">{editId ? 'Edit Product' : 'New Product'}</h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white"><X size={18} /></button>
-            </div>
+      <Modal
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        title={editId ? 'Edit Product' : 'New Product'}
+        maxWidth="max-w-md"
+        footer={
+          <>
+            <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button className="flex-1" onClick={saveProduct} loading={saving} disabled={!form.name || !form.price}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+          </>
+        }
+      >
             <div className="p-5 space-y-3 max-h-[70vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
-                  <label className="text-xs text-gray-400 mb-1 block">Name *</label>
-                  <input value={form.name} onChange={(e) => f('name', e.target.value)}
-                    className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
+                  <Input label="Name *" value={form.name} onChange={(e) => f('name', e.target.value)} />
                 </div>
                 {[['SKU', 'sku', 'AUTO'], ['Barcode', 'barcode', 'Scan or type']].map(([label, key, ph]) => (
-                  <div key={key}>
-                    <label className="text-xs text-gray-400 mb-1 block">{label}</label>
-                    <input value={form[key as keyof ProductForm] as string} onChange={(e) => f(key as keyof ProductForm, e.target.value)} placeholder={ph}
-                      className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
-                  </div>
+                  <Input key={key} label={label} placeholder={ph}
+                    value={form[key as keyof ProductForm] as string}
+                    onChange={(e) => f(key as keyof ProductForm, e.target.value)} />
                 ))}
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Price (UZS) *</label>
-                  <input type="number" value={form.price} onChange={(e) => f('price', e.target.value)}
-                    className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Cost (UZS)</label>
-                  <input type="number" value={form.cost} onChange={(e) => f('cost', e.target.value)}
-                    className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
-                </div>
+                <Input label="Price (UZS) *" type="number" value={form.price} onChange={(e) => f('price', e.target.value)} />
+                <Input label="Cost (UZS)" type="number" value={form.cost} onChange={(e) => f('cost', e.target.value)} />
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Category</label>
                   <Select
@@ -261,11 +256,7 @@ export default function ProductsScreen() {
                     ]}
                   />
                 </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Alert Qty</label>
-                  <input type="number" value={form.alert_quantity} onChange={(e) => f('alert_quantity', e.target.value)}
-                    className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
-                </div>
+                <Input label="Alert Qty" type="number" value={form.alert_quantity} onChange={(e) => f('alert_quantity', e.target.value)} />
                 <div className="col-span-2 flex items-center gap-6">
                   <label className="flex items-center gap-3 cursor-pointer">
                     <button onClick={() => f('is_stock_managed', !form.is_stock_managed)}
@@ -284,43 +275,27 @@ export default function ProductsScreen() {
                 </div>
               </div>
             </div>
-            <div className="p-5 pt-0 flex gap-3">
-              <button onClick={() => setShowForm(false)} className="flex-1 border border-dark-border text-gray-400 rounded-xl py-2.5 text-sm">Cancel</button>
-              <button onClick={saveProduct} disabled={saving || !form.name || !form.price}
-                className="flex-1 bg-primary disabled:opacity-40 text-white rounded-xl py-2.5 text-sm font-semibold">{saving ? 'Saving…' : 'Save'}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {adjustId !== null && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-dark-surface border border-dark-border rounded-2xl w-72">
-            <div className="flex items-center justify-between p-4 border-b border-dark-border">
-              <h2 className="text-white font-semibold text-sm">Adjust Stock</h2>
-              <button onClick={() => setAdjustId(null)} className="text-gray-400 hover:text-white"><X size={16} /></button>
-            </div>
+      <Modal
+        open={adjustId !== null}
+        onClose={() => setAdjustId(null)}
+        title={<h2 className="text-white font-semibold text-sm">Adjust Stock</h2>}
+        maxWidth="max-w-[18rem]"
+        footer={
+          <>
+            <Button variant="secondary" className="flex-1" onClick={() => setAdjustId(null)}>Cancel</Button>
+            <Button className="flex-1" icon={Check} onClick={saveAdjust}>Save</Button>
+          </>
+        }
+      >
             <div className="p-4 space-y-3">
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">New Quantity</label>
-                <input autoFocus type="number" value={adjustQty} onChange={(e) => setAdjustQty(e.target.value)}
-                  className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Reason</label>
-                <input value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder="e.g. Stock count"
-                  className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
-              </div>
+              <Input label="New Quantity" autoFocus type="number" value={adjustQty}
+                onChange={(e) => setAdjustQty(e.target.value)} />
+              <Input label="Reason" value={adjustReason} placeholder="e.g. Stock count"
+                onChange={(e) => setAdjustReason(e.target.value)} />
             </div>
-            <div className="p-4 pt-0 flex gap-2">
-              <button onClick={() => setAdjustId(null)} className="flex-1 border border-dark-border text-gray-400 rounded-xl py-2">Cancel</button>
-              <button onClick={saveAdjust} className="flex-1 bg-primary text-white rounded-xl py-2 text-sm font-semibold flex items-center justify-center gap-1.5">
-                <Check size={14} /> Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </BackOfficeLayout>
   )
 }

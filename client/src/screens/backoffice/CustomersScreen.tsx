@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { Search, Plus, X, Star, ShoppingBag, Users, Edit2 } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
+import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 
 interface Customer {
@@ -23,6 +24,7 @@ export default function CustomersScreen() {
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState<CustomerForm>({ name: '', phone: '', email: '', address: '' })
   const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
   const debouncedSearch = useDebouncedValue(search)
 
   useEffect(() => { loadCustomers() }, [debouncedSearch])
@@ -41,7 +43,10 @@ export default function CustomersScreen() {
       const q = `%${debouncedSearch}%`; params.push(q, q, q)
     }
     sql += ` GROUP BY c.id ORDER BY c.name LIMIT 100`
-    setCustomers(await window.electronAPI.db.query(sql, params) as Customer[])
+    setLoading(true)
+    try {
+      setCustomers(await window.electronAPI.db.query(sql, params) as Customer[])
+    } finally { setLoading(false) }
   }
 
   async function loadCustomerDetail(id: number) {
@@ -90,13 +95,14 @@ export default function CustomersScreen() {
 
   return (
     <BackOfficeLayout>
-      <div className="shrink-0 px-6 py-4 border-b border-dark-border bg-dark-surface flex items-center justify-between">
-        <h1 className="text-lg font-bold text-white">Customers</h1>
-        <button onClick={() => { setEditId(null); setForm({ name: '', phone: '', email: '', address: '' }); setShowForm(true) }}
-          className="flex items-center gap-2 bg-primary hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">
-          <Plus size={15} /> New Customer
-        </button>
-      </div>
+      <PageHeader
+        title="Customers"
+        actions={
+          <Button icon={Plus} onClick={() => { setEditId(null); setForm({ name: '', phone: '', email: '', address: '' }); setShowForm(true) }}>
+            New Customer
+          </Button>
+        }
+      />
       <div className="shrink-0 px-6 py-3 border-b border-dark-border">
         <div className="relative max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -114,7 +120,8 @@ export default function CustomersScreen() {
               ))}</tr>
             </thead>
             <tbody className="divide-y divide-dark-border">
-              {customers.map((c) => (
+              {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={7} />)}
+              {!loading && customers.map((c) => (
                 <tr key={c.id} onClick={() => openCustomer(c)} className="hover:bg-dark-card/40 cursor-pointer group">
                   <td className="px-4 py-3">
                     <p className="text-white text-sm font-medium">{c.name}</p>
@@ -138,10 +145,8 @@ export default function CustomersScreen() {
               ))}
             </tbody>
           </table>
-          {customers.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-600">
-              <Users size={40} className="mb-3 opacity-30" /><p className="text-sm">No customers yet</p>
-            </div>
+          {!loading && customers.length === 0 && (
+            <EmptyState icon={Users} title="No customers yet" />
           )}
         </div>
 
@@ -209,30 +214,27 @@ export default function CustomersScreen() {
         )}
       </div>
 
-      {showForm && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-dark-surface border border-dark-border rounded-2xl w-full max-w-sm">
-            <div className="flex items-center justify-between p-5 border-b border-dark-border">
-              <h2 className="text-white font-semibold">{editId ? 'Edit Customer' : 'New Customer'}</h2>
-              <button onClick={() => { setShowForm(false); setEditId(null) }} className="text-gray-400 hover:text-white"><X size={18} /></button>
-            </div>
+      <Modal
+        open={showForm}
+        onClose={() => { setShowForm(false); setEditId(null) }}
+        title={editId ? 'Edit Customer' : 'New Customer'}
+        maxWidth="max-w-sm"
+        footer={
+          <>
+            <Button variant="secondary" className="flex-1" onClick={() => { setShowForm(false); setEditId(null) }}>Cancel</Button>
+            <Button className="flex-1" onClick={saveCustomer} loading={saving} disabled={!form.name.trim()}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+          </>
+        }
+      >
             <div className="p-5 space-y-3">
               {[['Name *', 'name', 'text'], ['Phone', 'phone', 'tel'], ['Email', 'email', 'email'], ['Address', 'address', 'text']].map(([label, key, type]) => (
-                <div key={key}>
-                  <label className="text-xs text-gray-400 mb-1 block">{label}</label>
-                  <input type={type} value={form[key as keyof CustomerForm]} onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-                    className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
-                </div>
+                <Input key={key} label={label} type={type} value={form[key as keyof CustomerForm]}
+                  onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))} />
               ))}
             </div>
-            <div className="p-5 pt-0 flex gap-3">
-              <button onClick={() => { setShowForm(false); setEditId(null) }} className="flex-1 border border-dark-border text-gray-400 rounded-xl py-2.5 text-sm">Cancel</button>
-              <button onClick={saveCustomer} disabled={saving || !form.name.trim()}
-                className="flex-1 bg-primary disabled:opacity-40 text-white rounded-xl py-2.5 text-sm font-semibold">{saving ? 'Saving…' : 'Save'}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </BackOfficeLayout>
   )
 }

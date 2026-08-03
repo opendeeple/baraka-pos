@@ -29,6 +29,25 @@ export function createReportsRepository(db: DbAdapter) {
       }
     },
 
+    /** Revenue and sale count per day (inclusive range, gaps filled with 0). */
+    revenueSeries(dateFrom: string, dateTo: string): Array<{ date: string; revenue: number; salesCount: number }> {
+      const rows = db.all<Record<string, any>>(
+        `SELECT sale_date, COALESCE(SUM(total_amount),0) AS revenue, COUNT(*) AS sales_count
+         FROM sales WHERE sale_date BETWEEN ? AND ? AND status = 'completed'
+         GROUP BY sale_date`,
+        [dateFrom, dateTo]
+      )
+      const byDate = new Map(rows.map((r) => [r.sale_date, r]))
+      const out: Array<{ date: string; revenue: number; salesCount: number }> = []
+      for (let d = new Date(`${dateFrom}T00:00:00Z`); ; d.setUTCDate(d.getUTCDate() + 1)) {
+        const key = d.toISOString().slice(0, 10)
+        if (key > dateTo) break
+        const row = byDate.get(key)
+        out.push({ date: key, revenue: Number(row?.revenue) || 0, salesCount: row?.sales_count ?? 0 })
+      }
+      return out
+    },
+
     topProducts(dateFrom: string, dateTo: string, limit = 10): Array<{ productId: number; name: string; quantity: number; revenue: number }> {
       return db
         .all<Record<string, any>>(

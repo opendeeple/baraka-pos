@@ -4,4 +4,5 @@ export type RootStackParamList = {
   CloseSession: undefined
   Settings: undefined
   SalesHistory: undefined
+  PrinterSettings: undefined
 }

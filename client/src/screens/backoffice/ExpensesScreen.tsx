@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Plus, Receipt, X } from 'lucide-react'
+import { Plus, Receipt } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { useAuthStore } from '../../store/auth.store'
 import { fmtUZS } from '../../lib/currency'
-import { Select } from '../../components/ui/Select'
-import { DatePicker } from '../../components/ui/DatePicker'
+import { Modal, Button, Input, EmptyState, PageHeader, Select, DatePicker } from '../../components/ui'
 
 interface Expense {
   id: number; expense_date: string; category: string; description: string
@@ -68,16 +67,11 @@ export default function ExpensesScreen() {
 
   return (
     <BackOfficeLayout>
-      <div className="shrink-0 px-6 py-4 border-b border-dark-border bg-dark-surface flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold text-white">Expenses</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Total: <span className="text-red-400 font-semibold">UZS {fmtUZS(totalExpenses)}</span></p>
-        </div>
-        <button onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 bg-primary hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">
-          <Plus size={15} /> Add Expense
-        </button>
-      </div>
+      <PageHeader
+        title="Expenses"
+        subtitle={<>Total: <span className="text-red-400 font-semibold">UZS {fmtUZS(totalExpenses)}</span></>}
+        actions={<Button icon={Plus} onClick={() => setShowForm(true)}>Add Expense</Button>}
+      />
 
       <div className="shrink-0 px-6 py-3 border-b border-dark-border flex items-center gap-2">
         <span className="text-xs text-gray-500 shrink-0">From</span>
@@ -108,19 +102,24 @@ export default function ExpensesScreen() {
           </tbody>
         </table>
         {expenses.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-600">
-            <Receipt size={40} className="mb-3 opacity-30" /><p className="text-sm">No expenses in this period</p>
-          </div>
+          <EmptyState icon={Receipt} title="No expenses in this period" />
         )}
       </div>
 
-      {showForm && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-dark-surface border border-dark-border rounded-2xl w-full max-w-sm">
-            <div className="flex items-center justify-between p-5 border-b border-dark-border">
-              <h2 className="text-white font-semibold">Add Expense</h2>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white"><X size={18} /></button>
-            </div>
+      <Modal
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        title="Add Expense"
+        maxWidth="max-w-sm"
+        footer={
+          <>
+            <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button className="flex-1" onClick={saveExpense} loading={saving} disabled={!form.description || !form.amount}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+          </>
+        }
+      >
             <div className="p-5 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -136,17 +135,11 @@ export default function ExpensesScreen() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Description *</label>
-                <input value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="e.g. Electricity bill"
-                  className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
-              </div>
+              <Input label="Description *" placeholder="e.g. Electricity bill" value={form.description}
+                onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Amount (UZS) *</label>
-                  <input type="number" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} placeholder="0.00"
-                    className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
-                </div>
+                <Input label="Amount (UZS) *" type="number" placeholder="0.00" value={form.amount}
+                  onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} />
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Payment Method</label>
                   <Select
@@ -156,20 +149,10 @@ export default function ExpensesScreen() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Reference</label>
-                <input value={form.reference} onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))} placeholder="Receipt #, invoice #"
-                  className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary" />
-              </div>
+              <Input label="Reference" placeholder="Receipt #, invoice #" value={form.reference}
+                onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))} />
             </div>
-            <div className="p-5 pt-0 flex gap-3">
-              <button onClick={() => setShowForm(false)} className="flex-1 border border-dark-border text-gray-400 rounded-xl py-2.5 text-sm">Cancel</button>
-              <button onClick={saveExpense} disabled={saving || !form.description || !form.amount}
-                className="flex-1 bg-primary disabled:opacity-40 text-white rounded-xl py-2.5 text-sm font-semibold">{saving ? 'Saving…' : 'Save'}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </BackOfficeLayout>
   )
 }

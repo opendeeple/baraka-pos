@@ -1,12 +1,22 @@
 import { useCallback, useState } from 'react'
-import {
-  FlatList, Modal, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View,
-} from 'react-native'
+import { FlatList, StyleSheet, Switch, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { ProductListItem } from '@baraka/data'
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Icon,
+  Input,
+  ListRow,
+  Screen,
+  Sheet,
+  toast,
+  useTheme,
+} from '@baraka/mobile-ui'
+import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
-import { colors } from '../theme'
 
 interface FormState {
   name: string
@@ -23,6 +33,7 @@ const EMPTY_FORM: FormState = {
 }
 
 export function ProductsScreen() {
+  const theme = useTheme()
   const { repos, engine } = getServices()
   const [search, setSearch] = useState('')
   const [products, setProducts] = useState<ProductListItem[]>([])
@@ -47,13 +58,19 @@ export function ProductsScreen() {
     setForm({
       name: p.name, sku: p.sku ?? '', barcode: p.barcode ?? '',
       price: String(p.price), cost: String(p.cost),
-      alertQuantity: '', isStockManaged: p.isStockManaged,
+      // Pre-refactor this was hardcoded '' — every edit silently wiped the
+      // low-stock threshold back to 0.
+      alertQuantity: p.alertQuantity ? String(p.alertQuantity) : '',
+      isStockManaged: p.isStockManaged,
     })
     setShowForm(true)
   }
 
   function save() {
-    if (!form.name.trim() || !form.price) return
+    if (!form.name.trim() || !form.price) {
+      toast.error('Name and price are required')
+      return
+    }
     const input = {
       name: form.name.trim(),
       sku: form.sku.trim() || null,
@@ -67,126 +84,122 @@ export function ProductsScreen() {
     else repos.products.create(input)
     engine.flushOutbox().catch(() => {})
     setShowForm(false)
+    toast.success(editId ? 'Product updated' : 'Product created')
     load()
   }
 
   const set = (k: keyof FormState, v: string | boolean) => setForm((prev) => ({ ...prev, [k]: v }))
 
   return (
-    <View style={styles.container}>
+    <Screen padded={false}>
       <View style={styles.toolbar}>
-        <TextInput
-          style={styles.search}
+        <Input
           value={search}
           onChangeText={setSearch}
           onSubmitEditing={load}
           placeholder="Search products…"
-          placeholderTextColor={colors.textMuted}
+          returnKeyType="search"
+          left={<Icon name="search" size={16} color={theme.textFaint} />}
+          containerStyle={styles.searchWrap}
         />
-        <TouchableOpacity style={styles.addBtn} onPress={openCreate}>
-          <Text style={styles.addBtnText}>＋ New</Text>
-        </TouchableOpacity>
+        <Button title="New" icon="plus" size="md" onPress={openCreate} />
       </View>
 
       <FlatList
         data={products}
         keyExtractor={(p) => String(p.id)}
-        contentContainerStyle={{ padding: 12, gap: 8 }}
+        contentContainerStyle={styles.list}
+        keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.card} onPress={() => openEdit(item)}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.meta}>
-                {item.barcode ?? item.sku ?? '—'} · {item.isStockManaged ? `stock ${item.stock}` : 'unmanaged'}
-              </Text>
-            </View>
-            <Text style={styles.price}>{fmtUZS(item.price)}</Text>
-          </TouchableOpacity>
+          <ListRow
+            title={item.name}
+            subtitle={`${item.barcode ?? item.sku ?? '—'} · ${item.isStockManaged ? `stock ${item.stock}` : 'unmanaged'}`}
+            onPress={() => openEdit(item)}
+            right={
+              <View style={styles.rowRight}>
+                {item.isStockManaged && item.alertQuantity > 0 && item.stock <= item.alertQuantity ? (
+                  <Badge label="Low" tone="warning" />
+                ) : null}
+                <Text style={[typeScale.money, { color: theme.primary }]}>{fmtUZS(item.price)}</Text>
+              </View>
+            }
+          />
         )}
-        ListEmptyComponent={<Text style={styles.empty}>No products</Text>}
+        ListEmptyComponent={
+          <EmptyState
+            icon="package"
+            title={search ? 'No products found' : 'No products yet'}
+            message={search ? 'Try a different search' : 'Create your first product to start selling'}
+            action={search ? undefined : { label: 'New product', onPress: openCreate }}
+          />
+        }
       />
 
-      <Modal visible={showForm} animationType="slide" transparent onRequestClose={() => setShowForm(false)}>
-        <View style={styles.overlay}>
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>{editId ? 'Edit product' : 'New product'}</Text>
-            <Field label="Name" value={form.name} onChange={(v) => set('name', v)} />
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Field label="Price" value={form.price} onChange={(v) => set('price', v)} numeric flex />
-              <Field label="Cost" value={form.cost} onChange={(v) => set('cost', v)} numeric flex />
-            </View>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Field label="Barcode" value={form.barcode} onChange={(v) => set('barcode', v)} flex />
-              <Field label="SKU" value={form.sku} onChange={(v) => set('sku', v)} flex />
-            </View>
-            <View style={styles.switchRow}>
-              <Text style={styles.fieldLabel}>Track stock</Text>
+      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? 'Edit product' : 'New product'}>
+        <View style={styles.form}>
+          <Input label="Name" value={form.name} onChangeText={(v) => set('name', v)} />
+          <View style={styles.row2}>
+            <Input
+              label="Price"
+              value={form.price}
+              onChangeText={(v) => set('price', v)}
+              keyboardType="numeric"
+              containerStyle={styles.flex1}
+            />
+            <Input
+              label="Cost"
+              value={form.cost}
+              onChangeText={(v) => set('cost', v)}
+              keyboardType="numeric"
+              containerStyle={styles.flex1}
+            />
+          </View>
+          <View style={styles.row2}>
+            <Input
+              label="Barcode"
+              value={form.barcode}
+              onChangeText={(v) => set('barcode', v)}
+              containerStyle={styles.flex1}
+            />
+            <Input label="SKU" value={form.sku} onChangeText={(v) => set('sku', v)} containerStyle={styles.flex1} />
+          </View>
+          <View style={styles.row2}>
+            <Input
+              label="Low-stock alert at"
+              value={form.alertQuantity}
+              onChangeText={(v) => set('alertQuantity', v)}
+              keyboardType="numeric"
+              helperText="0 disables the low-stock warning"
+              containerStyle={styles.flex1}
+            />
+            <View style={[styles.flex1, styles.switchCol]}>
+              <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Track stock</Text>
               <Switch
                 value={form.isStockManaged}
                 onValueChange={(v) => set('isStockManaged', v)}
-                trackColor={{ true: colors.primary, false: colors.border }}
+                trackColor={{ true: theme.primary, false: theme.border }}
               />
             </View>
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
-              <TouchableOpacity style={[styles.sheetBtn, { backgroundColor: colors.border }]} onPress={() => setShowForm(false)}>
-                <Text style={styles.sheetBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.sheetBtn, { backgroundColor: colors.primary, flex: 2 }]} onPress={save}>
-                <Text style={styles.sheetBtnText}>Save</Text>
-              </TouchableOpacity>
-            </View>
+          </View>
+          <View style={styles.actions}>
+            <Button title="Cancel" variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title="Save" onPress={save} style={styles.flex2} />
           </View>
         </View>
-      </Modal>
-    </View>
-  )
-}
-
-function Field({ label, value, onChange, numeric, flex }: {
-  label: string; value: string; onChange: (v: string) => void; numeric?: boolean; flex?: boolean
-}) {
-  return (
-    <View style={[{ marginBottom: 10 }, flex && { flex: 1 }]}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={value}
-        onChangeText={onChange}
-        keyboardType={numeric ? 'numeric' : 'default'}
-        placeholderTextColor={colors.textMuted}
-      />
-    </View>
+      </Sheet>
+    </Screen>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  toolbar: { flexDirection: 'row', gap: 8, padding: 12, paddingBottom: 0 },
-  search: {
-    flex: 1, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, color: colors.text,
-  },
-  addBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center' },
-  addBtnText: { color: colors.onPrimary, fontWeight: '700' },
-  card: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card,
-    borderRadius: 12, padding: 14, gap: 10, borderWidth: 1, borderColor: colors.border,
-  },
-  name: { color: colors.text, fontSize: 15, fontWeight: '600' },
-  meta: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
-  price: { color: colors.primary, fontSize: 15, fontWeight: '700' },
-  empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40 },
-  overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-  sheet: {
-    backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18,
-  },
-  sheetTitle: { color: colors.text, fontSize: 17, fontWeight: '700', marginBottom: 14 },
-  fieldLabel: { color: colors.textMuted, fontSize: 12, marginBottom: 4 },
-  input: {
-    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 10, color: colors.text,
-  },
-  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
-  sheetBtn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  sheetBtnText: { color: colors.onPrimary, fontWeight: '700' },
+  toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'flex-start' },
+  searchWrap: { flex: 1 },
+  list: { padding: spacing.md, gap: spacing.sm, flexGrow: 1 },
+  rowRight: { alignItems: 'flex-end', gap: spacing.xs },
+  form: { gap: spacing.sm, paddingBottom: spacing.sm },
+  row2: { flexDirection: 'row', gap: spacing.sm },
+  flex1: { flex: 1 },
+  flex2: { flex: 2 },
+  switchCol: { alignItems: 'flex-start', justifyContent: 'space-between', paddingVertical: spacing.xs },
+  actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
 })

@@ -49,3 +49,4 @@ pnpm-debug.log*
 .DS_Store
 .vscode/
 .idea/
+server-3002.log

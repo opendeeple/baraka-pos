@@ -5,7 +5,8 @@ import { NavigationContainer, DarkTheme } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { StatusBar } from 'expo-status-bar'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
-import { Icon, ThemeProvider, ToastProvider, type IconName } from '@baraka/mobile-ui'
+import { Icon, SyncStatusBadge, ThemeProvider, ToastProvider, type IconName } from '@baraka/mobile-ui'
+import { useSyncStatus } from '@baraka/mobile-shell'
 import { openDatabase } from './platform/database'
 import { getServices } from './platform/services'
 import { useAuthStore } from './platform/authStore'
@@ -29,6 +30,15 @@ const navTheme = {
     primary: colors.primary,
     text: colors.text,
   },
+}
+
+function HeaderSyncBadge() {
+  const status = useSyncStatus()
+  return (
+    <View style={{ marginRight: 16 }}>
+      <SyncStatusBadge state={status.state} pendingCount={status.pendingCount} />
+    </View>
+  )
 }
 
 const TAB_ICONS: Record<string, IconName> = {
@@ -95,6 +105,7 @@ export default function AppRoot() {
               headerStyle: { backgroundColor: colors.surface },
               headerTintColor: colors.text,
               headerTitleStyle: { fontWeight: '700' },
+              headerRight: () => <HeaderSyncBadge />,
               tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
               tabBarActiveTintColor: colors.primary,
               tabBarInactiveTintColor: colors.textMuted,

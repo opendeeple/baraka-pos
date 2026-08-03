@@ -3,7 +3,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth.store'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { UpdateBanner } from '../components/layout/UpdateBanner'
-import { Toaster } from 'sonner'
+import { AppToaster } from '../components/ui/AppToaster'
 import { AppModeProvider } from '../contexts/AppModeContext'
 import OfficeLoginScreen from './LoginScreen'
 
@@ -40,14 +40,7 @@ const backofficeRoutes = [
 export default function App() {
   return (
     <AppModeProvider value="office">
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          style: { background: '#1e2130', border: '1px solid #2a2d3e', color: '#fff' },
-          duration: 4000,
-        }}
-        richColors
-      />
+      <AppToaster />
       <ErrorBoundary>
         <div className="flex flex-col h-screen">
           <UpdateBanner />

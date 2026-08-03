@@ -4,7 +4,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { NavigationContainer, DarkTheme } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { StatusBar } from 'expo-status-bar'
-import { IconButton, ThemeProvider, ToastProvider } from '@baraka/mobile-ui'
+import { IconButton, SyncStatusBadge, ThemeProvider, ToastProvider } from '@baraka/mobile-ui'
+import { useSyncStatus } from '@baraka/mobile-shell'
 import { openDatabase } from './platform/database'
 import { getServices } from './platform/services'
 import { useAuthStore } from './platform/authStore'
@@ -15,10 +16,16 @@ import { PaymentScreen } from './screens/PaymentScreen'
 import { CloseSessionScreen } from './screens/CloseSessionScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
 import { SalesHistoryScreen } from './screens/SalesHistoryScreen'
+import { PrinterSettingsScreen } from './screens/PrinterSettingsScreen'
 import { colors } from './theme'
 import type { RootStackParamList } from './navigation'
 
 const Stack = createNativeStackNavigator<RootStackParamList>()
+
+function HeaderSyncBadge() {
+  const status = useSyncStatus()
+  return <SyncStatusBadge state={status.state} pendingCount={status.pendingCount} />
+}
 
 const navTheme = {
   ...DarkTheme,
@@ -90,6 +97,7 @@ export default function AppRoot() {
                 title: 'BarakaPOS',
                 headerRight: () => (
                   <View style={styles.headerActions}>
+                    <HeaderSyncBadge />
                     <IconButton
                       icon="history"
                       accessibilityLabel="Sales history"
@@ -116,6 +124,7 @@ export default function AppRoot() {
             <Stack.Screen name="CloseSession" component={CloseSessionScreen} options={{ title: 'Close Register' }} />
             <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
             <Stack.Screen name="SalesHistory" component={SalesHistoryScreen} options={{ title: 'Sales' }} />
+            <Stack.Screen name="PrinterSettings" component={PrinterSettingsScreen} options={{ title: 'Printer' }} />
           </Stack.Navigator>
         )}
       </NavigationContainer>
@@ -133,5 +142,5 @@ export default function AppRoot() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  headerActions: { flexDirection: 'row', gap: 4 },
+  headerActions: { flexDirection: 'row', gap: 4, alignItems: 'center' },
 })

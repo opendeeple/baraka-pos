@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import {
-  Users, Plus, Search, X, Check, Eye, EyeOff,
+  Users, Plus, Search, Check, Eye, EyeOff,
   Shield, ChevronRight, Wallet, Calendar,
 } from 'lucide-react'
 import { fmtUZS } from '../../lib/currency'
-import { Select } from '../../components/ui/Select'
-import { DatePicker } from '../../components/ui/DatePicker'
+import { Modal, Button, Input, Select, DatePicker } from '../../components/ui'
 
 interface Employee {
   id: number
@@ -146,12 +145,9 @@ export default function EmployeesScreen() {
           <h1 className="text-white font-bold text-xl">Employees</h1>
           <p className="text-gray-500 text-xs mt-0.5">{employees.length} staff members</p>
         </div>
-        <button
-          onClick={() => { setSelectedEmp(null); setShowForm(true) }}
-          className="flex items-center gap-2 bg-primary hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
-        >
-          <Plus size={15} /> Add Employee
-        </button>
+        <Button icon={Plus} onClick={() => { setSelectedEmp(null); setShowForm(true) }}>
+          Add Employee
+        </Button>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -326,27 +322,28 @@ export default function EmployeesScreen() {
       </div>
 
       {/* Add/Edit Employee Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6">
-          <div className="bg-dark-surface border border-dark-border rounded-2xl w-full max-w-md">
-            <div className="flex items-center justify-between p-5 border-b border-dark-border">
-              <h3 className="text-white font-semibold">{selectedEmp ? 'Edit Employee' : 'New Employee'}</h3>
-              <button onClick={() => setShowForm(false)} className="text-gray-500 hover:text-white"><X size={18} /></button>
-            </div>
+      <Modal
+        open={showForm}
+        onClose={() => setShowForm(false)}
+        title={selectedEmp ? 'Edit Employee' : 'New Employee'}
+        maxWidth="max-w-md"
+        footer={
+          <>
+            <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button className="flex-1" icon={Check} onClick={saveEmployee} loading={saving} disabled={!form.name.trim()}>
+              {saving ? 'Saving…' : 'Save'}
+            </Button>
+          </>
+        }
+      >
             <div className="p-5 space-y-4">
-              <Field label="Full Name *">
-                <input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
-                  className="w-full px-3 py-2.5 bg-dark-card border border-dark-border text-white text-sm rounded-xl" />
-              </Field>
+              <Input label="Full Name *" value={form.name}
+                onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} />
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Email">
-                  <input value={form.email} onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))}
-                    type="email" className="w-full px-3 py-2.5 bg-dark-card border border-dark-border text-white text-sm rounded-xl" />
-                </Field>
-                <Field label="Phone">
-                  <input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))}
-                    className="w-full px-3 py-2.5 bg-dark-card border border-dark-border text-white text-sm rounded-xl" />
-                </Field>
+                <Input label="Email" type="email" value={form.email}
+                  onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} />
+                <Input label="Phone" value={form.phone}
+                  onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Role">
@@ -356,58 +353,47 @@ export default function EmployeesScreen() {
                     options={ROLES.map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
                   />
                 </Field>
-                <Field label="PIN Code">
-                  <div className="relative">
-                    <input value={form.pin_code} onChange={(e) => setForm(f => ({ ...f, pin_code: e.target.value }))}
-                      type={showPin ? 'text' : 'password'} maxLength={6} placeholder="4-6 digits"
-                      className="w-full px-3 pr-9 py-2.5 bg-dark-card border border-dark-border text-white text-sm rounded-xl" />
+                <Input label="PIN Code" value={form.pin_code}
+                  onChange={(e) => setForm(f => ({ ...f, pin_code: e.target.value }))}
+                  type={showPin ? 'text' : 'password'} maxLength={6} placeholder="4-6 digits"
+                  right={
                     <button type="button" onClick={() => setShowPin(p => !p)}
-                      className="absolute right-2.5 top-3 text-gray-500 hover:text-white">
+                      className="text-gray-500 hover:text-white">
                       {showPin ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
-                  </div>
-                </Field>
+                  } />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Monthly Salary (UZS)">
-                  <input value={form.salary} onChange={(e) => setForm(f => ({ ...f, salary: e.target.value }))}
-                    type="number" min="0" className="w-full px-3 py-2.5 bg-dark-card border border-dark-border text-white text-sm rounded-xl" />
-                </Field>
+                <Input label="Monthly Salary (UZS)" type="number" min="0" value={form.salary}
+                  onChange={(e) => setForm(f => ({ ...f, salary: e.target.value }))} />
                 <Field label="Hire Date">
                   <DatePicker value={form.hire_date} onChange={(v) => setForm(f => ({ ...f, hire_date: v }))} className="w-full" />
                 </Field>
               </div>
             </div>
-            <div className="flex gap-3 p-5 pt-0">
-              <button onClick={() => setShowForm(false)}
-                className="flex-1 border border-dark-border text-gray-400 py-2.5 rounded-xl text-sm hover:text-white transition-colors">
-                Cancel
-              </button>
-              <button onClick={saveEmployee} disabled={saving || !form.name.trim()}
-                className="flex-1 bg-primary hover:bg-orange-600 disabled:opacity-40 text-white py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2">
-                <Check size={15} /> {saving ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
       {/* Salary payment modal */}
-      {showSalaryForm && selectedEmp && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6">
-          <div className="bg-dark-surface border border-dark-border rounded-2xl w-full max-w-sm">
-            <div className="flex items-center justify-between p-5 border-b border-dark-border">
-              <h3 className="text-white font-semibold">Record Salary Payment</h3>
-              <button onClick={() => setShowSalaryForm(false)} className="text-gray-500 hover:text-white"><X size={18} /></button>
-            </div>
+      {selectedEmp && (
+        <Modal
+          open={showSalaryForm}
+          onClose={() => setShowSalaryForm(false)}
+          title="Record Salary Payment"
+          maxWidth="max-w-sm"
+          footer={
+            <>
+              <Button variant="secondary" className="flex-1" onClick={() => setShowSalaryForm(false)}>Cancel</Button>
+              <Button className="flex-1" icon={Check} onClick={saveSalary} loading={saving}>
+                {saving ? 'Saving…' : 'Record'}
+              </Button>
+            </>
+          }
+        >
             <div className="p-5 space-y-4">
               <p className="text-gray-400 text-sm">For: <span className="text-white font-medium">{selectedEmp.name}</span></p>
-              <Field label="Amount (UZS) *">
-                <input value={salaryForm.amount} onChange={(e) => setSalaryForm(f => ({ ...f, amount: e.target.value }))}
-                  type="number" min="0"
-                  placeholder={selectedEmp.salary ? String(selectedEmp.salary) : '0'}
-                  className="w-full px-3 py-2.5 bg-dark-card border border-dark-border text-white text-sm rounded-xl" />
-              </Field>
+              <Input label="Amount (UZS) *" type="number" min="0" value={salaryForm.amount}
+                placeholder={selectedEmp.salary ? String(selectedEmp.salary) : '0'}
+                onChange={(e) => setSalaryForm(f => ({ ...f, amount: e.target.value }))} />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Period From *">
                   <DatePicker value={salaryForm.period_from} onChange={(v) => setSalaryForm(f => ({ ...f, period_from: v }))} className="w-full" />
@@ -416,22 +402,10 @@ export default function EmployeesScreen() {
                   <DatePicker value={salaryForm.period_to} onChange={(v) => setSalaryForm(f => ({ ...f, period_to: v }))} className="w-full" />
                 </Field>
               </div>
-              <Field label="Note">
-                <input value={salaryForm.note} onChange={(e) => setSalaryForm(f => ({ ...f, note: e.target.value }))}
-                  placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-dark-card border border-dark-border text-white text-sm rounded-xl" />
-              </Field>
+              <Input label="Note" placeholder="Optional" value={salaryForm.note}
+                onChange={(e) => setSalaryForm(f => ({ ...f, note: e.target.value }))} />
             </div>
-            <div className="flex gap-3 p-5 pt-0">
-              <button onClick={() => setShowSalaryForm(false)}
-                className="flex-1 border border-dark-border text-gray-400 py-2.5 rounded-xl text-sm">Cancel</button>
-              <button onClick={saveSalary} disabled={saving}
-                className="flex-1 bg-primary hover:bg-orange-600 disabled:opacity-40 text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2">
-                <Check size={15} /> {saving ? 'Saving…' : 'Record'}
-              </button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </BackOfficeLayout>
   )
