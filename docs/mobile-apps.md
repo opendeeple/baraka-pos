@@ -70,6 +70,19 @@ distribution happens).
   (`react-native-bluetooth-classic` SPP and a small Sunmi InnerPrinter Expo
   module respectively). The call sites don't change.
 
+## Design system (2026-08-03 refactor)
+
+All four apps share `packages/ui-tokens` (colors/spacing/radius/type/touch/
+motion — desktop Tailwind and the RN theme read the same values). The Android
+apps build on `packages/mobile-ui` (ThemeProvider, lucide icons, Button/Input/
+Screen/Sheet/Dialog/toast/Skeleton/KpiTile/Sparkline/SyncStatusBadge/NumPad;
+44dp targets, safe-area + keyboard handling, haptics, a11y labels) and
+`packages/mobile-shell` (shared platform adapters + Login/Settings screens +
+useSyncStatus). Desktop primitives live in `client/src/components/ui/`
+(Modal has a real focus trap). Feedback rules: destructive/confirm → Dialog,
+success/info → toast, post-sale → receipt sheet (on-screen preview of the
+printed receipt). POS printer setup lives in Settings → Printer.
+
 ## Known limitations / next steps
 
 - Bluetooth + Sunmi printer drivers and the Sunmi broadcast-scanner module
