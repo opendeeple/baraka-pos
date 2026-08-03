@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { NavigationContainer, DarkTheme } from '@react-navigation/native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { StatusBar } from 'expo-status-bar'
+import { IconButton, ThemeProvider, ToastProvider } from '@baraka/mobile-ui'
 import { openDatabase } from './platform/database'
 import { getServices } from './platform/services'
 import { useAuthStore } from './platform/authStore'
@@ -52,67 +54,84 @@ export default function AppRoot() {
     setSession(repos.sessions.current(terminalId))
   }, [ready, isAuthenticated])
 
+  let body
   if (bootError) {
-    return (
+    body = (
       <View style={styles.center}>
         <Text style={{ color: colors.danger, textAlign: 'center' }}>{bootError}</Text>
       </View>
     )
-  }
-  if (!ready) {
-    return (
+  } else if (!ready) {
+    body = (
       <View style={styles.center}>
         <ActivityIndicator color={colors.primary} size="large" />
       </View>
     )
+  } else {
+    body = (
+      <NavigationContainer theme={navTheme}>
+        <StatusBar style="light" />
+        {!isAuthenticated ? (
+          <LoginScreen />
+        ) : !session ? (
+          <OpenSessionScreen />
+        ) : (
+          <Stack.Navigator
+            screenOptions={{
+              headerStyle: { backgroundColor: colors.surface },
+              headerTintColor: colors.text,
+              headerTitleStyle: { fontWeight: '700' },
+            }}
+          >
+            <Stack.Screen
+              name="Register"
+              component={RegisterScreen}
+              options={({ navigation }) => ({
+                title: 'BarakaPOS',
+                headerRight: () => (
+                  <View style={styles.headerActions}>
+                    <IconButton
+                      icon="history"
+                      accessibilityLabel="Sales history"
+                      color={colors.primary}
+                      onPress={() => navigation.navigate('SalesHistory')}
+                    />
+                    <IconButton
+                      icon="lock"
+                      accessibilityLabel="Close register"
+                      color={colors.primary}
+                      onPress={() => navigation.navigate('CloseSession')}
+                    />
+                    <IconButton
+                      icon="settings"
+                      accessibilityLabel="Settings"
+                      color={colors.primary}
+                      onPress={() => navigation.navigate('Settings')}
+                    />
+                  </View>
+                ),
+              })}
+            />
+            <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payment' }} />
+            <Stack.Screen name="CloseSession" component={CloseSessionScreen} options={{ title: 'Close Register' }} />
+            <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+            <Stack.Screen name="SalesHistory" component={SalesHistoryScreen} options={{ title: 'Sales' }} />
+          </Stack.Navigator>
+        )}
+      </NavigationContainer>
+    )
   }
 
   return (
-    <NavigationContainer theme={navTheme}>
-      <StatusBar style="light" />
-      {!isAuthenticated ? (
-        <LoginScreen />
-      ) : !session ? (
-        <OpenSessionScreen />
-      ) : (
-        <Stack.Navigator
-          screenOptions={({ navigation }) => ({
-            headerStyle: { backgroundColor: colors.surface },
-            headerTintColor: colors.text,
-            headerTitleStyle: { fontWeight: '700' },
-          })}
-        >
-          <Stack.Screen
-            name="Register"
-            component={RegisterScreen}
-            options={({ navigation }) => ({
-              title: 'BarakaPOS',
-              headerRight: () => (
-                <View style={{ flexDirection: 'row', gap: 18 }}>
-                  <TouchableOpacity onPress={() => navigation.navigate('SalesHistory')}>
-                    <Text style={styles.headerAction}>≡</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => navigation.navigate('CloseSession')}>
-                    <Text style={styles.headerAction}>Close</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-                    <Text style={styles.headerAction}>⚙︎</Text>
-                  </TouchableOpacity>
-                </View>
-              ),
-            })}
-          />
-          <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payment' }} />
-          <Stack.Screen name="CloseSession" component={CloseSessionScreen} options={{ title: 'Close Register' }} />
-          <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
-          <Stack.Screen name="SalesHistory" component={SalesHistoryScreen} options={{ title: 'Sales' }} />
-        </Stack.Navigator>
-      )}
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <ToastProvider>{body}</ToastProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   )
 }
 
 const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  headerAction: { color: colors.primary, fontSize: 16, fontWeight: '700' },
+  headerActions: { flexDirection: 'row', gap: 4 },
 })

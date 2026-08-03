@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { NavigationContainer, DarkTheme } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { StatusBar } from 'expo-status-bar'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
+import { Icon, ThemeProvider, ToastProvider, type IconName } from '@baraka/mobile-ui'
 import { openDatabase } from './platform/database'
 import { getServices } from './platform/services'
 import { useAuthStore } from './platform/authStore'
@@ -29,12 +31,12 @@ const navTheme = {
   },
 }
 
-const TAB_ICONS: Record<string, string> = {
-  Dashboard: '▦',
-  Products: '⬚',
-  Customers: '☺',
-  Sales: '≡',
-  Settings: '⚙',
+const TAB_ICONS: Record<string, IconName> = {
+  Dashboard: 'dashboard',
+  Products: 'package',
+  Customers: 'users',
+  Sales: 'sales',
+  Settings: 'settings',
 }
 
 export default function AppRoot() {
@@ -68,48 +70,56 @@ export default function AppRoot() {
     return () => clearInterval(flushInterval)
   }, [ready, isAuthenticated])
 
+  let body
   if (bootError) {
-    return (
+    body = (
       <View style={styles.center}>
         <Text style={{ color: colors.danger, textAlign: 'center' }}>{bootError}</Text>
       </View>
     )
-  }
-  if (!ready) {
-    return (
+  } else if (!ready) {
+    body = (
       <View style={styles.center}>
         <ActivityIndicator color={colors.primary} size="large" />
       </View>
     )
+  } else {
+    body = (
+      <NavigationContainer theme={navTheme}>
+        <StatusBar style="light" />
+        {!isAuthenticated ? (
+          <LoginScreen />
+        ) : (
+          <Tab.Navigator
+            screenOptions={({ route }) => ({
+              headerStyle: { backgroundColor: colors.surface },
+              headerTintColor: colors.text,
+              headerTitleStyle: { fontWeight: '700' },
+              tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
+              tabBarActiveTintColor: colors.primary,
+              tabBarInactiveTintColor: colors.textMuted,
+              tabBarIcon: ({ color }) => (
+                <Icon name={TAB_ICONS[route.name] ?? 'none'} size={20} color={color} />
+              ),
+            })}
+          >
+            <Tab.Screen name="Dashboard" component={DashboardScreen} />
+            <Tab.Screen name="Products" component={ProductsScreen} />
+            <Tab.Screen name="Customers" component={CustomersScreen} />
+            <Tab.Screen name="Sales" component={SalesScreen} />
+            <Tab.Screen name="Settings" component={SettingsScreen} />
+          </Tab.Navigator>
+        )}
+      </NavigationContainer>
+    )
   }
 
   return (
-    <NavigationContainer theme={navTheme}>
-      <StatusBar style="light" />
-      {!isAuthenticated ? (
-        <LoginScreen />
-      ) : (
-        <Tab.Navigator
-          screenOptions={({ route }) => ({
-            headerStyle: { backgroundColor: colors.surface },
-            headerTintColor: colors.text,
-            headerTitleStyle: { fontWeight: '700' },
-            tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
-            tabBarActiveTintColor: colors.primary,
-            tabBarInactiveTintColor: colors.textMuted,
-            tabBarIcon: ({ color }) => (
-              <Text style={{ color, fontSize: 18 }}>{TAB_ICONS[route.name] ?? '•'}</Text>
-            ),
-          })}
-        >
-          <Tab.Screen name="Dashboard" component={DashboardScreen} />
-          <Tab.Screen name="Products" component={ProductsScreen} />
-          <Tab.Screen name="Customers" component={CustomersScreen} />
-          <Tab.Screen name="Sales" component={SalesScreen} />
-          <Tab.Screen name="Settings" component={SettingsScreen} />
-        </Tab.Navigator>
-      )}
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <ToastProvider>{body}</ToastProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   )
 }
 

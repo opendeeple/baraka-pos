@@ -1,5 +1,5 @@
 {
-  "name": "@baraka/mobile-ui",
+  "name": "@baraka/mobile-shell",
   "version": "1.0.0",
   "private": true,
   "main": "src/index.ts",
@@ -7,15 +7,20 @@
   "types": "src/index.ts",
   "react-native": "src/index.ts",
   "dependencies": {
+    "@baraka/app-core": "workspace:*",
+    "@baraka/data": "workspace:*",
+    "@baraka/db-schema": "workspace:*",
+    "@baraka/mobile-ui": "workspace:*",
+    "@baraka/shared": "workspace:*",
+    "@baraka/sync-engine": "workspace:*",
     "@baraka/ui-tokens": "workspace:*"
   },
   "peerDependencies": {
-    "expo-haptics": "*",
-    "lucide-react-native": "*",
+    "expo-crypto": "*",
+    "expo-sqlite": "*",
     "react": "^19.0.0",
     "react-native": "*",
-    "react-native-safe-area-context": "*",
-    "react-native-svg": "*"
+    "zustand": "*"
   },
   "devDependencies": {
     "@types/react": "~19.2.0"
