@@ -96,6 +96,16 @@ async function main() {
   const inc = await pullTableV2('products')
   check('incremental pull is empty', inc.count === 0, `${inc.count}`)
 
+  // Re-pulling must never duplicate rows (upsert on sync_id, one row per server record)
+  await pullTableV2('products')
+  const dupSync = (db.prepare(
+    `SELECT COUNT(*) c FROM (SELECT sync_id FROM products GROUP BY sync_id HAVING COUNT(*) > 1)`
+  ).get() as any).c
+  const dupName = (db.prepare(
+    `SELECT COUNT(*) c FROM (SELECT name FROM products GROUP BY name HAVING COUNT(*) > 1)`
+  ).get() as any).c
+  check('no duplicate products after re-pull', dupSync === 0 && dupName === 0, `syncDup=${dupSync} nameDup=${dupName}`)
+
   // 4. Invoice range leased at registration
   const inv1 = nextInvoiceNumber()
   check('invoice number from leased range', Boolean(inv1 && /-\d{6}$/.test(inv1!)), inv1 ?? 'null')

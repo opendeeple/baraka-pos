@@ -17,6 +17,10 @@ router.post('/login', async (req: Request, res: Response) => {
     const result = await login(body)
     res.json(result)
   } catch (err: unknown) {
+    // ZodError.message is a JSON dump of the issues — never show that to a login form.
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Username and password are required' })
+    }
     const msg = err instanceof Error ? err.message : 'Login failed'
     res.status(401).json({ error: msg })
   }

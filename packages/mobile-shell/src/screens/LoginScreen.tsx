@@ -53,7 +53,14 @@ export function LoginScreen({ subtitle, platformKind }: LoginScreenProps) {
         body: JSON.stringify({ username: username.trim(), password }),
       })
       const data = await res.json()
-      if (res.status !== 200) throw new Error(data?.error ?? 'Login failed')
+      if (res.status !== 200) {
+        // Guard against structured error payloads (e.g. validation issue
+        // arrays) leaking into the form — only plain messages are shown.
+        const msg = typeof data?.error === 'string' && !data.error.trimStart().startsWith('[') && !data.error.trimStart().startsWith('{')
+          ? data.error
+          : 'Login failed — check your username and password'
+        throw new Error(msg)
+      }
 
       repos.settings.set('server_url', base)
       repos.settings.set('store_id', String(data.store.id))
