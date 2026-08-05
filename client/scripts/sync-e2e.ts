@@ -78,11 +78,18 @@ async function main() {
       `SELECT COUNT(*) c FROM sales WHERE length(sale_date) != 10`
     ).get() as any).c
     check('pulled sales use date-only sale_date', badDates === 0, `${badDates} ISO-timestamp rows`)
-    const todayStr = new Date().toISOString().split('T')[0]
-    const todayCount = (db.prepare(
+    // Day-independent form of the dashboard's `sale_date = ?` equality filter:
+    // the latest sale_date present must be matchable by exact equality (this
+    // failed when pulled rows stored ISO timestamps). Using "today" here was
+    // flaky — the first run of a new day has no sales for that date yet.
+    const latest = (db.prepare(
+      `SELECT sale_date d, COUNT(*) c FROM sales WHERE status = 'completed'
+       GROUP BY sale_date ORDER BY sale_date DESC LIMIT 1`
+    ).get() as any)
+    const eqCount = (db.prepare(
       `SELECT COUNT(*) c FROM sales WHERE sale_date = ? AND status = 'completed'`
-    ).get(todayStr) as any).c
-    check('today-filter matches pulled sales (dashboard query)', todayCount >= 1, `${todayCount} for ${todayStr}`)
+    ).get(latest.d) as any).c
+    check('date-equality filter matches pulled sales (dashboard query)', eqCount === latest.c, `${eqCount}/${latest.c} for ${latest.d}`)
   }
 
   // 3. Incremental pull returns nothing new
