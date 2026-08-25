@@ -41,6 +41,7 @@
     "recharts": "^2.12.7",
     "socket.io-client": "^4.7.5",
     "sonner": "^2.0.7",
+    "usb": "^3.0.0",
     "uuid": "^10.0.0",
     "zustand": "^4.5.4"
   },
@@ -59,6 +60,7 @@
     "electron-vite": "^2.3.0",
     "playwright": "^1.61.0",
     "postcss": "^8.4.39",
+    "prebuild-install": "^7.1.3",
     "serve": "^14.2.6",
     "tailwindcss": "^3.4.6",
     "typescript": "^5.4.5",
@@ -67,7 +69,7 @@
   "build": {
     "appId": "com.baraka.pos",
     "productName": "BarakaPOS",
-    "copyright": "Copyright \u00a9 2025 BarakaPOS",
+    "copyright": "Copyright © 2025 BarakaPOS",
     "directories": {
       "buildResources": "resources",
       "output": "dist"
@@ -132,7 +134,8 @@
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*",
       "node_modules/escpos-usb/**/*",
-      "node_modules/keytar/**/*"
+      "node_modules/keytar/**/*",
+      "node_modules/usb/**/*"
     ]
   }
 }

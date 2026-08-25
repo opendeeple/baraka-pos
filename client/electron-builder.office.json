@@ -19,14 +19,18 @@
     {
       "from": "resources/",
       "to": "resources/",
-      "filter": ["**/*"]
+      "filter": [
+        "**/*"
+      ]
     }
   ],
   "win": {
     "target": [
       {
         "target": "nsis",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       }
     ],
     "icon": "resources/icon.ico",
@@ -63,6 +67,7 @@
   "asar": true,
   "asarUnpack": [
     "node_modules/better-sqlite3/**/*",
-    "node_modules/keytar/**/*"
+    "node_modules/keytar/**/*",
+    "node_modules/usb/**/*"
   ]
 }
