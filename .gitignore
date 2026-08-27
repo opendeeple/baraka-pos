@@ -50,3 +50,4 @@ pnpm-debug.log*
 .vscode/
 .idea/
 server-3002.log
+dist-office/
