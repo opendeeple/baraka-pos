@@ -41,7 +41,7 @@ async function main() {
   // 1. Login as admin (JWT) and register the device
   const loginRes = await fetch(`${SERVER}/api/auth/login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    body: JSON.stringify({ username: 'admin', password: process.env.ADMIN_PASSWORD || 'admin123' }),
   })
   const login = await loginRes.json() as any
   check('admin login', loginRes.status === 200)
@@ -177,7 +177,7 @@ async function main() {
   // 8. Server-side verification
   const verify = await fetch(`${SERVER}/api/auth/login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+    body: JSON.stringify({ username: 'admin', password: process.env.ADMIN_PASSWORD || 'admin123' }),
   }).then((r) => r.json()) as any
   const saleCheck = await fetch(`${SERVER}/api/sales?page=1`, {
     headers: { Authorization: `Bearer ${verify.token}` },

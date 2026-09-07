@@ -24,7 +24,7 @@ async function json(method: string, path: string, body?: unknown, headers: Recor
 
 async function main() {
   // --- auth + registration ---
-  const login = await json('POST', '/api/auth/login', { username: 'admin', password: 'admin123' })
+  const login = await json('POST', '/api/auth/login', { username: 'admin', password: process.env.ADMIN_PASSWORD || 'admin123' })
   check('admin login', login.status === 200)
   const jwt = { Authorization: `Bearer ${login.data.token}` }
 
