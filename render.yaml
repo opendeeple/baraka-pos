@@ -13,7 +13,7 @@ services:
       pnpm --filter server exec prisma generate &&
       pnpm --filter server exec prisma migrate deploy &&
       pnpm --filter server build
-    startCommand: pnpm --filter server start
+    startCommand: cd server && node dist/main.js
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
