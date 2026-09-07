@@ -14,8 +14,8 @@ This covers the server (`server/`) + database. Desktop distribution (`client/`) 
 
 1. Create a free account at supabase.com and a new project (region close to your store).
 2. Wait for provisioning, then go to **Project Settings > Database > Connection string > URI**.
-3. Copy the **direct connection** string (port `5432`, *not* the pooler string on `6543` — see the comment in `server/.env.example` for why).
-4. It looks like `postgresql://postgres:[YOUR-PASSWORD]@db.xxxxxxxx.supabase.co:5432/postgres` — replace `[YOUR-PASSWORD]` with the DB password you set during project creation.
+3. Copy the **Session pooler** string (port `5432`). Do NOT use the direct `db.xxx.supabase.co` host: it is IPv6-only and Render cannot reach it (build fails with Prisma P1001). The transaction pooler on `6543` also won't work — Prisma migrate needs session semantics.
+4. It looks like `postgresql://postgres.xxxxxxxx:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:5432/postgres` — note the `aws-0`/`aws-1` prefix is project-specific; always copy it from the dashboard (Connect > Direct > Session pooler) rather than guessing.
 5. Keep this string handy for step 3 below — don't commit it anywhere.
 
 **The 7-day auto-pause**: a free Supabase project pauses if it gets zero database traffic for 7 days straight. The keep-alive workflow (step 4) prevents this by hitting your server's `/api/health` regularly, which keeps Prisma's connection warm — as long as the workflow is running, this won't trigger. If it ever does pause (e.g. you paused the GitHub Actions workflow), just log into the Supabase dashboard and click "Restore project."
