@@ -51,3 +51,4 @@ pnpm-debug.log*
 .idea/
 server-3002.log
 dist-office/
+.env.supabase
