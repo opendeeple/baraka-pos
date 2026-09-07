@@ -1,6 +1,7 @@
 // Platform-agnostic sync protocol v2 client engine, shared by Electron
 // (better-sqlite3 in the main process) and the Android apps (expo-sqlite sync
 // API). All platform concerns are injected via SyncEngineDeps.
+import { DEFAULT_SERVER_URL } from '@baraka/shared'
 
 // ---------------------------------------------------------------------------
 // Injected dependencies
@@ -139,7 +140,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
   }
 
   function getServerUrl(): string {
-    return getSetting('server_url', 'http://localhost:3001')
+    return getSetting('server_url', DEFAULT_SERVER_URL)
   }
 
   // --- HTTP (cold-start-aware timeouts for Render free tier) ---------------

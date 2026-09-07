@@ -1,7 +1,11 @@
 import { useEffect, useRef, type MutableRefObject } from 'react'
 import { io, Socket } from 'socket.io-client'
+import { DEFAULT_SERVER_URL } from '@baraka/shared'
 import { useAuthStore } from '../store/auth.store'
 import { useSyncStore } from '../store/sync.store'
+
+// Fixed server (dev override: VITE_SERVER_URL). Matches the login screen.
+const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string | undefined) || DEFAULT_SERVER_URL
 
 type StockUpdatePayload = { productId: number; batchId: number; newQty: number }
 type SaleCompletedPayload = { saleId: number; invoiceNumber: string; total: number }
@@ -24,10 +28,7 @@ export function useWebSocket(opts: WebSocketOpts = {}): MutableRefObject<Socket 
   useEffect(() => {
     if (!token || !store) return
 
-    const serverUrl = localStorage.getItem('server_url') ?? ''
-    if (!serverUrl) return
-
-    const socket = io(serverUrl, {
+    const socket = io(SERVER_URL, {
       auth: { token },
       transports: ['websocket'],
       reconnectionDelay: 2000,

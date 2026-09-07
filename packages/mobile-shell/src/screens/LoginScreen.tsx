@@ -3,10 +3,13 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import type { AuthUser } from '@baraka/shared'
 import { Button, Input, Screen, useTheme } from '@baraka/mobile-ui'
 import { type as typeScale, spacing } from '@baraka/ui-tokens'
+import { DEFAULT_SERVER_URL } from '@baraka/shared'
 import { getServices } from '../platform/services'
 import { useAuthStore, type StoreInfo } from '../platform/authStore'
 
-const DEFAULT_SERVER = 'https://barakapos-server.onrender.com'
+// Fixed server — end users never see or type an address. Dev override:
+// EXPO_PUBLIC_SERVER_URL (e.g. http://10.0.2.2:3001 for a local emulator).
+const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL || DEFAULT_SERVER_URL
 
 export interface LoginScreenProps {
   subtitle: string
@@ -18,7 +21,6 @@ export function LoginScreen({ subtitle, platformKind }: LoginScreenProps) {
   const theme = useTheme()
   const { repos, engine } = getServices()
   const setAuth = useAuthStore((s) => s.setAuth)
-  const [serverUrl, setServerUrl] = useState(DEFAULT_SERVER)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -31,8 +33,9 @@ export function LoginScreen({ subtitle, platformKind }: LoginScreenProps) {
     try {
       const cachedUser = repos.settings.getJson<AuthUser>('cached_user')
       const cachedStore = repos.settings.getJson<StoreInfo>('cached_store')
-      const savedUrl = repos.settings.get('server_url')
-      if (savedUrl) setServerUrl(savedUrl)
+      // Always pin the server to the fixed URL — overwrites any stale address
+      // saved by an older build so the sync engine targets production.
+      repos.settings.set('server_url', SERVER_URL)
       if (cachedUser && cachedStore) {
         setAuth(cachedUser, null, cachedStore)
         return
@@ -46,7 +49,7 @@ export function LoginScreen({ subtitle, platformKind }: LoginScreenProps) {
     setError('')
     setLoading(true)
     try {
-      const base = serverUrl.replace(/\/+$/, '')
+      const base = SERVER_URL.replace(/\/+$/, '')
       const res = await fetch(`${base}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -94,16 +97,6 @@ export function LoginScreen({ subtitle, platformKind }: LoginScreenProps) {
           <ActivityIndicator color={theme.primary} />
         ) : (
           <View style={styles.form}>
-            <Input
-              value={serverUrl}
-              onChangeText={setServerUrl}
-              label="Server URL"
-              placeholder="https://…"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              returnKeyType="next"
-            />
             <Input
               value={username}
               onChangeText={setUsername}

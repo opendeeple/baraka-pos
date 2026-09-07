@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuthStore } from '../../store/auth.store'
 import { useSessionStore, LocalPosSession } from '../../store/session.store'
-import { AuthUser } from '@baraka/shared'
+import { AuthUser, DEFAULT_SERVER_URL } from '@baraka/shared'
 
-const DEFAULT_SERVER_URL = 'http://localhost:3001'
+// Fixed server — end users never see or type an address. Dev override:
+// VITE_SERVER_URL (e.g. http://localhost:3001).
+const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string | undefined) || DEFAULT_SERVER_URL
 
 export interface LoginScreenProps {
   /**
@@ -28,7 +30,18 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
   // office variant shows the form immediately while it restores in background.
   const [restoring, setRestoring] = useState(!isOffice)
   const [error, setError] = useState('')
-  const [serverUrl, setServerUrl] = useState(DEFAULT_SERVER_URL)
+
+  // Pin settings.server_url to the fixed URL — overwrites any stale address
+  // (e.g. an old localhost) saved by a previous build so sync targets it.
+  async function pinServerUrl() {
+    try {
+      await window.electronAPI.db.exec(
+        `INSERT OR REPLACE INTO settings (store_id, meta_key, meta_value, updated_at)
+         VALUES ((SELECT COALESCE(MAX(store_id),1) FROM settings), 'server_url', ?, ?)`,
+        [SERVER_URL, new Date().toISOString()]
+      )
+    } catch { /* fresh DB — login will write it */ }
+  }
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -42,18 +55,15 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
 
   async function restorePosSession() {
     try {
+      await pinServerUrl()
       // Read cached user + store from SQLite — works even when server is offline
       const rows = await window.electronAPI.db.query(
-        `SELECT meta_key, meta_value FROM settings WHERE meta_key IN ('cached_user','cached_store','server_url')`,
+        `SELECT meta_key, meta_value FROM settings WHERE meta_key IN ('cached_user','cached_store')`,
         []
       ) as Array<{ meta_key: string; meta_value: string }>
 
       const map: Record<string, string> = {}
       rows.forEach((r) => { map[r.meta_key] = r.meta_value })
-
-      // The saved server URL belongs to the terminal, not the login — restore
-      // it even when there is no cached session to resume.
-      if (map.server_url) setServerUrl(map.server_url)
 
       const token = await window.electronAPI.auth.getToken()
       if (!token) { setRestoring(false); return }
@@ -71,23 +81,11 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
   }
 
   async function restoreOfficeSession() {
-    // The saved server URL belongs to the terminal — restore it for both the
-    // form and the token check (the useState default is just a placeholder).
-    let effectiveUrl = serverUrl
-    try {
-      const rows = await window.electronAPI.db.query(
-        `SELECT meta_value FROM settings WHERE meta_key='server_url' LIMIT 1`, []
-      ) as Array<{ meta_value: string }>
-      if (rows[0]?.meta_value) {
-        effectiveUrl = rows[0].meta_value
-        setServerUrl(effectiveUrl)
-      }
-    } catch { /* fresh DB — keep default */ }
-
+    await pinServerUrl()
     const token = await window.electronAPI.auth.getToken()
     if (!token) return
     try {
-      const result = await window.electronAPI.auth.me(effectiveUrl, token)
+      const result = await window.electronAPI.auth.me(SERVER_URL, token)
       if (result.status === 200) {
         const data = result.data as { user: AuthUser; store: { id: number; name: string; address?: string; phone?: string; salePrefix: string } }
         setAuth(data.user, token, data.store)
@@ -115,7 +113,7 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
     setError('')
     setLoading(true)
     try {
-      const result = await window.electronAPI.auth.login(serverUrl, username, password)
+      const result = await window.electronAPI.auth.login(SERVER_URL, username, password)
       if (result.status !== 200) {
         const msg = (result.data as Record<string, string>)?.error || 'Login failed'
         throw new Error(msg)
@@ -139,7 +137,7 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
           [sid, key, val, now]
         )
 
-      await upsert('server_url', serverUrl)
+      await upsert('server_url', SERVER_URL)
       await upsert('store_id', String(sid))
       if (!isOffice) {
         await upsert('cached_user', JSON.stringify(data.user))
@@ -192,16 +190,6 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
           <h2 className="text-xl font-semibold text-white mb-6">Sign In</h2>
 
           <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Server URL</label>
-              <input
-                type="text"
-                value={serverUrl}
-                onChange={(e) => setServerUrl(e.target.value)}
-                className="w-full bg-dark-card border border-dark-border rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-primary"
-              />
-            </div>
-
             <div>
               <label className="block text-sm text-gray-400 mb-1">Username</label>
               <input

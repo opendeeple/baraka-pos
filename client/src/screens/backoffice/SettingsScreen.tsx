@@ -37,7 +37,6 @@ export default function SettingsScreen() {
   const [storeName, setStoreName] = useState('')
   const [storeAddress, setStoreAddress] = useState('')
   const [storePhone, setStorePhone] = useState('')
-  const [serverUrl, setServerUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -56,7 +55,6 @@ export default function SettingsScreen() {
     if (map.receipt_template) {
       try { setReceipt(JSON.parse(map.receipt_template)) } catch {}
     }
-    if (map.server_url) setServerUrl(map.server_url)
 
     const storeRow = await window.electronAPI.db.query(`SELECT name, address, phone FROM stores LIMIT 1`, []) as Array<{name:string;address:string;phone:string}>
     if (storeRow[0]) {
@@ -86,7 +84,6 @@ export default function SettingsScreen() {
     try {
       await saveSetting('printer_config', JSON.stringify(printer))
       await saveSetting('receipt_template', JSON.stringify(receipt))
-      if (serverUrl.trim()) await saveSetting('server_url', serverUrl.trim())
       await window.electronAPI.db.exec(`UPDATE stores SET name=?,address=?,phone=?,updated_at=? WHERE id=1`, [storeName, storeAddress, storePhone, now])
     } finally { setSaving(false) }
   }
@@ -147,11 +144,6 @@ export default function SettingsScreen() {
                 <input value={val as string} onChange={(e) => (set as (v: string) => void)(e.target.value)} className={INPUT_CLS} />
               </div>
             ))}
-          </div>
-          <div>
-            <label className={LABEL_CLS}>Server URL</label>
-            <input value={serverUrl} onChange={(e) => setServerUrl(e.target.value)}
-              placeholder="https://your-server.com" className={INPUT_CLS} />
           </div>
         </div>
 

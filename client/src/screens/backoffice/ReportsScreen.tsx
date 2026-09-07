@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { DEFAULT_SERVER_URL } from '@baraka/shared'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import {
   TrendingUp, ShoppingCart, DollarSign, Package, RefreshCw,
@@ -39,18 +40,11 @@ async function apiFetch<T>(url: string, token: string): Promise<T> {
   return window.electronAPI.reports.fetch(url, token) as Promise<T>
 }
 
+// Fixed server (dev override: VITE_SERVER_URL).
+const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string | undefined) || DEFAULT_SERVER_URL
+
 export default function ReportsScreen() {
   const { token } = useAuthStore()
-  const [serverUrl, setServerUrl] = useState('')
-
-  useEffect(() => {
-    window.electronAPI.db.query<{ meta_value: string }>(
-      `SELECT meta_value FROM settings WHERE meta_key='server_url' LIMIT 1`, []
-    ).then((rows) => {
-      if (rows[0]) setServerUrl(rows[0].meta_value)
-      setSettingsReady(true)
-    })
-  }, [])
 
   const [tab, setTab] = useState<'daily' | 'range'>('daily')
   const [date, setDate] = useState(today())
@@ -64,12 +58,11 @@ export default function ReportsScreen() {
   const [lowStock, setLowStock] = useState<LowStockItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [settingsReady, setSettingsReady] = useState(false)
 
   const load = useCallback(async () => {
-    if (!serverUrl || !token) return
+    if (!token) return
     setLoading(true); setError('')
-    const base = `${serverUrl}/api/reports`
+    const base = `${SERVER_URL}/api/reports`
     const t = token
     try {
       const [d, tp, cs, h, ls] = await Promise.all([
@@ -84,7 +77,7 @@ export default function ReportsScreen() {
       setError('Failed to load reports. Check server connection.')
       console.error(e)
     } finally { setLoading(false) }
-  }, [serverUrl, token, date, dateFrom, dateTo])
+  }, [token, date, dateFrom, dateTo])
 
   useEffect(() => { load() }, [load])
 
@@ -128,18 +121,10 @@ export default function ReportsScreen() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {settingsReady && !serverUrl && !loading && (
-          <div className="bg-dark-surface border border-dark-border rounded-xl p-8 text-center">
-            <TrendingUp size={36} className="text-gray-700 mx-auto mb-3" />
-            <p className="text-gray-300 font-medium text-sm">No server configured</p>
-            <p className="text-gray-500 text-xs mt-1">Go to <span className="text-primary">Settings → Server URL</span> and enter your server address to load reports.</p>
-          </div>
-        )}
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-4 text-sm">
             <p className="text-red-400 font-medium">Could not connect to server</p>
-            {serverUrl && <p className="text-red-400/60 text-xs mt-1 font-mono">{serverUrl}</p>}
-            <p className="text-red-400/60 text-xs mt-1">Make sure the server is running and the URL in Settings is correct.</p>
+            <p className="text-red-400/60 text-xs mt-1">Make sure you have an internet connection and try again.</p>
           </div>
         )}
 
