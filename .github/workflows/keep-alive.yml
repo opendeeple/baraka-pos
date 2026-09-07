@@ -2,10 +2,10 @@ name: Keep server + database awake
 
 on:
   schedule:
-    # Every 10 minutes, 06:00-22:00 UTC (adjust to your store's hours/timezone).
+    # Every 10 minutes, 03:00-18:00 UTC = 08:00-23:00 Uzbekistan (UTC+5).
     # Render free services sleep after 15 min idle, and Supabase pauses a
     # project after 7 days with zero DB traffic — this ping prevents both.
-    - cron: '*/10 6-22 * * *'
+    - cron: '*/10 3-18 * * *'
   workflow_dispatch: {}
 
 jobs:
