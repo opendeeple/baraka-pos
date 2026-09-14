@@ -86,9 +86,10 @@ const PULL_FK_MAP: Record<string, Record<string, { table: string; localColumn: s
 const SWEEP_TABLES = new Set(['products', 'product_batches', 'product_stocks', 'contacts'])
 
 // Generic pushes flush before sales so FK targets (sessions, contacts,
-// products) exist server-side by the time their sales arrive.
+// products) exist server-side by the time their sales arrive. Collections
+// flush first — products reference them via categorySyncId/brandSyncId.
 const FLUSH_PRIORITY: Record<string, number> = {
-  contacts: 1, products: 2, product_batches: 3, pos_sessions: 4,
+  collections: 0, contacts: 1, products: 2, product_batches: 3, pos_sessions: 4,
   quantity_adjustments: 5, expenses: 6, purchases: 7, cash_logs: 8, sales: 99,
 }
 
@@ -580,6 +581,21 @@ export function createSyncEngine(deps: SyncEngineDeps) {
   type ChangeBuilder = (row: OutboxRow) => Record<string, unknown> | null
 
   const CHANGE_BUILDERS: Record<string, ChangeBuilder> = {
+    collections: ({ sync_id }) => {
+      // Read regardless of op: on delete the row is already soft-deleted
+      // locally (deleted_at set, not removed) so it is still here to build
+      // the last-known field values the outbox op='delete' will discard.
+      const c = db.get<any>(`SELECT * FROM collections WHERE sync_id=?`, [sync_id])
+      if (!c) return null
+      return {
+        collectionType: c.collection_type ?? 'category',
+        name: c.name,
+        description: c.description,
+        sortOrder: c.sort_order ?? 0,
+        parentSyncId: syncIdForLocalId('collections', c.parent_id),
+        _updatedAt: c.updated_at,
+      }
+    },
     contacts: ({ sync_id }) => {
       const c = db.get<any>(`SELECT * FROM contacts WHERE sync_id=?`, [sync_id])
       if (!c) return null

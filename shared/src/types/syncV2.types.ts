@@ -28,6 +28,7 @@ export type SyncV2PushTable =
   | 'contacts'
   | 'products'
   | 'product_batches'
+  | 'collections'
   | 'expenses'
   | 'purchases'
   | 'pos_sessions'

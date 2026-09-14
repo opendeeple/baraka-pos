@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, Package, ShoppingBag, Users, Truck,
+  LayoutDashboard, Package, Tags, ShoppingBag, Users, Truck,
   Receipt, Settings, ArrowLeft, ChevronRight, BarChart2, UserCog, LogOut,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/auth.store'
@@ -10,6 +10,7 @@ import { useAppMode } from '../../contexts/AppModeContext'
 const NAV = [
   { to: '/backoffice', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/backoffice/products', label: 'Products', icon: Package },
+  { to: '/backoffice/categories', label: 'Categories', icon: Tags },
   { to: '/backoffice/sales', label: 'Sales', icon: ShoppingBag },
   { to: '/backoffice/customers', label: 'Customers', icon: Users },
   { to: '/backoffice/purchases', label: 'Purchases', icon: Truck },

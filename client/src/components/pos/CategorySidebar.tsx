@@ -18,7 +18,7 @@ export default function CategoryBar({ selectedCategory, onSelect }: Props) {
 
   useEffect(() => {
     window.electronAPI.db
-      .query(`SELECT * FROM collections WHERE collection_type='category' ORDER BY sort_order, name`, [])
+      .query(`SELECT * FROM collections WHERE collection_type='category' AND deleted_at IS NULL ORDER BY sort_order, name`, [])
       .then((rows) => setCategories(rows as Category[]))
   }, [])
 

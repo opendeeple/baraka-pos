@@ -13,7 +13,7 @@ const PULL_TABLES: SyncV2PullTable[] = [
 ]
 
 const PUSH_TABLES = [
-  'contacts', 'products', 'product_batches', 'expenses', 'purchases',
+  'contacts', 'products', 'product_batches', 'collections', 'expenses', 'purchases',
   'pos_sessions', 'quantity_adjustments', 'users', 'cash_logs',
 ] as const
 

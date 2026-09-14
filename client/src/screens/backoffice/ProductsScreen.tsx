@@ -70,7 +70,7 @@ export default function ProductsScreen() {
 
   async function loadCategories() {
     setCategories(await window.electronAPI.db.query(
-      `SELECT id, name FROM collections WHERE collection_type='category' ORDER BY name`, []
+      `SELECT id, name FROM collections WHERE collection_type='category' AND deleted_at IS NULL ORDER BY name`, []
     ) as Category[])
   }
 

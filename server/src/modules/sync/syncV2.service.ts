@@ -376,7 +376,17 @@ function pick(data: Record<string, unknown>, fields: string[]): Record<string, u
 // balance / loyaltyPointsBalance are deliberately absent: they are
 // server-accumulated from debt payments and loyalty transactions — a client
 // pushing absolute values would double-count or clobber concurrent activity.
+function slugify(name: string, syncId: string): string {
+  const base = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return `${base || 'category'}-${syncId.slice(0, 8)}`
+}
+
 const CONTACT_FIELDS = ['name', 'email', 'phone', 'whatsapp', 'address', 'type', 'notes', 'metaData']
+const COLLECTION_FIELDS = ['collectionType', 'name', 'description', 'sortOrder']
 const PRODUCT_FIELDS = ['name', 'description', 'sku', 'barcode', 'imageUrl', 'unit', 'productType', 'isStockManaged', 'isActive', 'isFeatured', 'alertQuantity', 'discount', 'metaData']
 const BATCH_FIELDS = ['batchNumber', 'expiryDate', 'cost', 'price', 'discount', 'isActive', 'isFeatured']
 const EXPENSE_FIELDS = ['description', 'amount', 'expenseDate', 'source', 'createdBy']
@@ -398,6 +408,31 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
     if (op === 'delete') return { serverId: 0, status: 'applied' }
     const created = await tx.contact.create({
       data: { syncId, storeId: device.storeId, ...(pick(data, CONTACT_FIELDS) as object) } as never,
+    })
+    return { serverId: created.id, status: 'applied' }
+  },
+
+  collections: async (tx, _device, { syncId, op, data, clientUpdatedAt }) => {
+    const parentId = await resolveSyncId(tx, 'collection', data.parentSyncId as string | undefined)
+    const fields = { ...pick(data, COLLECTION_FIELDS), parentId }
+    const existing = await tx.collection.findUnique({ where: { syncId } })
+    if (existing) {
+      if (isStale(existing.updatedAt, clientUpdatedAt)) return { serverId: existing.id, status: 'skipped-stale' }
+      await tx.collection.update({
+        where: { syncId },
+        data: op === 'delete' ? { deletedAt: new Date() } : (fields as never),
+      })
+      return { serverId: existing.id, status: 'applied' }
+    }
+    if (op === 'delete') return { serverId: 0, status: 'applied' }
+    const name = data.name as string | undefined
+    const created = await tx.collection.create({
+      data: {
+        syncId,
+        collectionType: (data.collectionType as 'category' | 'brand' | 'tag' | undefined) ?? 'category',
+        slug: slugify(name ?? '', syncId),
+        ...fields,
+      } as never,
     })
     return { serverId: created.id, status: 'applied' }
   },

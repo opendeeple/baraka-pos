@@ -432,9 +432,17 @@ function migrateToV3(db: SchemaDb): void {
   addColumnIfMissing(db, 'cash_logs', 'server_id', 'INTEGER')
 }
 
+// Schema v4 — collections (categories/brands/tags) become soft-deletable so
+// a server tombstone (deletedAt) has a local column to arrive with, matching
+// how products/contacts already signal deletion without losing the row.
+function migrateToV4(db: SchemaDb): void {
+  addColumnIfMissing(db, 'collections', 'deleted_at', 'TEXT')
+}
+
 export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb) => void }> = [
   { version: 2, apply: migrateToV2 },
   { version: 3, apply: migrateToV3 },
+  { version: 4, apply: migrateToV4 },
 ]
 
 export const CURRENT_SCHEMA_VERSION = VERSIONED_MIGRATIONS[VERSIONED_MIGRATIONS.length - 1].version
