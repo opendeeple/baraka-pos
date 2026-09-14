@@ -12,6 +12,14 @@ import { registerWindowIpc, hideAllMiniapps } from './ipc/window.ipc'
 import { registerBarcodeIpc } from './ipc/barcode.ipc'
 import { registerAuthIpc } from './ipc/auth.ipc'
 
+// Deliberately the SAME name as main.office.ts: for now POS and Office are
+// meant to share one local SQLite replica on a single machine (so data added
+// in one shows up in the other immediately, without round-tripping through
+// the server). Must run before userData is first touched (initDatabase,
+// logger, settings) — package.json's "name" alone resolves inconsistently
+// depending on how the app is launched.
+app.setName('baraka-pos')
+
 const isTraining = process.argv.includes('--training')
 
 let mainWindow: BrowserWindow | null = null

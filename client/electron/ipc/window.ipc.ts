@@ -2,20 +2,23 @@ import { ipcMain, BrowserWindow, app, WebContentsView, session as electronSessio
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 
-const sessionsFile = join(app.getPath('userData'), 'webview-sessions.json')
+// Lazy: app.getPath('userData') must not run at module load — that's before
+// main.ts's app.setName() call, and would lock in the wrong (default) path.
+function getSessionsFile(): string {
+  return join(app.getPath('userData'), 'webview-sessions.json')
+}
 
 function readSessions(): Record<string, Record<string, string>> {
   try {
-    if (existsSync(sessionsFile)) return JSON.parse(readFileSync(sessionsFile, 'utf-8'))
+    const file = getSessionsFile()
+    if (existsSync(file)) return JSON.parse(readFileSync(file, 'utf-8'))
   } catch {}
   return {}
 }
 
 function writeSessions(data: Record<string, Record<string, string>>) {
-  try { writeFileSync(sessionsFile, JSON.stringify(data)) } catch {}
+  try { writeFileSync(getSessionsFile(), JSON.stringify(data)) } catch {}
 }
-
-const sessions = readSessions()
 
 // ─── Mini-app WebContentsView management ─────────────────────────────────────
 
@@ -53,6 +56,8 @@ export function registerWindowIpc(
   createCustomerWindow: () => BrowserWindow,
   getCustomerWindow: () => BrowserWindow | null
 ) {
+  const sessions = readSessions()
+
   ipcMain.handle('window:openCustomerDisplay', () => {
     if (!getCustomerWindow()) createCustomerWindow()
     return { success: true }
