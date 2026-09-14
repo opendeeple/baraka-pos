@@ -20,6 +20,7 @@ export default defineConfig({
         '@baraka/shared': resolve(__dirname, '../shared/src/index.ts'),
         '@baraka/db-schema': resolve(__dirname, '../packages/db-schema/src/index.ts'),
         '@baraka/sync-engine': resolve(__dirname, '../packages/sync-engine/src/index.ts'),
+        '@baraka/app-core': resolve(__dirname, '../packages/app-core/src/index.ts'),
       },
     },
   },
@@ -50,6 +51,7 @@ export default defineConfig({
       alias: {
         '@renderer': resolve('src'),
         '@baraka/shared': resolve(__dirname, '../shared/src/index.ts'),
+        '@baraka/app-core': resolve(__dirname, '../packages/app-core/src/index.ts'),
       },
     },
     plugins: [react()],

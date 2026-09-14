@@ -1,13 +1,30 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings } from 'lucide-react'
+import { Settings, RefreshCw } from 'lucide-react'
 import { useAuthStore } from '../../store/auth.store'
 import { useSessionStore } from '../../store/session.store'
 import { SyncStatusBadge } from './SyncStatusBadge'
 
-export default function TopBar() {
+interface Props {
+  /** Manually push+pull data from the server. Omit to hide the refresh button. */
+  onRefresh?: () => Promise<void> | void
+}
+
+export default function TopBar({ onRefresh }: Props) {
   const navigate = useNavigate()
   const { user, store } = useAuthStore()
   const { session } = useSessionStore()
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleRefreshClick() {
+    if (!onRefresh || refreshing) return
+    setRefreshing(true)
+    try {
+      await onRefresh()
+    } finally {
+      setRefreshing(false)
+    }
+  }
 
   const sessionTime = session
     ? new Date(session.opened_at ?? Date.now()).toLocaleTimeString([], {
@@ -31,6 +48,18 @@ export default function TopBar() {
       <div className="text-xs text-gray-500 whitespace-nowrap shrink-0">
         Session since <span className="text-gray-300 font-medium">{sessionTime}</span>
       </div>
+
+      {/* Manual refresh */}
+      {onRefresh && (
+        <button
+          onClick={handleRefreshClick}
+          disabled={refreshing}
+          title="Refresh data from server"
+          className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white hover:bg-dark-card rounded-xl transition-colors shrink-0 disabled:opacity-50"
+        >
+          <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+        </button>
+      )}
 
       {/* Sync */}
       <SyncStatusBadge />

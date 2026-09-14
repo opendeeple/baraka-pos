@@ -5,7 +5,9 @@ import { useCartStore } from '../../store/cart.store'
 import { useAuthStore } from '../../store/auth.store'
 import { useSessionStore } from '../../store/session.store'
 import { PaymentEntry, PaymentMethod } from '@baraka/shared'
+import type { ReceiptDoc } from '@baraka/app-core'
 import { NumPad } from '../../components/pos/NumPad'
+import { ReceiptModal } from '../../components/pos/ReceiptModal'
 import { v4 as uuidv4 } from 'uuid'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 
@@ -38,6 +40,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
   const [amountInput, setAmountInput] = useState('0')
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
+  const [receipt, setReceipt] = useState<ReceiptDoc | null>(null)
 
   // Debt contact state
   const [debtContact, setDebtContact] = useState<ContactResult | null>(null)
@@ -58,6 +61,17 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
   const isFullyPaid = paid >= total && payments.length > 0
   const hasDebtPayment = payments.some((p) => p.paymentMethod === 'Debt')
   const canComplete = isFullyPaid && (!hasDebtPayment || debtContact !== null)
+
+  // If the cashier typed the full amount but never pressed "+ Add" (a common
+  // slip with a single, exact payment), Complete Sale can proceed directly —
+  // it adds that amount as the payment itself instead of staying disabled.
+  const pendingAmount = parseFloat(amountInput) || 0
+  const canCompleteFromPending =
+    payments.length === 0 &&
+    pendingAmount >= total &&
+    pendingAmount > 0 &&
+    (selectedMethod !== 'Debt' || debtContact !== null)
+  const canCompleteNow = canComplete || canCompleteFromPending
 
   useEffect(() => {
     if (selectedMethod !== 'Debt' || debtContact) return
@@ -83,6 +97,14 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
 
   function setExact() {
     setAmountInput(remaining.toFixed(2).replace(/^0/, '') || '0')
+  }
+
+  function handleCompleteSale() {
+    if (canCompleteFromPending) {
+      processPayment([{ paymentMethod: selectedMethod, amount: pendingAmount }])
+      return
+    }
+    processPayment()
   }
 
   async function createContact() {
@@ -116,16 +138,26 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
     }
   }
 
-  async function processPayment() {
-    if (!isFullyPaid) { setError('Insufficient payment amount'); return }
-    if (hasDebtPayment && !debtContact) { setError('Contact is required for debt payment'); return }
+  /**
+   * `overridePayments`: used when Complete Sale is pressed with a typed-but-
+   * not-yet-added amount (see canCompleteFromPending) — that amount becomes
+   * the payment itself instead of requiring an explicit "+ Add" first.
+   */
+  async function processPayment(overridePayments?: PaymentEntry[]) {
+    const effectivePayments = overridePayments ?? payments
+    const effectivePaid = effectivePayments.reduce((s, p) => s + p.amount, 0)
+    const effectiveFullyPaid = effectivePaid >= total && effectivePayments.length > 0
+    const effectiveHasDebt = effectivePayments.some((p) => p.paymentMethod === 'Debt')
+
+    if (!effectiveFullyPaid) { setError('Insufficient payment amount'); return }
+    if (effectiveHasDebt && !debtContact) { setError('Contact is required for debt payment'); return }
     setProcessing(true)
     setError('')
 
     try {
       const syncId = uuidv4()
       const now = new Date().toISOString()
-      const changeAmount = change
+      const changeAmount = Math.max(0, effectivePaid - total)
       const storeId = store?.id ?? 1
       const sessionId = session?.id ?? 1
       const userId = user?.id ?? 1
@@ -149,8 +181,8 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
           debtContact?.id ?? null, userId,
           invoiceNumber, 'sale',
           subtotal, discount, chargeAmount,
-          total, paid, changeAmount,
-          'completed', hasDebtPayment ? 'partially_paid' : 'fully_paid',
+          total, effectivePaid, changeAmount,
+          'completed', effectiveHasDebt ? 'partially_paid' : 'fully_paid',
           now.split('T')[0], now.split('T')[1].slice(0, 8),
           JSON.stringify({ items, charges, discount }),
           now, now,
@@ -172,7 +204,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
         })
       }
 
-      for (const payment of payments) {
+      for (const payment of effectivePayments) {
         ops.push({
           sql: `INSERT INTO payment_transactions (sale_id, store_id, session_id, transaction_date,
                  amount, payment_method, transaction_type, charge_state, created_at, sync_status)
@@ -181,8 +213,8 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
         })
       }
 
-      if (hasDebtPayment && debtContact) {
-        const debtTotal = payments
+      if (effectiveHasDebt && debtContact) {
+        const debtTotal = effectivePayments
           .filter((p) => p.paymentMethod === 'Debt')
           .reduce((s, p) => s + p.amount, 0)
         ops.push({
@@ -191,7 +223,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
         })
       }
 
-      const cashPayments = payments.filter((p) => p.paymentMethod === 'Cash')
+      const cashPayments = effectivePayments.filter((p) => p.paymentMethod === 'Cash')
       for (const cp of cashPayments) {
         ops.push({
           sql: `INSERT INTO cash_logs (store_id, session_id, transaction_type, amount, source, description, created_by, created_at)
@@ -220,20 +252,42 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
         name: c.name,
         amount: c.rateType === 'percentage' ? (subtotal * c.rateValue) / 100 : c.rateValue,
       }))
-      window.electronAPI.printer.print({
+
+      // Freshest store info + receipt template — `store` (from login) goes
+      // stale the moment Backoffice > Settings edits the `stores` row or
+      // `receipt_template`, since neither writes back to the auth store.
+      const storeRow = (await window.electronAPI.db.query(
+        `SELECT name, address, phone FROM stores WHERE id=? LIMIT 1`, [storeId]
+      ) as Array<{ name: string; address: string | null; phone: string | null }>)[0]
+      const templateRow = (await window.electronAPI.db.query(
+        `SELECT meta_value FROM settings WHERE meta_key='receipt_template' LIMIT 1`, []
+      ) as Array<{ meta_value: string }>)[0]
+      const template = templateRow ? JSON.parse(templateRow.meta_value) as {
+        header?: string; footer?: string; show_cashier?: boolean
+      } : {}
+
+      const doc: ReceiptDoc = {
         invoiceNumber,
-        storeName: store?.name ?? 'Store',
-        cashierName: user?.name ?? 'Cashier',
+        storeName: storeRow?.name || store?.name || 'Store',
+        storeAddress: storeRow?.address ?? store?.address,
+        storePhone: storeRow?.phone ?? store?.phone,
+        header: template.header,
+        cashierName: template.show_cashier === false ? null : (user?.name ?? 'Cashier'),
         timestamp: now,
         items: items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.unitPrice, discount: i.discount })),
         charges: chargeDisplay,
         total,
-        payments: payments.map((p) => ({ method: p.paymentMethod, amount: p.amount })),
+        payments: effectivePayments.map((p) => ({ method: p.paymentMethod, amount: p.amount })),
         change: changeAmount,
-      }).catch(console.error)
+        footer: template.footer,
+      }
+      // Fire-and-forget: prints on a configured physical printer if there is
+      // one. Either way, the on-screen receipt below (set via setReceipt) is
+      // what actually confirms the sale to the cashier.
+      window.electronAPI.printer.print(doc).catch(console.error)
 
       clearCart()
-      onComplete()
+      setReceipt(doc)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Payment failed — please retry')
     } finally {
@@ -544,14 +598,19 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
 
         <div className="p-4 shrink-0">
           <button
-            onClick={processPayment}
-            disabled={processing || !canComplete}
+            onClick={handleCompleteSale}
+            disabled={processing || !canCompleteNow}
             className="w-full bg-primary hover:bg-orange-600 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl text-base transition-all"
           >
             {processing ? 'Processing...' : 'Complete Sale'}
           </button>
         </div>
       </div>
+
+      <ReceiptModal
+        receipt={receipt}
+        onClose={() => { setReceipt(null); onComplete() }}
+      />
     </div>
   )
 }

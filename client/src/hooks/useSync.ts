@@ -18,24 +18,35 @@ const SYNC_TABLES = [
 ] as const
 
 export function useSync() {
-  const { setStatus, setPendingCount, setLastSync } = useSyncStore()
+  const { setStatus, setPendingCount, setLastSync, setLastError } = useSyncStore()
   const { isAuthenticated } = useAuthStore()
 
   const pullAll = useCallback(async () => {
     if (!isAuthenticated) return
+    // Login sets isAuthenticated before device registration's network round
+    // trip resolves (so login still works while offline) — a pull racing that
+    // gap would hit "Device not registered" and falsely flash Error. Skip
+    // quietly; the next interval retries once registration has landed.
+    if (!(await window.electronAPI.sync.isDeviceRegistered())) return
     setStatus('syncing')
     try {
       for (const table of SYNC_TABLES) {
         await window.electronAPI.sync.pullLatest(table)
       }
       setLastSync(new Date().toISOString())
+      setLastError(null)
       setStatus('online')
     } catch (err: unknown) {
-      setStatus('error')
       const msg = err instanceof Error ? err.message : 'Sync failed'
+      setStatus('error')
+      setLastError(msg)
       toast.error(`Sync error: ${msg}`, { id: 'sync-error', duration: 6000 })
+      // Most failures here are transient (a cold Render free-tier instance,
+      // a brief network blip) — retry soon instead of leaving the badge
+      // stuck on Error for up to the full 5-minute interval.
+      setTimeout(() => { pullAll() }, 20_000)
     }
-  }, [isAuthenticated, setStatus, setLastSync])
+  }, [isAuthenticated, setStatus, setLastSync, setLastError])
 
   const pushPending = useCallback(async () => {
     try {
@@ -43,12 +54,13 @@ export function useSync() {
       setPendingCount(0)
       return result
     } catch (err: unknown) {
-      setStatus('error')
       const msg = err instanceof Error ? err.message : 'Push failed'
+      setStatus('error')
+      setLastError(msg)
       toast.error(`Sync push failed: ${msg}`, { id: 'sync-push-error', duration: 6000 })
       return { synced: 0, errors: 0 }
     }
-  }, [setPendingCount, setStatus])
+  }, [setPendingCount, setStatus, setLastError])
 
   const checkPendingCount = useCallback(async () => {
     const rows = await window.electronAPI.db.query(

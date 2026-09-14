@@ -12,7 +12,10 @@ export interface ReceiptDoc {
   storeName: string
   storeAddress?: string | null
   storePhone?: string | null
-  cashierName: string
+  /** Custom greeting line, printed under the store info block. */
+  header?: string | null
+  /** Omit (empty/undefined) to hide the cashier line entirely. */
+  cashierName?: string | null
   timestamp: string
   items: ReceiptLine[]
   charges: Array<{ name: string; amount: number }>
@@ -24,8 +27,8 @@ export interface ReceiptDoc {
   openDrawer?: boolean
 }
 
-/** Plain-text 32/48-col rendering — usable for previews and simple printers. */
-export function renderReceiptText(doc: ReceiptDoc, width: 32 | 48 = 32): string {
+/** Plain-text fixed-width rendering — usable for previews and simple printers. */
+export function renderReceiptText(doc: ReceiptDoc, width = 32): string {
   const line = (l: string, r: string) => {
     const space = Math.max(1, width - l.length - r.length)
     return l + ' '.repeat(space) + r
@@ -39,9 +42,10 @@ export function renderReceiptText(doc: ReceiptDoc, width: 32 | 48 = 32): string 
   out.push(center(doc.storeName))
   if (doc.storeAddress) out.push(center(doc.storeAddress))
   if (doc.storePhone) out.push(center(doc.storePhone))
+  if (doc.header) out.push(center(doc.header))
   out.push(divider)
   out.push(line(`Invoice: ${doc.invoiceNumber}`, ''))
-  out.push(line(`Cashier: ${doc.cashierName}`, ''))
+  if (doc.cashierName) out.push(line(`Cashier: ${doc.cashierName}`, ''))
   out.push(line(doc.timestamp.slice(0, 19).replace('T', ' '), ''))
   out.push(divider)
   for (const item of doc.items) {
