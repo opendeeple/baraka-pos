@@ -93,6 +93,23 @@ const FLUSH_PRIORITY: Record<string, number> = {
   quantity_adjustments: 5, expenses: 6, purchases: 7, cash_logs: 8, sales: 99,
 }
 
+// When a pulled tombstone hard-deletes a row by sync_id, also delete rows in
+// these child tables that reference its *local* id. Without this, a deleted
+// product's batches/stocks stay behind as orphans, and since products.id is
+// a plain INTEGER PRIMARY KEY (not AUTOINCREMENT), SQLite recycles the freed
+// id for the next locally-created product — silently attaching it to the
+// dead product's old batches/stocks and fanning out into duplicate rows
+// wherever products are joined to their active batch.
+const CASCADE_ON_DELETE: Record<string, Array<{ table: string; column: string }>> = {
+  products: [
+    { table: 'product_batches', column: 'product_id' },
+    { table: 'product_stocks', column: 'product_id' },
+  ],
+  product_batches: [
+    { table: 'product_stocks', column: 'batch_id' },
+  ],
+}
+
 class NetworkError extends Error {}
 
 function camelToSnake(str: string): string {
@@ -372,8 +389,23 @@ export function createSyncEngine(deps: SyncEngineDeps) {
           [syncId, serverId, syncId, syncId]
         )
 
-        // Tombstone: the row is gone on the server.
+        // Tombstone: the row is gone on the server. Cascade to children that
+        // reference this row's *local* id — products.id is a plain INTEGER
+        // PRIMARY KEY (not AUTOINCREMENT), so SQLite recycles a freed id for
+        // the next locally-created row. Leaving orphaned product_batches /
+        // product_stocks behind meant a later product silently "inherited"
+        // a deleted product's old batches, fanning out into duplicate rows
+        // wherever products are joined to their active batch.
         if (record.deletedAt) {
+          const cascades = CASCADE_ON_DELETE[table]
+          if (cascades) {
+            const row = db.get<{ id: number }>(`SELECT id FROM ${table} WHERE sync_id=?`, [syncId])
+            if (row) {
+              for (const { table: childTable, column } of cascades) {
+                db.run(`DELETE FROM ${childTable} WHERE ${column}=?`, [row.id])
+              }
+            }
+          }
           db.run(`DELETE FROM ${table} WHERE sync_id=?`, [syncId])
           continue
         }

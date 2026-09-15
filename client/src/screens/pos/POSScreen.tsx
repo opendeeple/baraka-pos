@@ -81,8 +81,12 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
              pb.id as batch_id, pb.price, pb.cost,
              COALESCE(ps.quantity, 0) as stock
       FROM products p
-      LEFT JOIN product_batches pb ON pb.product_id = p.id AND pb.is_active = 1
-      LEFT JOIN product_stocks ps ON ps.product_id = p.id AND ps.batch_id = pb.id
+      LEFT JOIN product_batches pb ON pb.id = (
+        SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
+      )
+      LEFT JOIN product_stocks ps ON ps.id = (
+        SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id ORDER BY id DESC LIMIT 1
+      )
       WHERE p.is_active = 1 AND p.deleted_at IS NULL
     `
     const params: unknown[] = []
@@ -107,8 +111,12 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
       `SELECT p.id, p.name, p.barcode, pb.id as batch_id, pb.price, pb.cost,
               COALESCE(ps.quantity,0) as stock
        FROM products p
-       JOIN product_batches pb ON pb.product_id = p.id AND pb.is_active = 1
-       LEFT JOIN product_stocks ps ON ps.product_id = p.id AND ps.batch_id = pb.id
+       JOIN product_batches pb ON pb.id = (
+         SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
+       )
+       LEFT JOIN product_stocks ps ON ps.id = (
+         SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id ORDER BY id DESC LIMIT 1
+       )
        WHERE p.barcode = ? AND p.is_active = 1 LIMIT 1`,
       [barcode]
     ) as LocalProduct[]

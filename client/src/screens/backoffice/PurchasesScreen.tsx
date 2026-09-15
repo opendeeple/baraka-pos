@@ -48,7 +48,9 @@ export default function PurchasesScreen() {
   async function loadProducts() {
     const rows = await window.electronAPI.db.query(
       `SELECT p.id, p.name, pb.id as batch_id, pb.cost FROM products p
-       JOIN product_batches pb ON pb.product_id=p.id AND pb.is_active=1
+       JOIN product_batches pb ON pb.id = (
+         SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
+       )
        WHERE p.deleted_at IS NULL ORDER BY p.name`, []
     )
     setProducts(rows as Product[])

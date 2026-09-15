@@ -52,8 +52,12 @@ export default function ProductsScreen() {
              COALESCE(ps.quantity, 0) as stock
       FROM products p
       LEFT JOIN collections c ON c.id = p.category_id
-      LEFT JOIN product_batches pb ON pb.product_id = p.id AND pb.is_active = 1
-      LEFT JOIN product_stocks ps ON ps.product_id = p.id AND ps.batch_id = pb.id
+      LEFT JOIN product_batches pb ON pb.id = (
+        SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
+      )
+      LEFT JOIN product_stocks ps ON ps.id = (
+        SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id ORDER BY id DESC LIMIT 1
+      )
       WHERE p.deleted_at IS NULL`
     const params: unknown[] = []
     if (debouncedSearch.trim()) {

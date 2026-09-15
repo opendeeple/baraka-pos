@@ -444,10 +444,17 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
     const existing = await tx.product.findUnique({ where: { syncId } })
     if (existing) {
       if (isStale(existing.updatedAt, clientUpdatedAt)) return { serverId: existing.id, status: 'skipped-stale' }
-      await tx.product.update({
-        where: { syncId },
-        data: op === 'delete' ? { deletedAt: new Date() } : (fields as never),
-      })
+      if (op === 'delete') {
+        // Cascade so other devices' next pull tombstones these batches too —
+        // otherwise they linger as "still active" server-side and a later
+        // product that recycles the deleted product's local SQLite id
+        // silently inherits them (fans out into duplicate rows wherever a
+        // product is joined to its active batch).
+        await tx.productBatch.updateMany({ where: { productId: existing.id, deletedAt: null }, data: { deletedAt: new Date() } })
+        await tx.product.update({ where: { syncId }, data: { deletedAt: new Date() } })
+      } else {
+        await tx.product.update({ where: { syncId }, data: fields as never })
+      }
       return { serverId: existing.id, status: 'applied' }
     }
     if (op === 'delete') return { serverId: 0, status: 'applied' }

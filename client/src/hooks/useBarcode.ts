@@ -20,8 +20,12 @@ export function useBarcodeScanner(onScan?: BarcodeHandler) {
         `SELECT p.id, p.name, p.barcode, ps.quantity as stock,
                 pb.id as batch_id, pb.price, pb.cost
          FROM products p
-         JOIN product_batches pb ON pb.product_id = p.id AND pb.is_active = 1
-         JOIN product_stocks ps ON ps.product_id = p.id AND ps.batch_id = pb.id
+         JOIN product_batches pb ON pb.id = (
+           SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
+         )
+         JOIN product_stocks ps ON ps.id = (
+           SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id ORDER BY id DESC LIMIT 1
+         )
          WHERE p.barcode = ? AND p.is_active = 1
          LIMIT 1`,
         [barcode]
