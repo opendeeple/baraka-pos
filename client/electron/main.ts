@@ -9,7 +9,6 @@ import { registerPrinterIpc } from './ipc/printer.ipc'
 import { registerSessionIpc } from './ipc/session.ipc'
 import { registerSyncIpc } from './ipc/sync.ipc'
 import { registerWindowIpc, hideAllMiniapps } from './ipc/window.ipc'
-import { registerBarcodeIpc } from './ipc/barcode.ipc'
 import { registerAuthIpc } from './ipc/auth.ipc'
 
 // Deliberately the SAME name as main.office.ts: for now POS and Office are
@@ -138,7 +137,6 @@ app.whenReady().then(async () => {
   registerSessionIpc(isTraining)
   registerSyncIpc('electron-pos')
   registerWindowIpc(createCustomerWindow, () => customerWindow)
-  registerBarcodeIpc(mainWindow)
   registerAuthIpc()
 
   // App-level IPC (getVersion and isTraining are in session.ipc.ts — only add extras here)

@@ -51,10 +51,6 @@ export interface ElectronAPI {
     login: (serverUrl: string, username: string, password: string) => Promise<{ status: number; data: unknown }>
     me: (serverUrl: string, token: string) => Promise<{ status: number; data: unknown }>
   }
-  barcode: {
-    onScan: (callback: (barcode: string) => void) => () => void
-    manualScan: (barcode: string) => Promise<void>
-  }
   window: {
     openCustomerDisplay: () => Promise<{ success: boolean }>
     closeCustomerDisplay: () => Promise<{ success: boolean }>

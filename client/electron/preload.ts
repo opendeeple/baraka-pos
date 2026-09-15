@@ -56,14 +56,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     me: (serverUrl: string, token: string) =>
       ipcRenderer.invoke('auth:me', serverUrl, token),
   },
-  barcode: {
-    onScan: (callback: (barcode: string) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, barcode: string) => callback(barcode)
-      ipcRenderer.on('barcode:scan', listener)
-      return () => ipcRenderer.off('barcode:scan', listener)
-    },
-    manualScan: (barcode: string) => ipcRenderer.invoke('barcode:manualScan', barcode),
-  },
   window: {
     openCustomerDisplay: () => ipcRenderer.invoke('window:openCustomerDisplay'),
     closeCustomerDisplay: () => ipcRenderer.invoke('window:closeCustomerDisplay'),

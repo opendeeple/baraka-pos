@@ -43,8 +43,13 @@ export default function POSScreen() {
     onProductUpdated: () => loadProducts(),
   })
 
-  // HID barcode scanner
-  useBarcodeScanner()
+  // HID barcode scanner — same lookup used everywhere a scan can land (this
+  // global listener, and Enter in the search box below).
+  useBarcodeScanner(async (barcode) => {
+    if (!(await handleBarcodeScanned(barcode))) {
+      toast.error(`Mahsulot topilmadi: ${barcode}`)
+    }
+  })
 
   useEffect(() => {
     loadHeldCarts()
@@ -53,15 +58,6 @@ export default function POSScreen() {
   useEffect(() => {
     loadProducts()
   }, [selectedCategory, debouncedSearch])
-
-  // IPC barcode events (from preload)
-  useEffect(() => {
-    const unsubscribe = window.electronAPI.barcode.onScan((barcode) => {
-      handleBarcodeScanned(barcode)
-    })
-    return unsubscribe
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   // Keyboard shortcuts
   useEffect(() => {

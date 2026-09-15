@@ -41,10 +41,6 @@ export const MOCK_ELECTRON_API = () => {
       saveToken: async () => {},
       clearToken: async () => {},
     },
-    barcode: {
-      manualScan: async () => null,
-      onScan: () => () => {},
-    },
     window: {
       openCustomerDisplay: async () => {},
       closeCustomerDisplay: async () => {},

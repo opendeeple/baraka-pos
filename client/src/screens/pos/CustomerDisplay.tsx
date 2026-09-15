@@ -16,8 +16,6 @@ export default function CustomerDisplay() {
   })
 
   useEffect(() => {
-    window.electronAPI?.barcode?.onScan?.(() => {}) // dummy to avoid type error
-
     // Listen for updates from main window
     const handleUpdate = (_event: Event) => {
       const customEvent = _event as CustomEvent<CustomerDisplayData>
