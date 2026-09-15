@@ -583,7 +583,7 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
 
     // A cash-in against a customer is a debt repayment: it reduces what the
     // customer owes (same server-accumulated balance as debt sales).
-    if (contactId && transactionType === 'cash_in' && data.source === 'deposit') {
+    if (contactId && transactionType === 'cash_in' && (data.source === 'deposit' || data.source === 'debt_payment')) {
       await tx.contact.update({
         where: { id: contactId },
         data: { balance: { decrement: amount } },
