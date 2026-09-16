@@ -1,15 +1,17 @@
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { useSyncStore } from '../../store/sync.store'
 import { Wifi, WifiOff, RefreshCw, AlertTriangle } from 'lucide-react'
 
 export function SyncStatusBadge() {
+  const { t } = useTranslation()
   const { status, pendingCount, lastSyncAt, lastError } = useSyncStore()
 
   const configs = {
-    online: { icon: Wifi, color: 'text-green-400', bg: 'bg-green-400/10', label: 'Online' },
-    syncing: { icon: RefreshCw, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Syncing' },
-    offline: { icon: WifiOff, color: 'text-yellow-400', bg: 'bg-yellow-400/10', label: 'Offline' },
-    error: { icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-400/10', label: 'Error' },
+    online: { icon: Wifi, color: 'text-green-400', bg: 'bg-green-400/10', label: t('sync.online') },
+    syncing: { icon: RefreshCw, color: 'text-blue-400', bg: 'bg-blue-400/10', label: t('sync.syncing') },
+    offline: { icon: WifiOff, color: 'text-yellow-400', bg: 'bg-yellow-400/10', label: t('sync.offline') },
+    error: { icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-400/10', label: t('sync.error') },
   }
 
   const cfg = configs[status]
@@ -19,8 +21,8 @@ export function SyncStatusBadge() {
   const tooltip = isError
     ? lastError!
     : lastSyncAt
-      ? `Last sync: ${new Date(lastSyncAt).toLocaleTimeString()}`
-      : 'Not synced'
+      ? t('sync.lastSync', { time: new Date(lastSyncAt).toLocaleTimeString() })
+      : t('sync.notSynced')
 
   return (
     <div

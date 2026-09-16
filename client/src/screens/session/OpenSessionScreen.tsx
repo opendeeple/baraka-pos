@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useSessionStore, LocalPosSession } from '../../store/session.store'
 import { useAuthStore } from '../../store/auth.store'
 import { NumPad } from '../../components/pos/NumPad'
@@ -7,6 +8,7 @@ import { LogOut, Store } from 'lucide-react'
 
 export default function OpenSessionScreen() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { setSession } = useSessionStore()
   const { store, user, logout } = useAuthStore()
   const [openingBalance, setOpeningBalance] = useState('0')
@@ -22,7 +24,7 @@ export default function OpenSessionScreen() {
       setSession(session as LocalPosSession)
       navigate('/pos')
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to open session')
+      setError(err instanceof Error ? err.message : t('session.failedToOpen'))
     } finally {
       setLoading(false)
     }
@@ -44,13 +46,13 @@ export default function OpenSessionScreen() {
             </div>
             <div>
               <div className="text-white font-bold text-sm leading-tight">{store?.name ?? 'Store'}</div>
-              <div className="text-xs text-gray-500">Point of Sale</div>
+              <div className="text-xs text-gray-500">{t('session.pointOfSale')}</div>
             </div>
           </div>
 
           {/* Cashier */}
           <div className="mb-8">
-            <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">Cashier</p>
+            <p className="text-xs text-gray-500 uppercase tracking-widest mb-3">{t('session.cashier')}</p>
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-primary/30 flex items-center justify-center text-primary font-bold text-lg">
                 {initials}
@@ -70,15 +72,15 @@ export default function OpenSessionScreen() {
           className="flex items-center gap-2 text-gray-500 hover:text-white text-sm transition-colors"
         >
           <LogOut size={15} />
-          Switch User
+          {t('session.switchUser')}
         </button>
       </div>
 
       {/* Right panel — numpad */}
       <div className="flex-1 flex flex-col items-center justify-center p-10">
         <div className="w-full max-w-sm">
-          <h1 className="text-2xl font-bold text-white mb-1">Open Cash Register</h1>
-          <p className="text-gray-500 text-sm mb-8">Enter the opening cash amount in the drawer</p>
+          <h1 className="text-2xl font-bold text-white mb-1">{t('session.openCashRegister')}</h1>
+          <p className="text-gray-500 text-sm mb-8">{t('session.enterOpeningAmount')}</p>
 
           <NumPad
             value={openingBalance}
@@ -96,7 +98,7 @@ export default function OpenSessionScreen() {
             disabled={loading}
             className="mt-6 w-full bg-primary active:bg-orange-600 active:scale-[0.98] disabled:opacity-40 text-white font-bold py-4 rounded-2xl text-lg transition-all shadow-lg shadow-primary/20"
           >
-            {loading ? 'Opening...' : 'Open Register & Start Selling'}
+            {loading ? t('session.opening') : t('session.openRegisterAndSell')}
           </button>
         </div>
       </div>

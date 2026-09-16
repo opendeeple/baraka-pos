@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { fmtUZS } from '../../lib/currency'
 
 interface CustomerDisplayData {
@@ -10,9 +11,10 @@ interface CustomerDisplayData {
 }
 
 export default function CustomerDisplay() {
+  const { t } = useTranslation()
   const [data, setData] = useState<CustomerDisplayData>({
     storeName: 'Baraka Mini Market',
-    message: 'Welcome!',
+    message: t('customerDisplay.welcome'),
   })
 
   useEffect(() => {
@@ -36,9 +38,9 @@ export default function CustomerDisplay() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-gray-400 border-b border-dark-border">
-                <th className="text-left pb-2">Item</th>
-                <th className="text-center pb-2">Qty</th>
-                <th className="text-right pb-2">Total</th>
+                <th className="text-left pb-2">{t('customerDisplay.item')}</th>
+                <th className="text-center pb-2">{t('customerDisplay.qty')}</th>
+                <th className="text-right pb-2">{t('common.total')}</th>
               </tr>
             </thead>
             <tbody>
@@ -53,11 +55,11 @@ export default function CustomerDisplay() {
           </table>
           <div className="mt-4 text-right">
             <div className="text-2xl font-bold text-primary">
-              Total: UZS {fmtUZS(data.total ?? 0)}
+              {t('common.total')}: UZS {fmtUZS(data.total ?? 0)}
             </div>
             {data.change !== undefined && data.change > 0 && (
               <div className="text-xl text-green-400">
-                Change: UZS {fmtUZS(data.change)}
+                {t('payment.change')}: UZS {fmtUZS(data.change)}
               </div>
             )}
           </div>

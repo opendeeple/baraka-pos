@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   LayoutDashboard, Package, Tags, ShoppingBag, Users, Truck,
   Receipt, Settings, ArrowLeft, ChevronRight, BarChart2, UserCog, LogOut,
@@ -8,22 +9,23 @@ import { SyncStatusBadge } from './SyncStatusBadge'
 import { useAppMode } from '../../contexts/AppModeContext'
 
 const NAV = [
-  { to: '/backoffice', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/backoffice/products', label: 'Products', icon: Package },
-  { to: '/backoffice/categories', label: 'Categories', icon: Tags },
-  { to: '/backoffice/sales', label: 'Sales', icon: ShoppingBag },
-  { to: '/backoffice/customers', label: 'Customers', icon: Users },
-  { to: '/backoffice/purchases', label: 'Purchases', icon: Truck },
-  { to: '/backoffice/expenses', label: 'Expenses', icon: Receipt },
-  { to: '/backoffice/reports', label: 'Reports', icon: BarChart2 },
-  { to: '/backoffice/employees', label: 'Employees', icon: UserCog },
-  { to: '/backoffice/settings', label: 'Settings', icon: Settings },
+  { to: '/backoffice', labelKey: 'nav.dashboard', icon: LayoutDashboard, end: true },
+  { to: '/backoffice/products', labelKey: 'nav.products', icon: Package },
+  { to: '/backoffice/categories', labelKey: 'nav.categories', icon: Tags },
+  { to: '/backoffice/sales', labelKey: 'nav.sales', icon: ShoppingBag },
+  { to: '/backoffice/customers', labelKey: 'nav.customers', icon: Users },
+  { to: '/backoffice/purchases', labelKey: 'nav.purchases', icon: Truck },
+  { to: '/backoffice/expenses', labelKey: 'nav.expenses', icon: Receipt },
+  { to: '/backoffice/reports', labelKey: 'nav.reports', icon: BarChart2 },
+  { to: '/backoffice/employees', labelKey: 'nav.employees', icon: UserCog },
+  { to: '/backoffice/settings', labelKey: 'nav.settings', icon: Settings },
 ]
 
 export function BackOfficeLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
   const { user, store, logout } = useAuthStore()
   const appMode = useAppMode()
+  const { t } = useTranslation()
 
   return (
     <div className="h-screen flex bg-dark overflow-hidden">
@@ -37,7 +39,7 @@ export function BackOfficeLayout({ children }: { children: React.ReactNode }) {
             </div>
             <div>
               <p className="text-white font-bold text-sm leading-none">{store?.name ?? 'BarakaPOS'}</p>
-              <p className="text-gray-500 text-xs mt-0.5">Back Office</p>
+              <p className="text-gray-500 text-xs mt-0.5">{t('nav.backOffice')}</p>
             </div>
           </div>
         </div>
@@ -60,7 +62,7 @@ export function BackOfficeLayout({ children }: { children: React.ReactNode }) {
               {({ isActive }) => (
                 <>
                   <item.icon size={16} className={isActive ? 'text-primary' : 'text-gray-500 group-hover:text-gray-300'} />
-                  {item.label}
+                  {t(item.labelKey)}
                   {isActive && <ChevronRight size={13} className="ml-auto text-primary" />}
                 </>
               )}
@@ -86,7 +88,7 @@ export function BackOfficeLayout({ children }: { children: React.ReactNode }) {
               className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-dark-card transition-colors"
             >
               <ArrowLeft size={14} />
-              Back to POS
+              {t('nav.backToPos')}
             </button>
           ) : (
             <button
@@ -94,7 +96,7 @@ export function BackOfficeLayout({ children }: { children: React.ReactNode }) {
               className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-red-400 hover:bg-dark-card transition-colors"
             >
               <LogOut size={14} />
-              Logout
+              {t('nav.logout')}
             </button>
           )}
         </div>

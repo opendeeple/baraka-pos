@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Settings, RefreshCw } from 'lucide-react'
 import { useAuthStore } from '../../store/auth.store'
 import { useSessionStore } from '../../store/session.store'
@@ -12,6 +13,7 @@ interface Props {
 
 export default function TopBar({ onRefresh }: Props) {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { user, store } = useAuthStore()
   const { session } = useSessionStore()
   const [refreshing, setRefreshing] = useState(false)
@@ -46,7 +48,7 @@ export default function TopBar({ onRefresh }: Props) {
 
       {/* Session time */}
       <div className="text-xs text-gray-500 whitespace-nowrap shrink-0">
-        Session since <span className="text-gray-300 font-medium">{sessionTime}</span>
+        {t('pos.sessionSince')} <span className="text-gray-300 font-medium">{sessionTime}</span>
       </div>
 
       {/* Manual refresh */}
@@ -54,7 +56,7 @@ export default function TopBar({ onRefresh }: Props) {
         <button
           onClick={handleRefreshClick}
           disabled={refreshing}
-          title="Refresh data from server"
+          title={t('pos.refreshFromServer')}
           className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white hover:bg-dark-card rounded-xl transition-colors shrink-0 disabled:opacity-50"
         >
           <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
@@ -67,7 +69,7 @@ export default function TopBar({ onRefresh }: Props) {
       {/* Settings */}
       <button
         onClick={() => navigate('/pos/settings')}
-        title="POS Settings"
+        title={t('posSettings.title')}
         className="w-9 h-9 flex items-center justify-center text-gray-400 hover:text-white hover:bg-dark-card rounded-xl transition-colors shrink-0"
       >
         <Settings size={18} />

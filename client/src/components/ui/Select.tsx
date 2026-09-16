@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown, Check } from 'lucide-react'
 
 export interface SelectOption {
@@ -14,7 +15,9 @@ interface SelectProps {
   className?: string
 }
 
-export function Select({ value, onChange, options, placeholder = 'Select…', className = '' }: SelectProps) {
+export function Select({ value, onChange, options, placeholder, className = '' }: SelectProps) {
+  const { t } = useTranslation()
+  const effectivePlaceholder = placeholder ?? t('common.selectPlaceholder')
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -48,7 +51,7 @@ export function Select({ value, onChange, options, placeholder = 'Select…', cl
         }`}
       >
         <span className={selected ? 'text-white' : 'text-gray-500'}>
-          {selected?.label ?? placeholder}
+          {selected?.label ?? effectivePlaceholder}
         </span>
         <ChevronDown
           size={14}

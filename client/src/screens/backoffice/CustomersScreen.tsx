@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { Search, Plus, X, Star, ShoppingBag, Users, Edit2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Search, Plus, X, Star, ShoppingBag, Users, Edit2, Banknote } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { DebtHistoryPanel } from '../../components/pos/DebtHistoryDrawer'
 
 interface Customer {
   id: number; name: string; phone: string | null; email: string | null
@@ -15,6 +17,7 @@ interface Customer {
 interface CustomerForm { name: string; phone: string; email: string; address: string }
 
 export default function CustomersScreen() {
+  const { t } = useTranslation()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Customer | null>(null)
@@ -25,6 +28,7 @@ export default function CustomersScreen() {
   const [form, setForm] = useState<CustomerForm>({ name: '', phone: '', email: '', address: '' })
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [showDebtPanel, setShowDebtPanel] = useState(false)
   const debouncedSearch = useDebouncedValue(search)
 
   useEffect(() => { loadCustomers() }, [debouncedSearch])
@@ -64,6 +68,17 @@ export default function CustomersScreen() {
 
   function openCustomer(c: Customer) { setSelected(c); loadCustomerDetail(c.id) }
 
+  async function refreshAfterDebtPayment() {
+    setShowDebtPanel(false)
+    await loadCustomers()
+    if (!selected) return
+    const [row] = await window.electronAPI.db.query(
+      `SELECT id, name, phone, email, balance, loyalty_points_balance, type, created_at FROM contacts WHERE id=?`,
+      [selected.id]
+    ) as Array<Pick<Customer, 'id' | 'name' | 'phone' | 'email' | 'balance' | 'loyalty_points_balance' | 'type' | 'created_at'>>
+    if (row) setSelected((prev) => prev ? { ...prev, ...row } : null)
+  }
+
   async function saveCustomer() {
     if (!form.name.trim()) return
     setSaving(true)
@@ -96,17 +111,17 @@ export default function CustomersScreen() {
   return (
     <BackOfficeLayout>
       <PageHeader
-        title="Customers"
+        title={t('nav.customers')}
         actions={
           <Button icon={Plus} onClick={() => { setEditId(null); setForm({ name: '', phone: '', email: '', address: '' }); setShowForm(true) }}>
-            New Customer
+            {t('customers.newCustomer')}
           </Button>
         }
       />
       <div className="shrink-0 px-6 py-3 border-b border-dark-border">
         <div className="relative max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or phone…"
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('customers.searchByNameOrPhone')}
             className="w-full bg-dark-card border border-dark-border rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary" />
         </div>
       </div>
@@ -115,7 +130,7 @@ export default function CustomersScreen() {
         <div className="flex-1 overflow-auto">
           <table className="w-full">
             <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-              <tr>{['Name', 'Phone', 'Total Spent', 'Purchases', 'Loyalty Pts', 'Balance', ''].map((h) => (
+              <tr>{[t('common.name'), t('common.phone'), t('customers.totalSpent'), t('customers.purchases'), t('customers.loyaltyPts'), t('customers.balanceCol'), ''].map((h) => (
                 <th key={h} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
               ))}</tr>
             </thead>
@@ -146,7 +161,7 @@ export default function CustomersScreen() {
             </tbody>
           </table>
           {!loading && customers.length === 0 && (
-            <EmptyState icon={Users} title="No customers yet" />
+            <EmptyState icon={Users} title={t('customers.noCustomersYet')} />
           )}
         </div>
 
@@ -169,10 +184,10 @@ export default function CustomersScreen() {
             <div className="p-4 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: 'Total Spent', val: `UZS ${fmtUZS(Number(selected.total_sales))}`, color: 'text-primary' },
-                  { label: 'Purchases', val: String(selected.sale_count), color: 'text-white' },
-                  { label: 'Loyalty Points', val: String(selected.loyalty_points_balance), color: 'text-yellow-400' },
-                  { label: 'Balance', val: `UZS ${fmtUZS(Number(selected.balance))}`, color: Number(selected.balance) < 0 ? 'text-red-400' : 'text-white' },
+                  { label: t('customers.totalSpent'), val: `UZS ${fmtUZS(Number(selected.total_sales))}`, color: 'text-primary' },
+                  { label: t('customers.purchases'), val: String(selected.sale_count), color: 'text-white' },
+                  { label: t('customers.loyaltyPoints'), val: String(selected.loyalty_points_balance), color: 'text-yellow-400' },
+                  { label: t('customers.balance'), val: `UZS ${fmtUZS(Number(selected.balance))}`, color: Number(selected.balance) < 0 ? 'text-red-400' : 'text-white' },
                 ].map((s) => (
                   <div key={s.label} className="bg-dark-card rounded-xl p-3">
                     <p className="text-xs text-gray-500 mb-1">{s.label}</p>
@@ -181,9 +196,15 @@ export default function CustomersScreen() {
                 ))}
               </div>
 
+              {Number(selected.balance) > 0 && (
+                <Button icon={Banknote} className="w-full" onClick={() => setShowDebtPanel(true)}>
+                  {t('debt.payDebt')}
+                </Button>
+              )}
+
               {recentSales.length > 0 && (
                 <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><ShoppingBag size={11} /> Recent Sales</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><ShoppingBag size={11} /> {t('dashboard.recentSales')}</p>
                   {recentSales.map((s, i) => (
                     <div key={i} className="flex justify-between items-center py-2 border-b border-dark-border/50 last:border-0">
                       <div>
@@ -198,7 +219,7 @@ export default function CustomersScreen() {
 
               {loyaltyTx.length > 0 && (
                 <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Star size={11} /> Loyalty History</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5"><Star size={11} /> {t('customers.loyaltyHistory')}</p>
                   {loyaltyTx.map((tx, i) => (
                     <div key={i} className="flex justify-between items-center py-1.5">
                       <p className="text-gray-400 text-xs flex-1 mr-2 truncate">{tx.description}</p>
@@ -217,24 +238,36 @@ export default function CustomersScreen() {
       <Modal
         open={showForm}
         onClose={() => { setShowForm(false); setEditId(null) }}
-        title={editId ? 'Edit Customer' : 'New Customer'}
+        title={editId ? t('customers.editCustomer') : t('customers.newCustomer')}
         maxWidth="max-w-sm"
         footer={
           <>
-            <Button variant="secondary" className="flex-1" onClick={() => { setShowForm(false); setEditId(null) }}>Cancel</Button>
+            <Button variant="secondary" className="flex-1" onClick={() => { setShowForm(false); setEditId(null) }}>{t('common.cancel')}</Button>
             <Button className="flex-1" onClick={saveCustomer} loading={saving} disabled={!form.name.trim()}>
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? t('common.saving') : t('common.save')}
             </Button>
           </>
         }
       >
             <div className="p-5 space-y-3">
-              {[['Name *', 'name', 'text'], ['Phone', 'phone', 'tel'], ['Email', 'email', 'email'], ['Address', 'address', 'text']].map(([label, key, type]) => (
+              {[[t('products.nameRequired'), 'name', 'text'], [t('common.phone'), 'phone', 'tel'], [t('common.email'), 'email', 'email'], [t('common.address'), 'address', 'text']].map(([label, key, type]) => (
                 <Input key={key} label={label} type={type} value={form[key as keyof CustomerForm]}
                   onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))} />
               ))}
             </div>
       </Modal>
+
+      {selected && (
+        <Modal open={showDebtPanel} onClose={() => setShowDebtPanel(false)} maxWidth="max-w-sm">
+          <div className="flex flex-col h-[30rem]">
+            <DebtHistoryPanel
+              contact={selected}
+              onClose={() => setShowDebtPanel(false)}
+              onPaymentComplete={refreshAfterDebtPayment}
+            />
+          </div>
+        </Modal>
+      )}
     </BackOfficeLayout>
   )
 }

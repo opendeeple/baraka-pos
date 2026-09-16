@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Package } from 'lucide-react'
 import { fmtUZS } from '../../lib/currency'
 
@@ -23,11 +24,12 @@ interface Props {
 }
 
 export default function ProductGrid({ products, onAddToCart }: Props) {
+  const { t } = useTranslation()
   if (products.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-gray-600 gap-3">
         <Package size={48} className="opacity-30" />
-        <p className="text-base">No products found</p>
+        <p className="text-base">{t('pos.noProductsFound')}</p>
       </div>
     )
   }
@@ -55,6 +57,7 @@ const PLACEHOLDER_COLORS = [
 ]
 
 function ProductCard({ product, onAdd }: { product: LocalProduct; onAdd: (p: LocalProduct) => void }) {
+  const { t } = useTranslation()
   const outOfStock = product.stock !== undefined && product.stock <= 0
   const alertQty = product.alert_quantity ?? 5
   const lowStock = product.stock !== undefined && product.stock > 0 && product.stock <= alertQty
@@ -98,12 +101,12 @@ function ProductCard({ product, onAdd }: { product: LocalProduct; onAdd: (p: Loc
           </span>
           {lowStock && (
             <span className="text-yellow-400 text-xs bg-yellow-400/10 px-1.5 py-0.5 rounded-md shrink-0">
-              {product.stock} left
+              {t('pos.leftCount', { count: product.stock })}
             </span>
           )}
           {outOfStock && (
             <span className="text-red-400 text-xs bg-red-400/10 px-1.5 py-0.5 rounded-md shrink-0">
-              Out
+              {t('pos.outOfStockShort')}
             </span>
           )}
         </div>

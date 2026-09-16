@@ -1,19 +1,45 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Pencil, Trash2, Globe } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { ArrowLeft, Plus, Pencil, Trash2, Globe, Maximize, Minimize } from 'lucide-react'
 import { Modal, Button, Input } from '../../components/ui'
 import { PosApp, DEFAULT_APPS, APPS_STORAGE_KEY, loadApps, saveApps } from '../../components/pos/AppLauncherBar'
+import { LANGUAGES, setAppLanguage, type AppLanguage } from '../../i18n'
 
 type FormState = { name: string; url: string; color: string }
 const BLANK: FormState = { name: '', url: '', color: '#6366F1' }
 
 export default function POSSettingsScreen() {
   const navigate = useNavigate()
+  const { t, i18n } = useTranslation()
   const [apps, setApps] = useState<PosApp[]>(loadApps)
   const [editing, setEditing] = useState<PosApp | null>(null)
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState<FormState>(BLANK)
   const [error, setError] = useState('')
+  const [changingLang, setChangingLang] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
+  const [togglingFullscreen, setTogglingFullscreen] = useState(false)
+
+  useEffect(() => {
+    window.electronAPI.window.isFullscreen().then((r) => setFullscreen(r.fullscreen))
+  }, [])
+
+  async function toggleFullscreen() {
+    setTogglingFullscreen(true)
+    try {
+      const r = await window.electronAPI.window.toggleFullscreen()
+      setFullscreen(r.fullscreen)
+    } finally {
+      setTogglingFullscreen(false)
+    }
+  }
+
+  async function changeLanguage(lang: AppLanguage) {
+    if (lang === i18n.language) return
+    setChangingLang(true)
+    try { await setAppLanguage(lang) } finally { setChangingLang(false) }
+  }
 
   function openAdd() {
     setForm(BLANK)
@@ -38,8 +64,8 @@ export default function POSSettingsScreen() {
   function submitForm() {
     const name = form.name.trim()
     let url = form.url.trim()
-    if (!name) { setError('App name is required'); return }
-    if (!url) { setError('URL is required'); return }
+    if (!name) { setError(t('posSettings.nameRequired')); return }
+    if (!url) { setError(t('posSettings.urlRequired')); return }
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url
 
     let updated: PosApp[]
@@ -81,28 +107,65 @@ export default function POSSettingsScreen() {
         >
           <ArrowLeft size={20} />
         </button>
-        <h1 className="text-white font-bold text-lg">POS Settings</h1>
+        <h1 className="text-white font-bold text-lg">{t('posSettings.title')}</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 max-w-2xl w-full mx-auto">
+
+        {/* Language section */}
+        <div className="mb-6">
+          <h2 className="text-white font-semibold text-base flex items-center gap-2 mb-3"><Globe size={16} /> {t('settings.language')}</h2>
+          <div className="flex gap-2">
+            {LANGUAGES.map((lng) => (
+              <button
+                key={lng.code}
+                onClick={() => changeLanguage(lng.code)}
+                disabled={changingLang}
+                className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors border ${
+                  i18n.language === lng.code
+                    ? 'bg-primary/15 border-primary text-primary'
+                    : 'border-dark-border text-gray-300 hover:text-white hover:bg-dark-card'
+                }`}
+              >
+                {lng.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Fullscreen section */}
+        <div className="mb-6">
+          <h2 className="text-white font-semibold text-base flex items-center gap-2 mb-3">
+            {fullscreen ? <Minimize size={16} /> : <Maximize size={16} />} {t('posSettings.fullscreen')}
+          </h2>
+          <button
+            onClick={toggleFullscreen}
+            disabled={togglingFullscreen}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-dark-border text-gray-300 hover:text-white hover:bg-dark-card transition-colors disabled:opacity-50"
+          >
+            {fullscreen
+              ? <><Minimize size={15} /> {t('posSettings.exitFullscreen')}</>
+              : <><Maximize size={15} /> {t('posSettings.enterFullscreen')}</>}
+          </button>
+        </div>
 
         {/* Mini Apps section */}
         <div className="mb-2">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-white font-semibold text-base">Mini Apps</h2>
-              <p className="text-gray-500 text-xs mt-0.5">Payment apps and web tools shown in the POS sidebar</p>
+              <h2 className="text-white font-semibold text-base">{t('posSettings.miniApps')}</h2>
+              <p className="text-gray-500 text-xs mt-0.5">{t('posSettings.miniAppsHint')}</p>
             </div>
             <Button icon={Plus} onClick={openAdd}>
-              Add App
+              {t('posSettings.addApp')}
             </Button>
           </div>
 
           {apps.length === 0 ? (
             <div className="bg-dark-surface border border-dark-border rounded-2xl p-8 text-center">
               <Globe size={32} className="text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-500 text-sm">No apps added yet</p>
-              <button onClick={openAdd} className="mt-3 text-primary text-sm hover:underline">Add your first app</button>
+              <p className="text-gray-500 text-sm">{t('posSettings.noApps')}</p>
+              <button onClick={openAdd} className="mt-3 text-primary text-sm hover:underline">{t('posSettings.addFirstApp')}</button>
             </div>
           ) : (
             <div className="bg-dark-surface border border-dark-border rounded-2xl overflow-hidden">
@@ -143,7 +206,7 @@ export default function POSSettingsScreen() {
               onClick={restoreDefaults}
               className="mt-3 text-xs text-gray-600 hover:text-gray-400 transition-colors"
             >
-              Restore default apps
+              {t('posSettings.restoreDefaults')}
             </button>
           )}
         </div>
@@ -153,7 +216,7 @@ export default function POSSettingsScreen() {
       <Modal
         open={showModal}
         onClose={closeModal}
-        title={<h3 className="text-white font-bold text-base">{editing ? 'Edit App' : 'Add App'}</h3>}
+        title={<h3 className="text-white font-bold text-base">{editing ? t('posSettings.editApp') : t('posSettings.addApp')}</h3>}
         maxWidth="max-w-sm"
         footer={
           <>
@@ -166,7 +229,7 @@ export default function POSSettingsScreen() {
               </button>
             )}
             <Button size="lg" className="flex-1" onClick={submitForm}>
-              {editing ? 'Save Changes' : 'Add App'}
+              {editing ? t('settings.saveChanges') : t('posSettings.addApp')}
             </Button>
           </>
         }
@@ -181,14 +244,14 @@ export default function POSSettingsScreen() {
                 {form.name.slice(0, 2).toUpperCase() || '??'}
               </div>
               <div className="min-w-0">
-                <p className="text-white font-semibold text-sm truncate">{form.name || 'App Name'}</p>
+                <p className="text-white font-semibold text-sm truncate">{form.name || t('posSettings.appName')}</p>
                 <p className="text-gray-500 text-xs truncate">{form.url || 'https://...'}</p>
               </div>
             </div>
 
             <div className="space-y-4">
               <Input
-                label="App Name"
+                label={t('posSettings.appName')}
                 autoFocus
                 placeholder="e.g. Payme"
                 value={form.name}
@@ -204,7 +267,7 @@ export default function POSSettingsScreen() {
               />
 
               <div>
-                <label className="text-xs text-gray-500 font-medium block mb-1.5">Icon Color</label>
+                <label className="text-xs text-gray-500 font-medium block mb-1.5">{t('posSettings.iconColor')}</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"

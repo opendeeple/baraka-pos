@@ -50,6 +50,26 @@ function calcBounds(win: BrowserWindow) {
   return { x: 56, y: 108, width: Math.max(w - 56, 100), height: Math.max(h - 108, 100) }
 }
 
+// ─── Fullscreen toggle ────────────────────────────────────────────────────────
+// Registered directly by both main.ts and main.office.ts (not folded into
+// registerWindowIpc, which only main.ts calls — Office has no customer
+// display / miniapp windows) so both apps' Settings screens can offer the
+// same "enter/exit fullscreen" control against their own main window.
+export function registerFullscreenIpc(getMainWindow: () => BrowserWindow | null) {
+  ipcMain.handle('window:toggleFullscreen', () => {
+    const win = getMainWindow()
+    if (!win || win.isDestroyed()) return { fullscreen: false }
+    const next = !win.isFullScreen()
+    win.setFullScreen(next)
+    return { fullscreen: next }
+  })
+
+  ipcMain.handle('window:isFullscreen', () => {
+    const win = getMainWindow()
+    return { fullscreen: !!win && !win.isDestroyed() && win.isFullScreen() }
+  })
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function registerWindowIpc(

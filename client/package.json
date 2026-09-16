@@ -28,7 +28,9 @@
     "escpos": "^3.0.0-alpha",
     "escpos-network": "^3.0.0-alpha",
     "escpos-usb": "^3.0.0-alpha",
+    "i18next": "26.4.2",
     "keytar": "^7.9.0",
+    "react-i18next": "17.0.14",
     "usb": "^3.0.0"
   },
   "devDependencies": {

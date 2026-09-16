@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { DEFAULT_SERVER_URL } from '@baraka/shared'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import {
@@ -44,6 +45,7 @@ async function apiFetch<T>(url: string, token: string): Promise<T> {
 const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string | undefined) || DEFAULT_SERVER_URL
 
 export default function ReportsScreen() {
+  const { t } = useTranslation()
   const { token } = useAuthStore()
 
   const [tab, setTab] = useState<'daily' | 'range'>('daily')
@@ -63,21 +65,28 @@ export default function ReportsScreen() {
     if (!token) return
     setLoading(true); setError('')
     const base = `${SERVER_URL}/api/reports`
-    const t = token
+    const authToken = token
+    // The Daily-tab summary is for the single `date`; the Range tab's KPI
+    // cards (Revenue/Net Profit/Transactions/Expenses) need to reflect the
+    // whole dateFrom..dateTo span instead, or they silently keep showing
+    // just `date`'s numbers no matter what range is picked.
+    const summaryUrl = tab === 'range'
+      ? `${base}/daily?date=${dateFrom}&date_to=${dateTo}`
+      : `${base}/daily?date=${date}`
     try {
       const [d, tp, cs, h, ls] = await Promise.all([
-        apiFetch<DailySummary>(`${base}/daily?date=${date}`, t),
-        apiFetch<TopProduct[]>(`${base}/top-products?date_from=${dateFrom}&date_to=${dateTo}&limit=10`, t),
-        apiFetch<CategorySale[]>(`${base}/category-sales?date_from=${dateFrom}&date_to=${dateTo}`, t),
-        apiFetch<HourlySlot[]>(`${base}/hourly?date=${date}`, t),
-        apiFetch<LowStockItem[]>(`${base}/low-stock`, t),
+        apiFetch<DailySummary>(summaryUrl, authToken),
+        apiFetch<TopProduct[]>(`${base}/top-products?date_from=${dateFrom}&date_to=${dateTo}&limit=10`, authToken),
+        apiFetch<CategorySale[]>(`${base}/category-sales?date_from=${dateFrom}&date_to=${dateTo}`, authToken),
+        apiFetch<HourlySlot[]>(`${base}/hourly?date=${date}`, authToken),
+        apiFetch<LowStockItem[]>(`${base}/low-stock`, authToken),
       ])
       setDaily(d); setTopProducts(tp); setCategorySales(cs); setHourly(h); setLowStock(ls)
     } catch (e) {
-      setError('Failed to load reports. Check server connection.')
+      setError(t('reports.failedToLoad'))
       console.error(e)
     } finally { setLoading(false) }
-  }, [token, date, dateFrom, dateTo])
+  }, [token, date, dateFrom, dateTo, tab])
 
   useEffect(() => { load() }, [load])
 
@@ -85,21 +94,21 @@ export default function ReportsScreen() {
     <BackOfficeLayout>
       <div className="flex items-center justify-between px-6 py-4 border-b border-dark-border shrink-0">
         <div>
-          <h1 className="text-white font-bold text-xl">Reports</h1>
-          <p className="text-gray-500 text-xs mt-0.5">Sales analytics & business insights</p>
+          <h1 className="text-white font-bold text-xl">{t('nav.reports')}</h1>
+          <p className="text-gray-500 text-xs mt-0.5">{t('reports.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           {/* Tab toggle */}
           <div className="flex bg-dark-card rounded-lg p-0.5 border border-dark-border">
-            {(['daily', 'range'] as const).map((t) => (
+            {(['daily', 'range'] as const).map((tb) => (
               <button
-                key={t}
-                onClick={() => setTab(t)}
+                key={tb}
+                onClick={() => setTab(tb)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  tab === t ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'
+                  tab === tb ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >
-                {t === 'daily' ? 'Daily' : 'Date Range'}
+                {tb === 'daily' ? t('reports.daily') : t('reports.dateRange')}
               </button>
             ))}
           </div>
@@ -109,7 +118,7 @@ export default function ReportsScreen() {
           ) : (
             <div className="flex items-center gap-1.5 shrink-0">
               <DatePicker value={dateFrom} onChange={setDateFrom} max={dateTo} className="w-36" />
-              <span className="text-gray-500 text-xs">to</span>
+              <span className="text-gray-500 text-xs">{t('expenses.to')}</span>
               <DatePicker value={dateTo} onChange={setDateTo} min={dateFrom} max={today()} className="w-36" />
             </div>
           )}
@@ -123,26 +132,26 @@ export default function ReportsScreen() {
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-4 text-sm">
-            <p className="text-red-400 font-medium">Could not connect to server</p>
-            <p className="text-red-400/60 text-xs mt-1">Make sure you have an internet connection and try again.</p>
+            <p className="text-red-400 font-medium">{t('reports.couldNotConnect')}</p>
+            <p className="text-red-400/60 text-xs mt-1">{t('reports.checkConnectionHint')}</p>
           </div>
         )}
 
         {/* Daily KPI cards */}
         {daily && (
           <div className="grid grid-cols-4 gap-4">
-            <KPICard icon={DollarSign} label="Revenue" value={`UZS ${fmtUZS(daily.totalRevenue)}`} color="text-primary" />
-            <KPICard icon={TrendingUp} label="Net Profit" value={`UZS ${fmtUZS(daily.netProfit)}`}
+            <KPICard icon={DollarSign} label={t('dashboard.revenue')} value={`UZS ${fmtUZS(daily.totalRevenue)}`} color="text-primary" />
+            <KPICard icon={TrendingUp} label={t('reports.netProfit')} value={`UZS ${fmtUZS(daily.netProfit)}`}
               color={daily.netProfit >= 0 ? 'text-green-400' : 'text-red-400'} />
-            <KPICard icon={ShoppingCart} label="Transactions" value={daily.transactionCount.toString()} color="text-blue-400" />
-            <KPICard icon={Package} label="Expenses" value={`UZS ${fmtUZS(daily.totalExpenses)}`} color="text-orange-400" />
+            <KPICard icon={ShoppingCart} label={t('session.transactions')} value={daily.transactionCount.toString()} color="text-blue-400" />
+            <KPICard icon={Package} label={t('nav.expenses')} value={`UZS ${fmtUZS(daily.totalExpenses)}`} color="text-orange-400" />
           </div>
         )}
 
         <div className="grid grid-cols-3 gap-6">
           {/* Hourly sales chart */}
           <div className="col-span-2 bg-dark-surface border border-dark-border rounded-2xl p-5">
-            <h3 className="text-white font-semibold text-sm mb-4">Hourly Sales ({date})</h3>
+            <h3 className="text-white font-semibold text-sm mb-4">{t('reports.hourlySales', { date })}</h3>
             {hourly.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <AreaChart data={hourly}>
@@ -161,13 +170,13 @@ export default function ReportsScreen() {
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[220px] flex items-center justify-center text-gray-600 text-sm">No sales data</div>
+              <div className="h-[220px] flex items-center justify-center text-gray-600 text-sm">{t('reports.noSalesData')}</div>
             )}
           </div>
 
           {/* Payment breakdown */}
           <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
-            <h3 className="text-white font-semibold text-sm mb-4">Payment Methods</h3>
+            <h3 className="text-white font-semibold text-sm mb-4">{t('reports.paymentMethods')}</h3>
             {daily?.paymentBreakdown && daily.paymentBreakdown.length > 0 ? (
               <>
                 <ResponsiveContainer width="100%" height={150}>
@@ -187,7 +196,7 @@ export default function ReportsScreen() {
                     <div key={p.method} className="flex items-center justify-between text-xs">
                       <div className="flex items-center gap-1.5">
                         <div className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                        <span className="text-gray-400">{p.method}</span>
+                        <span className="text-gray-400">{t(`payment.method${p.method}`, { defaultValue: p.method })}</span>
                       </div>
                       <span className="text-white font-medium">UZS {fmtUZS(p.total)}</span>
                     </div>
@@ -195,7 +204,7 @@ export default function ReportsScreen() {
                 </div>
               </>
             ) : (
-              <div className="h-[200px] flex items-center justify-center text-gray-600 text-sm">No data</div>
+              <div className="h-[200px] flex items-center justify-center text-gray-600 text-sm">{t('reports.noData')}</div>
             )}
           </div>
         </div>
@@ -203,7 +212,7 @@ export default function ReportsScreen() {
         <div className="grid grid-cols-2 gap-6">
           {/* Top products */}
           <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
-            <h3 className="text-white font-semibold text-sm mb-4">Top Products
+            <h3 className="text-white font-semibold text-sm mb-4">{t('reports.topProducts')}
               <span className="text-gray-500 font-normal ml-1.5 text-xs">({dateFrom} → {dateTo})</span>
             </h3>
             {topProducts.length > 0 ? (
@@ -216,17 +225,17 @@ export default function ReportsScreen() {
                     tickFormatter={(v: string) => v.length > 18 ? v.slice(0, 18) + '…' : v} />
                   <Tooltip contentStyle={{ background: '#2a2a3e', border: '1px solid #404060', borderRadius: 8 }}
                     labelStyle={{ color: '#fff' }} itemStyle={{ color: '#f97316' }} />
-                  <Bar dataKey="quantitySold" fill="#f97316" radius={[0, 4, 4, 0]} name="Units" />
+                  <Bar dataKey="quantitySold" fill="#f97316" radius={[0, 4, 4, 0]} name={t('reports.units')} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-[220px] flex items-center justify-center text-gray-600 text-sm">No data</div>
+              <div className="h-[220px] flex items-center justify-center text-gray-600 text-sm">{t('reports.noData')}</div>
             )}
           </div>
 
           {/* Category sales */}
           <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
-            <h3 className="text-white font-semibold text-sm mb-4">Sales by Category</h3>
+            <h3 className="text-white font-semibold text-sm mb-4">{t('reports.salesByCategory')}</h3>
             {categorySales.length > 0 ? (
               <div className="space-y-3">
                 {categorySales.map((cat, i) => {
@@ -247,7 +256,7 @@ export default function ReportsScreen() {
                 })}
               </div>
             ) : (
-              <div className="h-[220px] flex items-center justify-center text-gray-600 text-sm">No data</div>
+              <div className="h-[220px] flex items-center justify-center text-gray-600 text-sm">{t('reports.noData')}</div>
             )}
           </div>
         </div>
@@ -256,16 +265,16 @@ export default function ReportsScreen() {
         {lowStock.length > 0 && (
           <div className="bg-dark-surface border border-yellow-500/30 rounded-2xl p-5">
             <h3 className="text-yellow-400 font-semibold text-sm mb-3 flex items-center gap-2">
-              <Package size={15} /> Low Stock Alert ({lowStock.length} items)
+              <Package size={15} /> {t('reports.lowStockAlert', { count: lowStock.length })}
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-gray-500 border-b border-dark-border">
-                    <th className="text-left pb-2">Product</th>
-                    <th className="text-left pb-2">SKU</th>
-                    <th className="text-center pb-2">Stock</th>
-                    <th className="text-center pb-2">Alert at</th>
+                    <th className="text-left pb-2">{t('nav.products')}</th>
+                    <th className="text-left pb-2">{t('products.sku')}</th>
+                    <th className="text-center pb-2">{t('common.stock')}</th>
+                    <th className="text-center pb-2">{t('reports.alertAt')}</th>
                   </tr>
                 </thead>
                 <tbody>

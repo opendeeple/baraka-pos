@@ -63,6 +63,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('window:updateCustomerDisplay', data),
     openApp: (id: string, name: string, url: string) =>
       ipcRenderer.invoke('window:openApp', { id, name, url }),
+    toggleFullscreen: () => ipcRenderer.invoke('window:toggleFullscreen'),
+    isFullscreen: () => ipcRenderer.invoke('window:isFullscreen'),
   },
   app: {
     isTraining: () => ipcRenderer.invoke('app:isTraining'),

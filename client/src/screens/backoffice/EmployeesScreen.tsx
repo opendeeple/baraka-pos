@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import {
   Users, Plus, Search, Check, Eye, EyeOff,
@@ -40,6 +41,8 @@ const ROLE_COLORS: Record<string, string> = {
 const ROLES = ['cashier', 'manager', 'admin'] as const
 
 export default function EmployeesScreen() {
+  const { t } = useTranslation()
+  const tRole = (r: string) => t(`employees.role${r.replace(/(^|_)([a-z])/g, (_m, _p, c) => c.toUpperCase())}`, { defaultValue: r })
   const [employees, setEmployees] = useState<Employee[]>([])
   const [search, setSearch] = useState('')
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null)
@@ -120,13 +123,19 @@ export default function EmployeesScreen() {
         [selectedEmp.id, Number(salaryForm.amount), salaryForm.period_from,
          salaryForm.period_to, new Date().toISOString(), salaryForm.note || null]
       )
-      // Add to expenses
+      // Add to expenses — needs sync_id + enqueue like ExpensesScreen's own
+      // insert, otherwise this record (and its amount) never reaches the
+      // server and silently never shows up in Reports.
+      const expenseSyncId = crypto.randomUUID()
+      const nowIso = new Date().toISOString()
       await window.electronAPI.db.exec(
-        `INSERT INTO expenses (expense_date, amount, category, description, reference, created_at)
-         VALUES (?,?,'Salaries',?,?,?)`,
-        [new Date().toISOString().split('T')[0], Number(salaryForm.amount),
-         `Salary: ${selectedEmp.name}`, `SAL-${selectedEmp.id}`, new Date().toISOString()]
+        `INSERT INTO expenses (sync_id, expense_date, amount, category, description, reference, created_at, updated_at)
+         VALUES (?,?,?,'Salaries',?,?,?,?)`,
+        [expenseSyncId, nowIso.split('T')[0], Number(salaryForm.amount),
+         `Salary: ${selectedEmp.name}`, `SAL-${selectedEmp.id}`, nowIso, nowIso]
       )
+      await window.electronAPI.sync.enqueue('expenses', expenseSyncId, 'upsert')
+      window.electronAPI.sync.pushPending().catch(() => {})
       setSalaryForm({ amount: '', period_from: '', period_to: '', note: '' })
       setShowSalaryForm(false)
       await selectEmployee(selectedEmp)
@@ -142,11 +151,11 @@ export default function EmployeesScreen() {
     <BackOfficeLayout>
       <div className="flex items-center justify-between px-6 py-4 border-b border-dark-border shrink-0">
         <div>
-          <h1 className="text-white font-bold text-xl">Employees</h1>
-          <p className="text-gray-500 text-xs mt-0.5">{employees.length} staff members</p>
+          <h1 className="text-white font-bold text-xl">{t('nav.employees')}</h1>
+          <p className="text-gray-500 text-xs mt-0.5">{t('employees.staffMembers', { count: employees.length })}</p>
         </div>
         <Button icon={Plus} onClick={() => { setSelectedEmp(null); setShowForm(true) }}>
-          Add Employee
+          {t('employees.addEmployee')}
         </Button>
       </div>
 
@@ -158,7 +167,7 @@ export default function EmployeesScreen() {
               <Search size={14} className="absolute left-3 top-2.5 text-gray-500" />
               <input
                 value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search employees…"
+                placeholder={t('employees.searchEmployees')}
                 className="w-full pl-9 pr-3 py-2 bg-dark-card border border-dark-border text-white text-xs rounded-lg"
               />
             </div>
@@ -168,14 +177,14 @@ export default function EmployeesScreen() {
               <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
                 <Users size={32} className="text-gray-700 mb-2" />
                 <p className="text-gray-500 text-sm">
-                  {search ? 'No results found' : 'No employees yet'}
+                  {search ? t('employees.noResultsFound') : t('employees.noEmployeesYet')}
                 </p>
                 {!search && (
                   <button
                     onClick={() => { setSelectedEmp(null); setShowForm(true) }}
                     className="mt-3 text-xs text-primary hover:text-orange-400 transition-colors"
                   >
-                    + Add first employee
+                    {t('employees.addFirstEmployee')}
                   </button>
                 )}
               </div>
@@ -194,7 +203,7 @@ export default function EmployeesScreen() {
                 <div className="flex-1 min-w-0">
                   <p className="text-white text-sm font-medium truncate">{emp.name}</p>
                   <p className={`text-xs font-medium px-1.5 py-0.5 rounded inline-block mt-0.5 ${ROLE_COLORS[emp.role] ?? 'text-gray-400'}`}>
-                    {emp.role}
+                    {tRole(emp.role)}
                   </p>
                 </div>
                 <ChevronRight size={14} className="text-gray-600 shrink-0" />
@@ -216,7 +225,7 @@ export default function EmployeesScreen() {
                   <div>
                     <h2 className="text-white font-bold text-lg">{selectedEmp.name}</h2>
                     <span className={`text-xs font-medium px-2 py-1 rounded ${ROLE_COLORS[selectedEmp.role]}`}>
-                      {selectedEmp.role}
+                      {tRole(selectedEmp.role)}
                     </span>
                     {selectedEmp.email && <p className="text-gray-400 text-sm mt-1">{selectedEmp.email}</p>}
                     {selectedEmp.phone && <p className="text-gray-400 text-sm">{selectedEmp.phone}</p>}
@@ -234,7 +243,7 @@ export default function EmployeesScreen() {
                       setShowForm(true)
                     }}
                     className="px-3 py-1.5 bg-dark-card border border-dark-border text-gray-300 hover:text-white rounded-lg text-xs transition-colors"
-                  >Edit</button>
+                  >{t('common.edit')}</button>
                   <button
                     onClick={() => toggleActive(selectedEmp)}
                     className={`px-3 py-1.5 rounded-lg text-xs transition-colors border ${
@@ -243,7 +252,7 @@ export default function EmployeesScreen() {
                         : 'border-green-500/30 text-green-400 hover:bg-green-500/10'
                     }`}
                   >
-                    {selectedEmp.is_active ? 'Deactivate' : 'Activate'}
+                    {selectedEmp.is_active ? t('employees.deactivate') : t('employees.activate')}
                   </button>
                 </div>
               </div>
@@ -253,7 +262,7 @@ export default function EmployeesScreen() {
                 <div className="bg-dark-surface border border-dark-border rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-1">
                     <Wallet size={14} className="text-primary" />
-                    <span className="text-gray-500 text-xs">Monthly Salary</span>
+                    <span className="text-gray-500 text-xs">{t('employees.monthlySalary')}</span>
                   </div>
                   <p className="text-white font-bold text-lg">
                     {selectedEmp.salary ? `UZS ${fmtUZS(Number(selectedEmp.salary))}` : '—'}
@@ -262,40 +271,40 @@ export default function EmployeesScreen() {
                 <div className="bg-dark-surface border border-dark-border rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-1">
                     <Calendar size={14} className="text-blue-400" />
-                    <span className="text-gray-500 text-xs">Hire Date</span>
+                    <span className="text-gray-500 text-xs">{t('employees.hireDate')}</span>
                   </div>
                   <p className="text-white font-bold text-lg">{selectedEmp.hire_date ?? '—'}</p>
                 </div>
                 <div className="bg-dark-surface border border-dark-border rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-1">
                     <Shield size={14} className="text-purple-400" />
-                    <span className="text-gray-500 text-xs">Role</span>
+                    <span className="text-gray-500 text-xs">{t('employees.role')}</span>
                   </div>
-                  <p className="text-white font-bold text-lg capitalize">{selectedEmp.role}</p>
+                  <p className="text-white font-bold text-lg capitalize">{tRole(selectedEmp.role)}</p>
                 </div>
               </div>
 
               {/* Salary history */}
               <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-white font-semibold text-sm">Salary Records</h3>
+                  <h3 className="text-white font-semibold text-sm">{t('employees.salaryRecords')}</h3>
                   <button
                     onClick={() => setShowSalaryForm(true)}
                     className="flex items-center gap-1.5 bg-primary hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                   >
-                    <Plus size={12} /> Record Payment
+                    <Plus size={12} /> {t('employees.recordPayment')}
                   </button>
                 </div>
                 {salaryRecords.length === 0 ? (
-                  <p className="text-gray-600 text-sm text-center py-8">No salary payments recorded</p>
+                  <p className="text-gray-600 text-sm text-center py-8">{t('employees.noSalaryPayments')}</p>
                 ) : (
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="text-gray-500 border-b border-dark-border">
-                        <th className="text-left pb-2">Period</th>
-                        <th className="text-right pb-2">Amount</th>
-                        <th className="text-right pb-2">Paid At</th>
-                        <th className="text-left pb-2">Note</th>
+                        <th className="text-left pb-2">{t('employees.period')}</th>
+                        <th className="text-right pb-2">{t('common.amount')}</th>
+                        <th className="text-right pb-2">{t('employees.paidAt')}</th>
+                        <th className="text-left pb-2">{t('employees.note')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -315,7 +324,7 @@ export default function EmployeesScreen() {
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-gray-600 gap-3">
               <Users size={40} className="opacity-30" />
-              <p className="text-sm">Select an employee to view details</p>
+              <p className="text-sm">{t('employees.selectEmployeeHint')}</p>
             </div>
           )}
         </div>
@@ -325,37 +334,37 @@ export default function EmployeesScreen() {
       <Modal
         open={showForm}
         onClose={() => setShowForm(false)}
-        title={selectedEmp ? 'Edit Employee' : 'New Employee'}
+        title={selectedEmp ? t('employees.editEmployee') : t('employees.newEmployee')}
         maxWidth="max-w-md"
         footer={
           <>
-            <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
             <Button className="flex-1" icon={Check} onClick={saveEmployee} loading={saving} disabled={!form.name.trim()}>
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? t('common.saving') : t('common.save')}
             </Button>
           </>
         }
       >
             <div className="p-5 space-y-4">
-              <Input label="Full Name *" value={form.name}
+              <Input label={t('employees.fullNameRequired')} value={form.name}
                 onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} />
               <div className="grid grid-cols-2 gap-3">
-                <Input label="Email" type="email" value={form.email}
+                <Input label={t('common.email')} type="email" value={form.email}
                   onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} />
-                <Input label="Phone" value={form.phone}
+                <Input label={t('common.phone')} value={form.phone}
                   onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Role">
+                <Field label={t('employees.role')}>
                   <Select
                     value={form.role}
                     onChange={(v) => setForm(f => ({ ...f, role: v as typeof ROLES[number] }))}
-                    options={ROLES.map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
+                    options={ROLES.map(r => ({ value: r, label: tRole(r) }))}
                   />
                 </Field>
-                <Input label="PIN Code" value={form.pin_code}
+                <Input label={t('employees.pinCode')} value={form.pin_code}
                   onChange={(e) => setForm(f => ({ ...f, pin_code: e.target.value }))}
-                  type={showPin ? 'text' : 'password'} maxLength={6} placeholder="4-6 digits"
+                  type={showPin ? 'text' : 'password'} maxLength={6} placeholder={t('employees.pinPlaceholder')}
                   right={
                     <button type="button" onClick={() => setShowPin(p => !p)}
                       className="text-gray-500 hover:text-white">
@@ -364,9 +373,9 @@ export default function EmployeesScreen() {
                   } />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Input label="Monthly Salary (UZS)" type="number" min="0" value={form.salary}
+                <Input label={t('employees.monthlySalaryUzs')} type="number" min="0" value={form.salary}
                   onChange={(e) => setForm(f => ({ ...f, salary: e.target.value }))} />
-                <Field label="Hire Date">
+                <Field label={t('employees.hireDate')}>
                   <DatePicker value={form.hire_date} onChange={(v) => setForm(f => ({ ...f, hire_date: v }))} className="w-full" />
                 </Field>
               </div>
@@ -378,31 +387,31 @@ export default function EmployeesScreen() {
         <Modal
           open={showSalaryForm}
           onClose={() => setShowSalaryForm(false)}
-          title="Record Salary Payment"
+          title={t('employees.recordSalaryPayment')}
           maxWidth="max-w-sm"
           footer={
             <>
-              <Button variant="secondary" className="flex-1" onClick={() => setShowSalaryForm(false)}>Cancel</Button>
+              <Button variant="secondary" className="flex-1" onClick={() => setShowSalaryForm(false)}>{t('common.cancel')}</Button>
               <Button className="flex-1" icon={Check} onClick={saveSalary} loading={saving}>
-                {saving ? 'Saving…' : 'Record'}
+                {saving ? t('common.saving') : t('employees.record')}
               </Button>
             </>
           }
         >
             <div className="p-5 space-y-4">
-              <p className="text-gray-400 text-sm">For: <span className="text-white font-medium">{selectedEmp.name}</span></p>
-              <Input label="Amount (UZS) *" type="number" min="0" value={salaryForm.amount}
+              <p className="text-gray-400 text-sm">{t('employees.for')}: <span className="text-white font-medium">{selectedEmp.name}</span></p>
+              <Input label={t('expenses.amountRequired')} type="number" min="0" value={salaryForm.amount}
                 placeholder={selectedEmp.salary ? String(selectedEmp.salary) : '0'}
                 onChange={(e) => setSalaryForm(f => ({ ...f, amount: e.target.value }))} />
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Period From *">
+                <Field label={t('employees.periodFrom')}>
                   <DatePicker value={salaryForm.period_from} onChange={(v) => setSalaryForm(f => ({ ...f, period_from: v }))} className="w-full" />
                 </Field>
-                <Field label="Period To *">
+                <Field label={t('employees.periodTo')}>
                   <DatePicker value={salaryForm.period_to} onChange={(v) => setSalaryForm(f => ({ ...f, period_to: v }))} className="w-full" />
                 </Field>
               </div>
-              <Input label="Note" placeholder="Optional" value={salaryForm.note}
+              <Input label={t('employees.note')} placeholder={t('employees.optional')} value={salaryForm.note}
                 onChange={(e) => setSalaryForm(f => ({ ...f, note: e.target.value }))} />
             </div>
         </Modal>

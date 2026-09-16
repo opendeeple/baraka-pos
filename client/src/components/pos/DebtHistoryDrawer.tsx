@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { v4 as uuidv4 } from 'uuid'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, User, Banknote } from 'lucide-react'
 import { fmtUZS } from '../../lib/currency'
 import { NumPad } from './NumPad'
@@ -20,6 +22,7 @@ interface Props {
 }
 
 export function DebtHistoryPanel({ contact, onClose, onPaymentComplete }: Props) {
+  const { t } = useTranslation()
   const { user, store } = useAuthStore()
   const { session } = useSessionStore()
 
@@ -55,30 +58,37 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete }: Props)
 
   async function confirmPayment() {
     const amt = parseFloat(payAmount)
-    if (!amt || amt <= 0) { setPayError('Enter a valid amount'); return }
-    if (amt > currentBalance) { setPayError(`Cannot exceed UZS ${fmtUZS(currentBalance)}`); return }
+    if (!amt || amt <= 0) { setPayError(t('debt.enterValidAmount')); return }
+    if (amt > currentBalance) { setPayError(t('debt.cannotExceed', { amount: `UZS ${fmtUZS(currentBalance)}` })); return }
     setPaying(true)
     setPayError('')
     try {
       const now = new Date().toISOString()
       const newBalance = Math.max(0, currentBalance - amt)
+      const cashLogSyncId = uuidv4()
       await window.electronAPI.db.exec(
         `UPDATE contacts SET balance = ?, updated_at = ? WHERE id = ?`,
         [newBalance, now, contact.id]
       )
       await window.electronAPI.db.exec(
-        `INSERT INTO cash_logs (store_id, session_id, transaction_type, amount, source, description, reference_id, created_by, created_at)
-         VALUES (?, ?, 'sale', ?, 'debt_payment', 'Debt repayment', ?, ?, ?)`,
-        [store?.id ?? 1, session?.id ?? 1,
-         amt, contact.id, user?.id ?? 1, now]
+        `INSERT INTO cash_logs (sync_id, store_id, session_id, transaction_type, amount, source, description, reference_id, contact_id, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, 'cash_in', ?, 'debt_payment', 'Debt repayment', ?, ?, ?, ?, ?)`,
+        [cashLogSyncId, store?.id ?? 1, session?.id ?? null,
+         amt, contact.id, contact.id, user?.id ?? 1, now, now]
       )
+      // The local balance UPDATE above is instant local feedback; the server
+      // is the one that actually decrements Contact.balance (balance isn't a
+      // directly push-able field — see CONTACT_FIELDS) as a side effect of
+      // this cash_logs push, so other devices see the payment once they pull.
+      await window.electronAPI.sync.enqueue('cash_logs', cashLogSyncId, 'upsert')
+      window.electronAPI.sync.pushPending().catch(() => {})
       setCurrentBalance(newBalance)
       setShowPay(false)
       setPayAmount('0')
       if (newBalance === 0) { setEvents([]) } else { loadRecords() }
       onPaymentComplete?.()
     } catch (e) {
-      setPayError(e instanceof Error ? e.message : 'Payment failed — please retry')
+      setPayError(e instanceof Error ? e.message : t('debt.paymentFailed'))
     } finally {
       setPaying(false)
     }
@@ -104,7 +114,7 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete }: Props)
           </div>
         </div>
         <div className="text-right shrink-0 ml-2">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wide">Total Debt</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wide">{t('debt.totalDebt')}</p>
           <p className="text-yellow-400 font-bold text-sm">UZS {fmtUZS(currentBalance)}</p>
         </div>
       </div>
@@ -113,7 +123,7 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete }: Props)
         /* NumPad payment view */
         <>
           <div className="flex-1 p-4 flex flex-col justify-end">
-            <NumPad value={payAmount} onChange={setPayAmount} label="Repayment Amount (UZS)" />
+            <NumPad value={payAmount} onChange={setPayAmount} label={t('debt.repaymentAmount')} />
           </div>
           {payError && (
             <p className="text-red-400 text-xs px-4 pb-2">{payError}</p>
@@ -124,7 +134,7 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete }: Props)
               disabled={paying || payAmount === '0'}
               className="w-full h-12 bg-green-600 active:bg-green-700 disabled:opacity-40 text-white font-semibold rounded-xl text-sm transition-colors"
             >
-              {paying ? 'Processing...' : 'Confirm Payment'}
+              {paying ? t('debt.processing') : t('debt.confirmPayment')}
             </button>
           </div>
         </>
@@ -133,9 +143,9 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete }: Props)
         <>
           <div className="flex-1 overflow-y-auto p-4">
             {loading ? (
-              <p className="text-center text-gray-500 py-16 text-sm">Loading...</p>
+              <p className="text-center text-gray-500 py-16 text-sm">{t('common.loading')}</p>
             ) : events.length === 0 ? (
-              <p className="text-center text-gray-500 py-16 text-sm">No records found</p>
+              <p className="text-center text-gray-500 py-16 text-sm">{t('debt.noRecords')}</p>
             ) : (
               <div className="space-y-2">
                 {events.map((e, i) => (
@@ -167,7 +177,7 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete }: Props)
                 className="w-full flex items-center justify-center gap-2 h-12 bg-green-600 active:bg-green-700 text-white font-semibold rounded-xl text-sm transition-colors"
               >
                 <Banknote size={16} />
-                Pay Debt
+                {t('debt.payDebt')}
               </button>
             </div>
           )}

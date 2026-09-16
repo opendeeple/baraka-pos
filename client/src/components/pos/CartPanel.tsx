@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Trash2, Pause, ShoppingBag, Plus, Minus, LogOut } from 'lucide-react'
 import { useCartStore } from '../../store/cart.store'
 import { fmtUZS } from '../../lib/currency'
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
+  const { t } = useTranslation()
   const {
     items, charges, heldCarts,
     getSubtotal, getTotalChargeAmount, getFinalTotal,
@@ -47,7 +49,7 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
         {items.length > 0 && <div className="px-4 py-3 border-b border-dark-border flex items-center justify-between shrink-0 min-h-[60px]">
           <div className="flex items-center gap-2 text-white">
             <ShoppingBag size={18} className="text-primary" />
-            <span className="font-bold text-base">Cart</span>
+            <span className="font-bold text-base">{t('pos.cart')}</span>
             {items.length > 0 && (
               <span className="text-sm bg-primary/20 text-primary px-2 py-0.5 rounded-full font-semibold">
                 {items.reduce((s, i) => s + i.quantity, 0)}
@@ -61,7 +63,7 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
                 onClick={() => setActivePanel('held')}
                 className="relative h-10 px-3 text-sm bg-dark-card border border-dark-border text-gray-400 active:text-white rounded-lg transition-colors"
               >
-                Held
+                {t('pos.held')}
                 <span className="absolute -top-2 -right-2 bg-yellow-500 text-black text-xs w-5 h-5 flex items-center justify-center rounded-full font-bold">
                   {heldCarts.length}
                 </span>
@@ -71,7 +73,7 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
             {items.length > 0 && (
               <button
                 onClick={() => holdCart()}
-                title="Hold order"
+                title={t('pos.holdOrder')}
                 className="h-10 w-10 flex items-center justify-center bg-dark-card border border-dark-border text-gray-400 active:text-yellow-400 rounded-lg transition-colors"
               >
                 <Pause size={16} />
@@ -94,13 +96,13 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
             <div className="flex-1 overflow-y-auto overflow-x-hidden">
               <div className="px-4 pt-4 pb-2">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs text-gray-500 uppercase tracking-wider">Outstanding Debts</p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">{t('pos.outstandingDebts')}</p>
                   {heldCarts.length > 0 && (
                     <button
                       onClick={() => setActivePanel('held')}
                       className="relative flex items-center gap-1.5 h-8 px-3 text-xs bg-dark-card border border-dark-border text-gray-400 active:text-white rounded-lg transition-colors"
                     >
-                      Held
+                      {t('pos.held')}
                       <span className="bg-yellow-500 text-black text-xs w-4 h-4 flex items-center justify-center rounded-full font-bold">
                         {heldCarts.length}
                       </span>
@@ -108,7 +110,7 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
                   )}
                 </div>
                 {debtors.length === 0 ? (
-                  <p className="text-gray-600 text-sm text-center py-6">No outstanding debts</p>
+                  <p className="text-gray-600 text-sm text-center py-6">{t('pos.noOutstandingDebts')}</p>
                 ) : (
                   <div className="space-y-2">
                     {debtors.map((d) => (
@@ -136,7 +138,7 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
                 className="w-full flex items-center justify-center gap-2 h-12 rounded-xl border border-dark-border text-gray-400 active:text-red-400 active:border-red-400/40 text-sm font-medium transition-colors"
               >
                 <LogOut size={15} />
-                Close Register
+                {t('pos.closeRegister')}
               </button>
             </div>
           </>
@@ -173,7 +175,7 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
 
               {/* Total */}
               <div className="flex justify-between text-primary font-bold text-xl">
-                <span>Total</span>
+                <span>{t('common.total')}</span>
                 <span>UZS {fmtUZS(total)}</span>
               </div>
             </div>
@@ -184,14 +186,14 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
                 onClick={onCheckout}
                 className="w-full h-16 bg-primary active:bg-orange-600 active:scale-[0.98] text-white font-bold rounded-2xl transition-all text-lg shadow-lg shadow-primary/25"
               >
-                Pay
+                {t('pos.pay')}
               </button>
               <button
                 onClick={() => clearCart()}
                 className="w-full flex items-center justify-center gap-2 h-10 text-gray-500 active:text-red-400 text-sm transition-colors rounded-xl"
               >
                 <Trash2 size={14} />
-                Clear cart
+                {t('pos.clearCart')}
               </button>
             </div>
           </div>
@@ -213,6 +215,7 @@ function CartItemRow({
   onRemove: () => void
   onQtyChange: (qty: number) => void
 }) {
+  const { t } = useTranslation()
   const lineTotal = item.unitPrice * item.quantity * (1 - item.discount / 100)
   const [offset, setOffset] = useState(0)
   const [dragging, setDragging] = useState(false)
@@ -276,7 +279,7 @@ function CartItemRow({
         onClick={() => { onRemove() }}
       >
         <Trash2 size={18} className="text-white" />
-        <span className="text-white text-[10px] font-bold tracking-wide">Delete</span>
+        <span className="text-white text-[10px] font-bold tracking-wide">{t('common.delete')}</span>
       </div>
 
       {/* Item content — slides left max DELETE_BTN_WIDTH, solid bg covers delete zone */}

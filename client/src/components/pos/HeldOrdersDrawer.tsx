@@ -1,5 +1,6 @@
 import { fmtUZS } from '../../lib/currency'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ShoppingCart, ArrowLeft, Trash2, RotateCcw } from 'lucide-react'
 import { useCartStore } from '../../store/cart.store'
 
@@ -18,6 +19,7 @@ interface HeldCartRow {
 }
 
 export function HeldOrdersPanel({ onClose }: Props) {
+  const { t } = useTranslation()
   const { restoreHeld, discardHeld, items: currentItems } = useCartStore()
   const [heldCarts, setHeldCarts] = useState<HeldCartRow[]>([])
 
@@ -29,7 +31,7 @@ export function HeldOrdersPanel({ onClose }: Props) {
 
   const handleRestore = async (id: string) => {
     if (currentItems.length > 0) {
-      const ok = confirm('Current cart has items. Discard and restore held order?')
+      const ok = confirm(t('pos.discardAndRestoreConfirm'))
       if (!ok) return
     }
     await restoreHeld(id)
@@ -57,7 +59,7 @@ export function HeldOrdersPanel({ onClose }: Props) {
             <ArrowLeft size={18} />
           </button>
           <ShoppingCart size={16} className="text-primary" />
-          <span className="font-bold text-sm">Held Orders</span>
+          <span className="font-bold text-sm">{t('pos.heldOrders')}</span>
           {heldCarts.length > 0 && (
             <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-semibold">
               {heldCarts.length}
@@ -71,7 +73,7 @@ export function HeldOrdersPanel({ onClose }: Props) {
         {heldCarts.length === 0 ? (
           <div className="text-center text-gray-500 py-16">
             <ShoppingCart size={48} className="mx-auto mb-4 opacity-20" />
-            <p className="text-base">No held orders</p>
+            <p className="text-base">{t('pos.noHeldOrders')}</p>
           </div>
         ) : (
           heldCarts.map((cart) => {
@@ -86,7 +88,7 @@ export function HeldOrdersPanel({ onClose }: Props) {
                   <div>
                     <p className="text-white text-base font-semibold">{cart.label}</p>
                     <p className="text-gray-500 text-sm mt-0.5">
-                      {new Date(cart.created_at).toLocaleTimeString()} · {items.length} item{items.length !== 1 ? 's' : ''}
+                      {new Date(cart.created_at).toLocaleTimeString()} · {t('pos.itemCount', { count: items.length })}
                     </p>
                   </div>
                   <p className="text-primary font-bold text-lg">UZS {fmtUZS(total)}</p>
@@ -100,7 +102,7 @@ export function HeldOrdersPanel({ onClose }: Props) {
                     </div>
                   ))}
                   {items.length > 3 && (
-                    <p className="text-gray-500 text-xs">+{items.length - 3} more items</p>
+                    <p className="text-gray-500 text-xs">{t('pos.moreItems', { count: items.length - 3 })}</p>
                   )}
                 </div>
 
@@ -110,7 +112,7 @@ export function HeldOrdersPanel({ onClose }: Props) {
                     className="flex-1 flex items-center justify-center gap-2 h-12 text-sm bg-primary active:bg-orange-600 text-white rounded-xl font-semibold transition-colors"
                   >
                     <RotateCcw size={16} />
-                    Restore
+                    {t('pos.restore')}
                   </button>
                   <button
                     onClick={() => handleDiscard(cart.id)}

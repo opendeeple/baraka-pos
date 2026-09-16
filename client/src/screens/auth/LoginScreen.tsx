@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useAuthStore } from '../../store/auth.store'
 import { useSessionStore, LocalPosSession } from '../../store/session.store'
@@ -21,6 +22,7 @@ export interface LoginScreenProps {
 export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
   const isOffice = variant === 'office'
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { setAuth, isAuthenticated } = useAuthStore()
   const { setSession } = useSessionStore()
   const [username, setUsername] = useState('')
@@ -115,7 +117,7 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
     try {
       const result = await window.electronAPI.auth.login(SERVER_URL, username, password)
       if (result.status !== 200) {
-        const msg = (result.data as Record<string, string>)?.error || 'Login failed'
+        const msg = (result.data as Record<string, string>)?.error || t('auth.loginFailed')
         throw new Error(msg)
       }
       const data = result.data as {
@@ -156,7 +158,7 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
       if (isOffice) navigate('/backoffice', { replace: true })
       else await checkAndNavigate()
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Login failed'
+      const msg = err instanceof Error ? err.message : t('auth.loginFailed')
       setError(msg)
       toast.error(msg)
     } finally {
@@ -182,16 +184,16 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
         <div className="text-center mb-8">
           <div className="text-5xl font-bold text-primary mb-2">BarakaPOS</div>
           <div className="text-dark-border text-sm">
-            {isOffice ? 'Back Office Management' : 'Mini Market Point of Sale'}
+            {isOffice ? t('auth.backOfficeManagement') : t('auth.posSubtitle')}
           </div>
         </div>
 
         <div className="bg-dark-surface rounded-2xl p-8 shadow-2xl border border-dark-border">
-          <h2 className="text-xl font-semibold text-white mb-6">Sign In</h2>
+          <h2 className="text-xl font-semibold text-white mb-6">{t('auth.signIn')}</h2>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Username</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('auth.username')}</label>
               <input
                 type="text"
                 value={username}
@@ -204,7 +206,7 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
             </div>
 
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Password</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('auth.password')}</label>
               <input
                 type="password"
                 value={password}
@@ -226,7 +228,7 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
               disabled={loading}
               className="w-full bg-primary hover:bg-primary-dark text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? t('auth.signingIn') : t('auth.signIn')}
             </button>
           </form>
         </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Search } from 'lucide-react'
 import { useCartStore } from '../../store/cart.store'
@@ -17,6 +18,7 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 
 export default function POSScreen() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { addItem, loadHeldCarts } = useCartStore()
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
   const [products, setProducts] = useState<LocalProduct[]>([])
@@ -34,7 +36,7 @@ export default function POSScreen() {
     await pushPending()
     await pullAll()
     loadProducts()
-    toast.success('Data refreshed')
+    toast.success(t('pos.dataRefreshed'))
   }
 
   // WebSocket: refresh products on stock/product updates from other terminals
@@ -47,7 +49,7 @@ export default function POSScreen() {
   // global listener, and Enter in the search box below).
   useBarcodeScanner(async (barcode) => {
     if (!(await handleBarcodeScanned(barcode))) {
-      toast.error(`Mahsulot topilmadi: ${barcode}`)
+      toast.error(t('pos.productNotFound', { barcode }))
     }
   })
 
@@ -183,7 +185,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
-                placeholder="Search by name or scan barcode…"
+                placeholder={t('pos.searchPlaceholder')}
                 className="w-full bg-dark-card border border-dark-border rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary"
               />
             </div>

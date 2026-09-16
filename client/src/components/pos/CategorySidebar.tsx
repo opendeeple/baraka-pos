@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { LayoutGrid } from 'lucide-react'
 
 interface Category {
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export default function CategoryBar({ selectedCategory, onSelect }: Props) {
+  const { t } = useTranslation()
   const [categories, setCategories] = useState<Category[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -50,7 +52,7 @@ export default function CategoryBar({ selectedCategory, onSelect }: Props) {
         }`}
       >
         <LayoutGrid size={14} />
-        All Items
+        {t('pos.allItems')}
       </button>
 
       {categories.map((cat) => (

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Search, Printer, XCircle, Eye, ShoppingBag, RotateCcw } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { useAuthStore } from '../../store/auth.store'
@@ -13,7 +14,7 @@ interface Sale {
   discount: number; total_charge_amount: number; amount_received: number
   change_amount: number; payment_status: string; status: string; sale_type: string
   sale_date: string; created_at: string; contact_name: string | null; user_name: string | null
-  store_id?: number; contact_id?: number
+  store_id?: number; contact_id?: number; session_id?: number | null
 }
 
 interface SaleItem {
@@ -33,6 +34,7 @@ interface ReturnItem {
 }
 
 export default function SalesScreen() {
+  const { t } = useTranslation()
   const [sales, setSales] = useState<Sale[]>([])
   const [search, setSearch] = useState('')
   const [dateFrom, setDateFrom] = useState(new Date().toISOString().split('T')[0])
@@ -140,12 +142,15 @@ export default function SalesScreen() {
     const refundTotal = returnableItems.reduce((s, i) => s + i.unitPrice * i.returnQty, 0)
 
     try {
+      // A return needs a valid local pos_sessions link — buildSalePayload
+      // refuses to push a sale whose session can't be resolved — so it
+      // inherits the session the original sale was rung up under.
       await window.electronAPI.db.exec(
-        `INSERT INTO sales (sync_id, store_id, contact_id, user_id, invoice_number, sale_type,
+        `INSERT INTO sales (sync_id, store_id, session_id, contact_id, user_id, invoice_number, sale_type,
            reference_id, subtotal, total_amount, amount_received, status, payment_status,
            sale_date, sale_time, created_at, updated_at, sync_status)
-         VALUES (?,?,?,?,?,'return',?,?,?,?,'completed','fully_paid',?,?,?,?,'pending')`,
-        [syncId, detail.store_id ?? store?.id ?? 1, detail.contact_id ?? null, user?.id ?? 1,
+         VALUES (?,?,?,?,?,?,'return',?,?,?,?,'completed','fully_paid',?,?,?,?,'pending')`,
+        [syncId, detail.store_id ?? store?.id ?? 1, detail.session_id ?? null, detail.contact_id ?? null, user?.id ?? 1,
          `RET-${syncId.slice(0, 8).toUpperCase()}`, detail.id,
          refundTotal, refundTotal, refundTotal,
          now.split('T')[0], now.split('T')[1].slice(0, 8), now, now]
@@ -179,8 +184,18 @@ export default function SalesScreen() {
         [retSaleId, detail.store_id ?? store?.id ?? 1, now, refundTotal * -1, returnMethod, now]
       )
 
+      // Outbox pointer row — same mechanism POS checkout uses (PaymentScreen):
+      // the push payload is rebuilt from the sale rows at flush time. Without
+      // this, the return was never pushed at all.
+      await window.electronAPI.db.exec(
+        `INSERT INTO sync_queue_local (entity_type, table_name, op, payload, sync_id, created_at, status)
+         VALUES ('sale', 'sales', 'upsert', '{}', ?, ?, 'pending')`,
+        [syncId, now]
+      )
+      window.electronAPI.sync.pushPending().catch(() => {})
+
       setShowReturnModal(false)
-      toast.success(`Return processed. Refund: UZS ${fmtUZS(refundTotal)}`)
+      toast.success(t('sales.returnProcessed', { amount: `UZS ${fmtUZS(refundTotal)}` }))
       loadSales()
       setDetail(null)
     } finally { setProcessingReturn(false) }
@@ -194,9 +209,9 @@ export default function SalesScreen() {
     <BackOfficeLayout>
       <div className="shrink-0 px-6 py-3 border-b border-dark-border bg-dark-surface flex items-center gap-2">
         <div className="mr-auto min-w-0">
-          <h1 className="text-base font-bold text-white leading-tight">Sales History</h1>
+          <h1 className="text-base font-bold text-white leading-tight">{t('sales.salesHistory')}</h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            Total: <span className="text-primary font-semibold">UZS {fmtUZS(totalRevenue)}</span>
+            {t('common.total')}: <span className="text-primary font-semibold">UZS {fmtUZS(totalRevenue)}</span>
           </p>
         </div>
         <div className="relative shrink-0">
@@ -204,7 +219,7 @@ export default function SalesScreen() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Invoice or customer…"
+            placeholder={t('sales.invoiceOrCustomer')}
             className="bg-dark-card border border-dark-border rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-primary w-44"
           />
         </div>
@@ -215,9 +230,9 @@ export default function SalesScreen() {
           onChange={setStatusFilter}
           className="w-32 shrink-0"
           options={[
-            { value: '', label: 'All Status' },
-            { value: 'completed', label: 'Completed' },
-            { value: 'cancelled', label: 'Cancelled' },
+            { value: '', label: t('sales.allStatus') },
+            { value: 'completed', label: t('sales.completed') },
+            { value: 'cancelled', label: t('sales.cancelled') },
           ]}
         />
       </div>
@@ -226,7 +241,7 @@ export default function SalesScreen() {
         <div className="flex-1 overflow-auto">
           <table className="w-full">
             <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-              <tr>{['Invoice', 'Date', 'Customer', 'Cashier', 'Total', 'Status', ''].map((h) => (
+              <tr>{[t('sales.invoice'), t('common.date'), t('sales.customer'), t('sales.cashier'), t('common.total'), t('common.status'), ''].map((h) => (
                 <th key={h} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
               ))}</tr>
             </thead>
@@ -247,7 +262,7 @@ export default function SalesScreen() {
                         : sale.status === 'completed' ? 'bg-green-500/15 text-green-400'
                         : sale.status === 'cancelled' ? 'bg-red-500/15 text-red-400'
                         : 'bg-gray-500/15 text-gray-400'}`}>
-                      {sale.sale_type === 'return' ? 'Return' : sale.status}
+                      {sale.sale_type === 'return' ? t('sales.return') : (sale.status === 'completed' ? t('sales.completed') : sale.status === 'cancelled' ? t('sales.cancelled') : sale.status)}
                     </span>
                   </td>
                   <td className="px-4 py-3"><Eye size={14} className="text-gray-600 group-hover:text-gray-300 transition-colors" /></td>
@@ -256,7 +271,7 @@ export default function SalesScreen() {
             </tbody>
           </table>
           {!loading && sales.length === 0 && (
-            <EmptyState icon={ShoppingBag} title="No sales found" />
+            <EmptyState icon={ShoppingBag} title={t('sales.noSalesFound')} />
           )}
         </div>
 
@@ -271,7 +286,7 @@ export default function SalesScreen() {
             </div>
             <div className="p-4 space-y-4">
               <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Items</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">{t('sales.items')}</p>
                 <div className="space-y-2">
                   {detail.items.map((item, i) => (
                     <div key={i} className="flex justify-between text-sm">
@@ -287,22 +302,22 @@ export default function SalesScreen() {
                 </div>
               </div>
               <div className="border-t border-dark-border pt-3 space-y-1.5 text-sm">
-                <div className="flex justify-between"><span className="text-gray-400">Subtotal</span><span className="text-white">UZS {fmtUZS(Number(detail.subtotal))}</span></div>
-                {Number(detail.total_charge_amount) > 0 && <div className="flex justify-between"><span className="text-gray-400">Charges</span><span className="text-white">UZS {fmtUZS(Number(detail.total_charge_amount))}</span></div>}
-                {Number(detail.discount) > 0 && <div className="flex justify-between"><span className="text-gray-400">Discount</span><span className="text-green-400">-UZS {fmtUZS(Number(detail.discount))}</span></div>}
-                <div className="flex justify-between font-bold"><span className="text-white">Total</span><span className="text-primary">UZS {fmtUZS(Number(detail.total_amount))}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">{t('sales.subtotal')}</span><span className="text-white">UZS {fmtUZS(Number(detail.subtotal))}</span></div>
+                {Number(detail.total_charge_amount) > 0 && <div className="flex justify-between"><span className="text-gray-400">{t('sales.charges')}</span><span className="text-white">UZS {fmtUZS(Number(detail.total_charge_amount))}</span></div>}
+                {Number(detail.discount) > 0 && <div className="flex justify-between"><span className="text-gray-400">{t('sales.discount')}</span><span className="text-green-400">-UZS {fmtUZS(Number(detail.discount))}</span></div>}
+                <div className="flex justify-between font-bold"><span className="text-white">{t('common.total')}</span><span className="text-primary">UZS {fmtUZS(Number(detail.total_amount))}</span></div>
               </div>
               <div className="border-t border-dark-border pt-3">
-                <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Payments</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">{t('sales.payments')}</p>
                 {detail.payments.map((p, i) => (
                   <div key={i} className="flex justify-between text-sm">
-                    <span className="text-gray-400">{p.payment_method}</span>
+                    <span className="text-gray-400">{t(`payment.method${p.payment_method}`, { defaultValue: p.payment_method })}</span>
                     <span className="text-white">UZS {fmtUZS(Number(p.amount))}</span>
                   </div>
                 ))}
                 {Number(detail.change_amount) > 0 && (
                   <div className="flex justify-between text-sm mt-1">
-                    <span className="text-gray-400">Change</span>
+                    <span className="text-gray-400">{t('payment.change')}</span>
                     <span className="text-yellow-400">UZS {fmtUZS(Number(detail.change_amount))}</span>
                   </div>
                 )}
@@ -311,32 +326,32 @@ export default function SalesScreen() {
             <div className="p-4 space-y-2 border-t border-dark-border">
               <button onClick={() => reprintReceipt(detail)}
                 className="w-full flex items-center justify-center gap-2 border border-dark-border text-gray-300 hover:text-white rounded-xl py-2.5 text-sm transition-colors">
-                <Printer size={14} /> Reprint
+                <Printer size={14} /> {t('sales.reprint')}
               </button>
               {detail.status === 'completed' && detail.sale_type === 'sale' && (
                 <>
                   <button onClick={openReturnModal}
                     className="w-full flex items-center justify-center gap-2 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 rounded-xl py-2.5 text-sm transition-colors">
-                    <RotateCcw size={14} /> Return Items
+                    <RotateCcw size={14} /> {t('sales.returnItems')}
                   </button>
                   {confirmVoid ? (
                     <div className="space-y-2">
-                      <p className="text-gray-400 text-xs text-center">This cannot be undone.</p>
+                      <p className="text-gray-400 text-xs text-center">{t('sales.cannotBeUndone')}</p>
                       <div className="flex gap-2">
                         <button onClick={() => setConfirmVoid(false)}
                           className="flex-1 border border-dark-border text-gray-400 rounded-xl py-2 text-sm">
-                          Cancel
+                          {t('common.cancel')}
                         </button>
                         <button onClick={() => voidSale(detail.id)} disabled={voiding}
                           className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-xl py-2 text-sm font-semibold">
-                          {voiding ? 'Voiding…' : 'Confirm Void'}
+                          {voiding ? t('sales.voiding') : t('sales.confirmVoid')}
                         </button>
                       </div>
                     </div>
                   ) : (
                     <button onClick={() => setConfirmVoid(true)}
                       className="w-full flex items-center justify-center gap-2 bg-red-500/15 hover:bg-red-500/25 text-red-400 rounded-xl py-2.5 text-sm">
-                      <XCircle size={14} /> Void Sale
+                      <XCircle size={14} /> {t('sales.voidSale')}
                     </button>
                   )}
                 </>
@@ -354,14 +369,14 @@ export default function SalesScreen() {
           maxWidth="max-w-lg"
           title={
             <div>
-              <h2 className="text-white font-semibold">Return Items</h2>
-              <p className="text-gray-500 text-xs mt-0.5">From {detail.invoice_number}</p>
+              <h2 className="text-white font-semibold">{t('sales.returnItems')}</h2>
+              <p className="text-gray-500 text-xs mt-0.5">{t('sales.fromInvoice', { invoice: detail.invoice_number })}</p>
             </div>
           }
           footer={
             <>
               <Button variant="secondary" className="flex-1" onClick={() => setShowReturnModal(false)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <button
                 onClick={processReturn}
@@ -369,7 +384,7 @@ export default function SalesScreen() {
                 className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
               >
                 <RotateCcw size={14} />
-                {processingReturn ? 'Processing…' : 'Process Return'}
+                {processingReturn ? t('sales.processing') : t('sales.processReturn')}
               </button>
             </>
           }
@@ -378,9 +393,9 @@ export default function SalesScreen() {
               <table className="w-full text-sm mb-4">
                 <thead>
                   <tr className="text-gray-500 text-xs border-b border-dark-border">
-                    <th className="text-left pb-2">Product</th>
-                    <th className="text-center pb-2 w-16">Ordered</th>
-                    <th className="text-center pb-2 w-24">Return Qty</th>
+                    <th className="text-left pb-2">{t('nav.products')}</th>
+                    <th className="text-center pb-2 w-16">{t('sales.ordered')}</th>
+                    <th className="text-center pb-2 w-24">{t('sales.returnQty')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-dark-card">
@@ -408,9 +423,9 @@ export default function SalesScreen() {
 
               <div className="border-t border-dark-border pt-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">Refund method</span>
+                  <span className="text-gray-400 text-sm">{t('sales.refundMethod')}</span>
                   <div className="flex gap-2">
-                    {['Cash', 'Credit'].map((m) => (
+                    {(['Cash', 'Credit'] as const).map((m) => (
                       <button
                         key={m}
                         onClick={() => setReturnMethod(m)}
@@ -420,13 +435,13 @@ export default function SalesScreen() {
                             : 'border-dark-border text-gray-400 hover:text-white'
                         }`}
                       >
-                        {m}
+                        {m === 'Cash' ? t('payment.methodCash') : t('sales.credit')}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">Refund total</span>
+                  <span className="text-gray-400 text-sm">{t('sales.refundTotal')}</span>
                   <span className="text-white font-bold text-lg">
                     UZS {fmtUZS(returnItems.filter((i) => i.returnQty > 0).reduce((s, i) => s + i.unitPrice * i.returnQty, 0))}
                   </span>

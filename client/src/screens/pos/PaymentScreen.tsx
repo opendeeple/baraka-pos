@@ -1,5 +1,6 @@
 import { fmtUZS } from '../../lib/currency'
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Trash2, Search, UserPlus, X, User } from 'lucide-react'
 import { useCartStore } from '../../store/cart.store'
 import { useAuthStore } from '../../store/auth.store'
@@ -11,11 +12,11 @@ import { ReceiptModal } from '../../components/pos/ReceiptModal'
 import { v4 as uuidv4 } from 'uuid'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 
-const PAYMENT_METHODS: { method: PaymentMethod; label: string; icon: string }[] = [
-  { method: 'Cash',  label: 'Naqd',  icon: '💵' },
-  { method: 'Card',  label: 'Karta', icon: '💳' },
-  { method: 'Click', label: 'Click', icon: '📱' },
-  { method: 'Debt',  label: 'Nasiya', icon: '📋' },
+const PAYMENT_METHODS: { method: PaymentMethod; labelKey: string; icon: string }[] = [
+  { method: 'Cash',  labelKey: 'payment.methodCash',  icon: '💵' },
+  { method: 'Card',  labelKey: 'payment.methodCard', icon: '💳' },
+  { method: 'Click', labelKey: 'payment.methodClick', icon: '📱' },
+  { method: 'Debt',  labelKey: 'payment.methodDebt', icon: '📋' },
 ]
 
 interface ContactResult {
@@ -31,6 +32,7 @@ interface Props {
 }
 
 export default function PaymentScreen({ onClose, onComplete }: Props) {
+  const { t } = useTranslation()
   const { items, charges, discount, getFinalTotal, getSubtotal, getTotalChargeAmount, clearCart } = useCartStore()
   const { user, store } = useAuthStore()
   const { session } = useSessionStore()
@@ -85,7 +87,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
 
   function addPayment() {
     if (selectedMethod === 'Debt' && !debtContact) {
-      setError('Please select a contact for debt payment')
+      setError(t('payment.selectContactForDebt'))
       return
     }
     const amt = parseFloat(amountInput)
@@ -149,8 +151,8 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
     const effectiveFullyPaid = effectivePaid >= total && effectivePayments.length > 0
     const effectiveHasDebt = effectivePayments.some((p) => p.paymentMethod === 'Debt')
 
-    if (!effectiveFullyPaid) { setError('Insufficient payment amount'); return }
-    if (effectiveHasDebt && !debtContact) { setError('Contact is required for debt payment'); return }
+    if (!effectiveFullyPaid) { setError(t('payment.insufficientAmount')); return }
+    if (effectiveHasDebt && !debtContact) { setError(t('payment.contactRequiredForDebt')); return }
     setProcessing(true)
     setError('')
 
@@ -289,7 +291,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
       clearCart()
       setReceipt(doc)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Payment failed — please retry')
+      setError(err instanceof Error ? err.message : t('debt.paymentFailed'))
     } finally {
       setProcessing(false)
     }
@@ -303,11 +305,11 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
             <ArrowLeft size={20} />
           </button>
-          <h2 className="text-xl font-bold text-white">Payment</h2>
+          <h2 className="text-xl font-bold text-white">{t('payment.title')}</h2>
         </div>
 
         <div className="bg-dark-surface rounded-2xl border border-dark-border p-5 mb-4">
-          <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Order Summary</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">{t('payment.orderSummary')}</p>
 
           <div className="space-y-2 max-h-64 overflow-auto pr-1">
             {items.map((item, i) => (
@@ -334,7 +336,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
               )
             })}
             <div className="flex justify-between text-xl font-bold text-primary border-t border-dark-border pt-3">
-              <span>TOTAL</span>
+              <span>{t('payment.totalCaps')}</span>
               <span>UZS {fmtUZS(total)}</span>
             </div>
           </div>
@@ -343,12 +345,12 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
         {/* Payments applied */}
         {payments.length > 0 && (
           <div className="bg-dark-surface rounded-2xl border border-dark-border p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Payments Applied</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">{t('payment.paymentsApplied')}</p>
             <div className="space-y-2">
               {payments.map((p, i) => (
                 <div key={i} className="flex justify-between items-center min-h-[48px]">
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-300 text-sm">{p.paymentMethod}</span>
+                    <span className="text-gray-300 text-sm">{t(PAYMENT_METHODS.find((m) => m.method === p.paymentMethod)?.labelKey ?? 'payment.methodCash')}</span>
                     {p.paymentMethod === 'Debt' && debtContact && (
                       <span className="text-yellow-400 text-xs font-medium">{debtContact.name}</span>
                     )}
@@ -368,12 +370,12 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
             <div className="border-t border-dark-border mt-3 pt-3">
               {remaining > 0 ? (
                 <div className="flex justify-between text-red-400 font-semibold">
-                  <span>Remaining</span>
+                  <span>{t('payment.remaining')}</span>
                   <span>UZS {fmtUZS(remaining)}</span>
                 </div>
               ) : (
                 <div className="flex justify-between text-green-400 font-bold text-lg">
-                  <span>Change</span>
+                  <span>{t('payment.change')}</span>
                   <span>UZS {fmtUZS(change)}</span>
                 </div>
               )}
@@ -386,7 +388,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
       <div className="w-[340px] bg-dark-surface border-l border-dark-border flex flex-col">
         {/* Method selector */}
         <div className="p-4 border-b border-dark-border shrink-0">
-          <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Payment Method</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">{t('payment.paymentMethod')}</p>
           <div className="grid grid-cols-4 gap-2">
             {PAYMENT_METHODS.map((m) => (
               <button
@@ -399,7 +401,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                 }`}
               >
                 <span className="text-lg leading-none">{m.icon}</span>
-                {m.label}
+                {t(m.labelKey)}
               </button>
             ))}
           </div>
@@ -422,7 +424,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                     )}
                     {debtContact.balance > 0 && (
                       <p className="text-yellow-400 text-xs">
-                        Current debt: UZS {fmtUZS(debtContact.balance)}
+                        {t('payment.currentDebt', { amount: `UZS ${fmtUZS(debtContact.balance)}` })}
                       </p>
                     )}
                   </div>
@@ -445,7 +447,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
                     <input
                       type="text"
-                      placeholder="Search by name or phone..."
+                      placeholder={t('payment.searchNameOrPhone')}
                       value={contactSearch}
                       onChange={(e) => { setContactSearch(e.target.value); setShowCreateContact(false) }}
                       className="w-full bg-dark-card border border-dark-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary/50"
@@ -454,7 +456,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                   </div>
                   <button
                     onClick={() => { setShowCreateContact((v) => !v); setContactSearch('') }}
-                    title="Create new contact"
+                    title={t('payment.createNewContact')}
                     className={`w-11 h-11 flex items-center justify-center rounded-xl border transition-colors shrink-0 ${
                       showCreateContact
                         ? 'bg-primary border-primary text-white'
@@ -481,7 +483,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                         <p className="text-white text-sm font-medium">{c.name}</p>
                         {c.phone && <p className="text-gray-400 text-xs">{c.phone}</p>}
                         {c.balance > 0 && (
-                          <p className="text-yellow-400 text-xs">Debt: UZS {fmtUZS(c.balance)}</p>
+                          <p className="text-yellow-400 text-xs">{t('payment.debtAmount', { amount: `UZS ${fmtUZS(c.balance)}` })}</p>
                         )}
                       </button>
                     ))}
@@ -490,10 +492,10 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
 
                 {showCreateContact && (
                   <div className="bg-dark-card border border-dark-border rounded-xl p-3 space-y-2 shrink-0">
-                    <p className="text-xs text-gray-500 uppercase tracking-wider">New Contact</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wider">{t('payment.newContact')}</p>
                     <input
                       type="text"
-                      placeholder="Full name *"
+                      placeholder={t('payment.fullName')}
                       value={newContactName}
                       onChange={(e) => setNewContactName(e.target.value)}
                       className="w-full bg-dark border border-dark-border rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary/50"
@@ -523,14 +525,14 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                         }}
                         className="flex-1 border border-dark-border text-gray-400 rounded-lg py-2 text-sm transition-colors"
                       >
-                        Cancel
+                        {t('common.cancel')}
                       </button>
                       <button
                         onClick={createContact}
                         disabled={!newContactName.trim() || newContactPhone.replace(/\D/g, '').length < 9 || savingContact}
                         className="flex-1 bg-primary disabled:opacity-40 text-white rounded-lg py-2 text-sm font-semibold transition-colors"
                       >
-                        {savingContact ? 'Saving...' : 'Save'}
+                        {savingContact ? t('common.saving') : t('common.save')}
                       </button>
                     </div>
                   </div>
@@ -544,7 +546,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                 <NumPad
                   value={amountInput}
                   onChange={setAmountInput}
-                  label="Debt Amount (UZS)"
+                  label={t('payment.debtAmountLabel')}
                 />
                 <div className="flex gap-2 mt-3 shrink-0">
                   <button
@@ -558,7 +560,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                     onClick={addPayment}
                     className="flex-1 bg-dark-card border border-dark-border text-white hover:border-primary/50 rounded-lg py-2.5 text-sm font-medium transition-colors"
                   >
-                    + Add
+                    {t('payment.addPayment')}
                   </button>
                 </div>
               </div>
@@ -570,7 +572,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
             <NumPad
               value={amountInput}
               onChange={setAmountInput}
-              label="Amount (UZS)"
+              label={t('payment.amountLabel')}
             />
             <div className="flex gap-2 mt-3">
               <button
@@ -584,7 +586,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                 onClick={addPayment}
                 className="flex-1 bg-dark-card border border-dark-border text-white hover:border-primary/50 rounded-lg py-2.5 text-sm font-medium transition-colors"
               >
-                + Add
+                {t('payment.addPayment')}
               </button>
             </div>
           </div>
@@ -602,7 +604,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
             disabled={processing || !canCompleteNow}
             className="w-full bg-primary hover:bg-orange-600 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl text-base transition-all"
           >
-            {processing ? 'Processing...' : 'Complete Sale'}
+            {processing ? t('debt.processing') : t('payment.completeSale')}
           </button>
         </div>
       </div>

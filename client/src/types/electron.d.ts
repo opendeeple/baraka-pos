@@ -56,6 +56,8 @@ export interface ElectronAPI {
     closeCustomerDisplay: () => Promise<{ success: boolean }>
     updateCustomerDisplay: (data: unknown) => Promise<{ success: boolean }>
     openApp: (id: string, name: string, url: string) => Promise<{ success: boolean }>
+    toggleFullscreen: () => Promise<{ fullscreen: boolean }>
+    isFullscreen: () => Promise<{ fullscreen: boolean }>
   }
   app: {
     isTraining: () => Promise<boolean>

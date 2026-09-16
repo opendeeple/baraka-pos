@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -46,6 +47,7 @@ const TOOLTIP_STYLE = {
 }
 
 export default function DashboardScreen() {
+  const { t } = useTranslation()
   const [stats, setStats] = useState<DashStats>({
     todayRevenue: 0, todaySales: 0, todayCustomers: 0, lowStockCount: 0,
     recentSales: [], topProducts: [], weeklyRevenue: [], lowStockItems: [],
@@ -89,11 +91,16 @@ export default function DashboardScreen() {
       ) as Promise<Array<{ name: string; qty: number; revenue: number }>>,
 
       window.electronAPI.db.query(
-        `SELECT p.name, ps.quantity as stock, p.alert_quantity
-         FROM product_stocks ps
-         JOIN products p ON p.id = ps.product_id
-         WHERE p.is_stock_managed = 1 AND ps.quantity <= p.alert_quantity AND p.deleted_at IS NULL
-         ORDER BY ps.quantity ASC LIMIT 8`,
+        `SELECT p.name, COALESCE(ps.quantity, 0) as stock, p.alert_quantity
+         FROM products p
+         LEFT JOIN product_batches pb ON pb.id = (
+           SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
+         )
+         LEFT JOIN product_stocks ps ON ps.id = (
+           SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id ORDER BY id DESC LIMIT 1
+         )
+         WHERE p.is_stock_managed = 1 AND p.deleted_at IS NULL AND COALESCE(ps.quantity, 0) <= p.alert_quantity
+         ORDER BY stock ASC LIMIT 8`,
         []
       ) as Promise<Array<{ name: string; stock: number; alert_quantity: number }>>,
 
@@ -127,7 +134,7 @@ export default function DashboardScreen() {
       <div className="flex-1 overflow-y-auto p-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-white">Dashboard</h1>
+            <h1 className="text-xl font-bold text-white">{t('nav.dashboard')}</h1>
             <p className="text-gray-400 text-sm mt-0.5">
               {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
@@ -139,7 +146,7 @@ export default function DashboardScreen() {
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
                     period === p ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'
                   }`}>
-                  {p === 'today' ? 'Today' : p === '7d' ? '7 Days' : '30 Days'}
+                  {p === 'today' ? t('dashboard.today') : p === '7d' ? t('dashboard.days7') : t('dashboard.days30')}
                 </button>
               ))}
             </div>
@@ -151,14 +158,14 @@ export default function DashboardScreen() {
 
         {/* Stat Cards */}
         <div className="grid grid-cols-4 gap-4 mb-6">
-          <StatCard label="Today's Revenue" value={`UZS ${fmtUZS(stats.todayRevenue)}`} icon={TrendingUp} sub="Today" />
-          <StatCard label="Today's Sales" value={String(stats.todaySales)} icon={ShoppingBag} sub="Transactions" color="text-blue-400" />
-          <StatCard label="Customers Served" value={String(stats.todayCustomers)} icon={Users} sub="Today" color="text-green-400" />
+          <StatCard label={t('dashboard.todaysRevenue')} value={`UZS ${fmtUZS(stats.todayRevenue)}`} icon={TrendingUp} sub={t('dashboard.today')} />
+          <StatCard label={t('dashboard.todaysSales')} value={String(stats.todaySales)} icon={ShoppingBag} sub={t('session.transactions')} color="text-blue-400" />
+          <StatCard label={t('dashboard.customersServed')} value={String(stats.todayCustomers)} icon={Users} sub={t('dashboard.today')} color="text-green-400" />
           <StatCard
-            label="Low Stock Items"
+            label={t('dashboard.lowStockItems')}
             value={String(stats.lowStockCount)}
             icon={AlertTriangle}
-            sub="Needs restock"
+            sub={t('dashboard.needsRestock')}
             color={stats.lowStockCount > 0 ? 'text-red-400' : 'text-gray-400'}
           />
         </div>
@@ -166,9 +173,9 @@ export default function DashboardScreen() {
         <div className="grid grid-cols-3 gap-4 mb-4">
           {/* Weekly Revenue Chart */}
           <div className="col-span-2 bg-dark-surface border border-dark-border rounded-2xl p-5">
-            <h3 className="text-white font-semibold mb-4 text-sm">Revenue — {period === 'today' ? 'Today' : period === '7d' ? 'Last 7 Days' : 'Last 30 Days'}</h3>
+            <h3 className="text-white font-semibold mb-4 text-sm">{t('dashboard.revenue')} — {period === 'today' ? t('dashboard.today') : period === '7d' ? t('dashboard.last7Days') : t('dashboard.last30Days')}</h3>
             {loading || stats.weeklyRevenue.length === 0 ? (
-              <div className="h-40 flex items-center justify-center text-gray-600 text-sm">No data yet</div>
+              <div className="h-40 flex items-center justify-center text-gray-600 text-sm">{t('dashboard.noDataYet')}</div>
             ) : (
               <ResponsiveContainer width="100%" height={160}>
                 <AreaChart data={stats.weeklyRevenue}>
@@ -182,7 +189,7 @@ export default function DashboardScreen() {
                   <XAxis dataKey="day" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} width={60}
                     tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`UZS ${fmtUZS(v as number)}`, 'Revenue']} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: number) => [`UZS ${fmtUZS(v as number)}`, t('dashboard.revenue')]} />
                   <Area type="monotone" dataKey="revenue" stroke="#f97316" strokeWidth={2} fill="url(#revGrad)" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -193,22 +200,38 @@ export default function DashboardScreen() {
           <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
             <h3 className="text-white font-semibold mb-4 text-sm flex items-center gap-2">
               <AlertTriangle size={14} className="text-red-400" />
-              Low Stock
+              {t('dashboard.lowStock')}
             </h3>
             {stats.lowStockItems.length === 0 ? (
-              <div className="text-gray-600 text-sm text-center py-8">All stocked up!</div>
+              <div className="text-gray-600 text-sm text-center py-8">{t('dashboard.allStockedUp')}</div>
             ) : (
-              <div className="space-y-2.5">
-                {stats.lowStockItems.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <p className="text-gray-300 text-xs truncate flex-1 mr-2">{item.name}</p>
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      item.stock === 0 ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
-                    }`}>
-                      {item.stock}
-                    </span>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                {stats.lowStockItems.map((item, i) => {
+                  const isOut = item.stock === 0
+                  const pct = item.alert_quantity > 0 ? Math.min(100, (item.stock / item.alert_quantity) * 100) : 0
+                  return (
+                    <div key={i} className="flex items-center gap-3 bg-dark-card border border-dark-border/60 rounded-xl px-3 py-2.5">
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${isOut ? 'bg-red-500/15' : 'bg-yellow-500/15'}`}>
+                        <Package size={16} className={isOut ? 'text-red-400' : 'text-yellow-400'} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-xs font-medium truncate">{item.name}</p>
+                        <div className="h-1 bg-dark-border rounded-full mt-1.5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${isOut ? 'bg-red-500' : 'bg-yellow-500'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className={`text-sm font-bold ${isOut ? 'text-red-400' : 'text-yellow-400'}`}>
+                          {item.stock}
+                        </span>
+                        <p className="text-gray-600 text-[10px] leading-none mt-0.5">/{item.alert_quantity}</p>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -217,9 +240,9 @@ export default function DashboardScreen() {
         <div className="grid grid-cols-2 gap-4">
           {/* Top Products */}
           <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
-            <h3 className="text-white font-semibold mb-4 text-sm">Top Products (7 days)</h3>
+            <h3 className="text-white font-semibold mb-4 text-sm">{t('dashboard.topProducts7Days')}</h3>
             {stats.topProducts.length === 0 ? (
-              <div className="h-32 flex items-center justify-center text-gray-600 text-sm">No sales yet</div>
+              <div className="h-32 flex items-center justify-center text-gray-600 text-sm">{t('dashboard.noSalesYet')}</div>
             ) : (
               <ResponsiveContainer width="100%" height={160}>
                 <BarChart data={stats.topProducts} layout="vertical">
@@ -236,9 +259,9 @@ export default function DashboardScreen() {
 
           {/* Recent Sales */}
           <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
-            <h3 className="text-white font-semibold mb-4 text-sm">Recent Sales</h3>
+            <h3 className="text-white font-semibold mb-4 text-sm">{t('dashboard.recentSales')}</h3>
             {stats.recentSales.length === 0 ? (
-              <div className="text-gray-600 text-sm text-center py-8">No sales yet</div>
+              <div className="text-gray-600 text-sm text-center py-8">{t('dashboard.noSalesYet')}</div>
             ) : (
               <div className="space-y-2">
                 {stats.recentSales.map((sale) => (
@@ -252,7 +275,7 @@ export default function DashboardScreen() {
                     <div className="text-right">
                       <p className="text-primary text-xs font-semibold">UZS {fmtUZS(Number(sale.total_amount))}</p>
                       <span className={`text-xs ${sale.payment_status === 'fully_paid' ? 'text-green-400' : 'text-yellow-400'}`}>
-                        {sale.payment_status}
+                        {sale.payment_status === 'fully_paid' ? t('sales.fullyPaid') : t('sales.partiallyPaid')}
                       </span>
                     </div>
                   </div>

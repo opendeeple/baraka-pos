@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Plus, Search, Edit2, Trash2, Tags } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader } from '../../components/ui'
@@ -21,6 +22,7 @@ interface CategoryForm {
 const EMPTY_FORM: CategoryForm = { name: '', description: '' }
 
 export default function CategoriesScreen() {
+  const { t } = useTranslation()
   const [categories, setCategories] = useState<Category[]>([])
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -31,6 +33,10 @@ export default function CategoriesScreen() {
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null)
   const [deleting, setDeleting] = useState(false)
   const debouncedSearch = useDebouncedValue(search)
+  // setSaving/setDeleting only disable the button on the *next* render —
+  // rapid clicks before that commits can each run a full extra insert.
+  // Refs update synchronously, so this guard blocks the very next click.
+  const submittingRef = useRef(false)
 
   useEffect(() => { loadAll() }, [debouncedSearch])
 
@@ -61,6 +67,8 @@ export default function CategoriesScreen() {
 
   async function saveCategory() {
     if (!form.name.trim()) return
+    if (submittingRef.current) return
+    submittingRef.current = true
     setSaving(true)
     const now = new Date().toISOString()
     try {
@@ -85,11 +93,13 @@ export default function CategoriesScreen() {
       window.electronAPI.sync.pushPending().catch(() => {})
       setShowForm(false)
       loadAll()
-    } finally { setSaving(false) }
+    } finally { setSaving(false); submittingRef.current = false }
   }
 
   async function confirmDelete() {
     if (!deleteTarget) return
+    if (submittingRef.current) return
+    submittingRef.current = true
     setDeleting(true)
     const now = new Date().toISOString()
     try {
@@ -102,10 +112,10 @@ export default function CategoriesScreen() {
       )
       if (row?.sync_id) await window.electronAPI.sync.enqueue('collections', row.sync_id, 'delete')
       window.electronAPI.sync.pushPending().catch(() => {})
-      toast.success(`"${deleteTarget.name}" deleted`)
+      toast.success(t('categories.deletedToast', { name: deleteTarget.name }))
       setDeleteTarget(null)
       loadAll()
-    } finally { setDeleting(false) }
+    } finally { setDeleting(false); submittingRef.current = false }
   }
 
   const f = (k: keyof CategoryForm, v: string) => setForm((prev) => ({ ...prev, [k]: v }))
@@ -113,14 +123,14 @@ export default function CategoriesScreen() {
   return (
     <BackOfficeLayout>
       <PageHeader
-        title="Categories"
-        actions={<Button icon={Plus} onClick={openCreate}>Add Category</Button>}
+        title={t('nav.categories')}
+        actions={<Button icon={Plus} onClick={openCreate}>{t('categories.addCategory')}</Button>}
       />
 
       <div className="shrink-0 px-6 py-3 border-b border-dark-border flex gap-3">
         <div className="relative flex-1 max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search categories…"
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('categories.searchCategories')}
             className="w-full bg-dark-card border border-dark-border rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary" />
         </div>
       </div>
@@ -128,7 +138,7 @@ export default function CategoriesScreen() {
       <div className="flex-1 overflow-auto">
         <table className="w-full">
           <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-            <tr>{['Name', 'Description', 'Products', ''].map((h) => (
+            <tr>{[t('common.name'), t('common.description'), t('nav.products'), ''].map((h) => (
               <th key={h} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
             ))}</tr>
           </thead>
@@ -154,49 +164,49 @@ export default function CategoriesScreen() {
           </tbody>
         </table>
         {!loading && categories.length === 0 && (
-          <EmptyState icon={Tags} title="No categories found" />
+          <EmptyState icon={Tags} title={t('categories.noCategoriesFound')} />
         )}
       </div>
 
       <Modal
         open={showForm}
         onClose={() => setShowForm(false)}
-        title={editId ? 'Edit Category' : 'New Category'}
+        title={editId ? t('categories.editCategory') : t('categories.newCategory')}
         maxWidth="max-w-md"
         footer={
           <>
-            <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
             <Button className="flex-1" onClick={saveCategory} loading={saving} disabled={!form.name.trim()}>
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? t('common.saving') : t('common.save')}
             </Button>
           </>
         }
       >
         <div className="p-5 space-y-3">
-          <Input label="Name *" autoFocus value={form.name} onChange={(e) => f('name', e.target.value)} />
-          <Input label="Description" value={form.description} onChange={(e) => f('description', e.target.value)} />
+          <Input label={t('products.nameRequired')} autoFocus value={form.name} onChange={(e) => f('name', e.target.value)} />
+          <Input label={t('common.description')} value={form.description} onChange={(e) => f('description', e.target.value)} />
         </div>
       </Modal>
 
       <Modal
         open={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
-        title="Delete Category"
+        title={t('categories.deleteCategory')}
         maxWidth="max-w-sm"
         footer={
           <>
-            <Button variant="secondary" className="flex-1" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="secondary" className="flex-1" onClick={() => setDeleteTarget(null)}>{t('common.cancel')}</Button>
             <Button variant="danger" className="flex-1" onClick={confirmDelete} loading={deleting}>
-              {deleting ? 'Deleting…' : 'Delete'}
+              {deleting ? t('common.deleting') : t('common.delete')}
             </Button>
           </>
         }
       >
         <div className="p-5 text-sm text-gray-400">
-          Delete <span className="text-white font-medium">"{deleteTarget?.name}"</span>?
+          {t('categories.deleteConfirm', { name: deleteTarget?.name ?? '' })}
           {!!deleteTarget?.product_count && (
             <p className="mt-2 text-yellow-400 text-xs">
-              {deleteTarget.product_count} product{deleteTarget.product_count === 1 ? '' : 's'} currently use this category and will show as uncategorized.
+              {t('categories.productsUseWarning', { count: deleteTarget.product_count })}
             </p>
           )}
         </div>

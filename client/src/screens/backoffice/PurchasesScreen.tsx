@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Plus, Search, Truck, Check, X } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
@@ -15,6 +16,7 @@ interface PurchaseItem { product_id: number; product_name: string; batch_id: num
 interface Product { id: number; name: string; batch_id: number; cost: number }
 
 export default function PurchasesScreen() {
+  const { t } = useTranslation()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [selected, setSelected] = useState<Purchase | null>(null)
   const [poItems, setPoItems] = useState<PurchaseItem[]>([])
@@ -122,17 +124,17 @@ export default function PurchasesScreen() {
   return (
     <BackOfficeLayout>
       <PageHeader
-        title="Purchases"
+        title={t('nav.purchases')}
         actions={
           <Button icon={Plus} onClick={() => { setShowForm(true); setLines([{ id: crypto.randomUUID(), productId: '', batchId: '', qty: '1', cost: '', name: '' }]) }}>
-            New Purchase Order
+            {t('purchases.newPurchaseOrder')}
           </Button>
         }
       />
       <div className="shrink-0 px-6 py-3 border-b border-dark-border">
         <div className="relative max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search PO or vendor…"
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('purchases.searchPoOrVendor')}
             className="w-full bg-dark-card border border-dark-border rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary" />
         </div>
       </div>
@@ -141,7 +143,7 @@ export default function PurchasesScreen() {
         <div className="flex-1 overflow-auto">
           <table className="w-full">
             <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-              <tr>{['PO Number', 'Vendor', 'Total', 'Status', 'Date', ''].map((h) => (
+              <tr>{[t('purchases.poNumber'), t('purchases.vendor'), t('common.total'), t('common.status'), t('common.date'), ''].map((h) => (
                 <th key={h} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
               ))}</tr>
             </thead>
@@ -155,7 +157,7 @@ export default function PurchasesScreen() {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
                       po.status === 'received' ? 'bg-green-500/15 text-green-400'
                       : po.status === 'pending' ? 'bg-yellow-500/15 text-yellow-400'
-                      : 'bg-gray-500/15 text-gray-400'}`}>{po.status}</span>
+                      : 'bg-gray-500/15 text-gray-400'}`}>{po.status === 'received' ? t('purchases.received') : po.status === 'pending' ? t('purchases.pending') : po.status}</span>
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-sm">{new Date(po.created_at).toLocaleDateString()}</td>
                   <td className="px-4 py-3 text-gray-600 group-hover:text-gray-300">›</td>
@@ -164,7 +166,7 @@ export default function PurchasesScreen() {
             </tbody>
           </table>
           {purchases.length === 0 && (
-            <EmptyState icon={Truck} title="No purchase orders yet" />
+            <EmptyState icon={Truck} title={t('purchases.noPurchaseOrdersYet')} />
           )}
         </div>
 
@@ -173,7 +175,7 @@ export default function PurchasesScreen() {
             <div className="p-4 border-b border-dark-border flex items-center justify-between">
               <div>
                 <p className="text-white font-mono font-semibold text-sm">{selected.reference_number}</p>
-                <p className="text-gray-500 text-xs">{selected.vendor_name ?? 'No vendor'}</p>
+                <p className="text-gray-500 text-xs">{selected.vendor_name ?? t('purchases.noVendor')}</p>
               </div>
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-white"><X size={16} /></button>
             </div>
@@ -188,7 +190,7 @@ export default function PurchasesScreen() {
                 </div>
               ))}
               <div className="border-t border-dark-border pt-3 flex justify-between font-bold">
-                <span className="text-white text-sm">Total</span>
+                <span className="text-white text-sm">{t('common.total')}</span>
                 <span className="text-primary text-sm">UZS {fmtUZS(Number(selected.total_amount))}</span>
               </div>
             </div>
@@ -196,22 +198,22 @@ export default function PurchasesScreen() {
               <div className="p-4 border-t border-dark-border space-y-2">
                 {confirmReceive ? (
                   <>
-                    <p className="text-gray-400 text-xs text-center">Add stock to inventory?</p>
+                    <p className="text-gray-400 text-xs text-center">{t('purchases.addStockConfirm')}</p>
                     <div className="flex gap-2">
                       <button onClick={() => setConfirmReceive(false)}
                         className="flex-1 border border-dark-border text-gray-400 rounded-xl py-2 text-sm">
-                        Cancel
+                        {t('common.cancel')}
                       </button>
                       <button onClick={() => receivePO(selected)} disabled={receiving}
                         className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white rounded-xl py-2 text-sm font-semibold">
-                        {receiving ? 'Receiving…' : 'Confirm'}
+                        {receiving ? t('purchases.receiving') : t('common.confirm')}
                       </button>
                     </div>
                   </>
                 ) : (
                   <button onClick={() => setConfirmReceive(true)}
                     className="w-full flex items-center justify-center gap-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-xl py-2.5 text-sm transition-colors">
-                    <Check size={14} /> Receive Stock
+                    <Check size={14} /> {t('purchases.receiveStock')}
                   </button>
                 )}
               </div>
@@ -223,29 +225,29 @@ export default function PurchasesScreen() {
       <Modal
         open={showForm}
         onClose={() => setShowForm(false)}
-        title="New Purchase Order"
+        title={t('purchases.newPurchaseOrder')}
         maxWidth="max-w-2xl"
         footer={
           <>
-            <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
             <Button className="flex-1" onClick={savePO} loading={saving} disabled={lines.length === 0}>
-              {saving ? 'Saving…' : 'Create PO'}
+              {saving ? t('common.saving') : t('purchases.createPo')}
             </Button>
           </>
         }
       >
             <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-3">
-                <Input label="PO Number" placeholder="AUTO" value={refNumber}
+                <Input label={t('purchases.poNumber')} placeholder={t('products.auto')} value={refNumber}
                   onChange={(e) => setRefNumber(e.target.value)} />
-                <Input label="Vendor" placeholder="Vendor name" value={vendorName}
+                <Input label={t('purchases.vendor')} placeholder={t('purchases.vendorName')} value={vendorName}
                   onChange={(e) => setVendorName(e.target.value)} />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs text-gray-400">Items *</label>
-                  <button onClick={addLine} className="text-xs text-primary hover:text-orange-400">+ Add Item</button>
+                  <label className="text-xs text-gray-400">{t('purchases.itemsRequired')}</label>
+                  <button onClick={addLine} className="text-xs text-primary hover:text-orange-400">{t('purchases.addItem')}</button>
                 </div>
                 <div className="space-y-2">
                   {lines.map((l, i) => (
@@ -254,16 +256,16 @@ export default function PurchasesScreen() {
                         <Select
                           value={l.productId}
                           onChange={(v) => setLine(i, 'productId', v)}
-                          placeholder="Select product…"
+                          placeholder={t('purchases.selectProduct')}
                           options={products.map((p) => ({ value: String(p.id), label: p.name }))}
                         />
                       </div>
                       <div className="col-span-2">
-                        <input type="number" value={l.qty} onChange={(e) => setLine(i, 'qty', e.target.value)} placeholder="Qty"
+                        <input type="number" value={l.qty} onChange={(e) => setLine(i, 'qty', e.target.value)} placeholder={t('common.quantity')}
                           className="w-full bg-dark-card border border-dark-border rounded-lg px-2 py-2 text-white text-xs focus:outline-none focus:border-primary" />
                       </div>
                       <div className="col-span-3">
-                        <input type="number" value={l.cost} onChange={(e) => setLine(i, 'cost', e.target.value)} placeholder="Unit cost"
+                        <input type="number" value={l.cost} onChange={(e) => setLine(i, 'cost', e.target.value)} placeholder={t('purchases.unitCost')}
                           className="w-full bg-dark-card border border-dark-border rounded-lg px-2 py-2 text-white text-xs focus:outline-none focus:border-primary" />
                       </div>
                       <div className="col-span-2 text-right">
@@ -276,14 +278,14 @@ export default function PurchasesScreen() {
                   ))}
                 </div>
                 <div className="mt-2 pt-2 border-t border-dark-border flex justify-between">
-                  <span className="text-gray-400 text-sm">Total</span>
+                  <span className="text-gray-400 text-sm">{t('common.total')}</span>
                   <span className="text-primary font-bold text-sm">
                     UZS {fmtUZS(lines.reduce((s, l) => s + Number(l.qty || 0) * Number(l.cost || 0), 0))}
                   </span>
                 </div>
               </div>
 
-              <Input label="Note" placeholder="Optional note" value={note}
+              <Input label={t('purchases.note')} placeholder={t('purchases.optionalNote')} value={note}
                 onChange={(e) => setNote(e.target.value)} />
             </div>
       </Modal>

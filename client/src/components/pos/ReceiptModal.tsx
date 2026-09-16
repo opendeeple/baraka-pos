@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { renderReceiptText, type ReceiptDoc } from '@baraka/app-core'
@@ -16,6 +17,7 @@ interface Props {
  * (same renderReceiptText formatter used by the ESC/POS driver).
  */
 export function ReceiptModal({ receipt, onClose }: Props) {
+  const { t } = useTranslation()
   const [printing, setPrinting] = useState(false)
   if (!receipt) return null
 
@@ -24,14 +26,14 @@ export function ReceiptModal({ receipt, onClose }: Props) {
     try {
       const result = await window.electronAPI.printer.print(receipt)
       if (result.success) {
-        toast.success('Sent to printer')
+        toast.success(t('receipt.sentToPrinter'))
       } else {
-        toast.error(result.error || 'No printer configured', {
-          description: 'Set one up in Backoffice → Settings → Printer.',
+        toast.error(result.error || t('receipt.noPrinterConfigured'), {
+          description: t('receipt.setUpPrinterHint'),
         })
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Print failed')
+      toast.error(err instanceof Error ? err.message : t('receipt.printFailed'))
     } finally {
       setPrinting(false)
     }
@@ -41,7 +43,7 @@ export function ReceiptModal({ receipt, onClose }: Props) {
     <Modal
       open
       onClose={onClose}
-      title="Sale Complete"
+      title={t('receipt.saleComplete')}
       maxWidth="max-w-sm"
       footer={
         <>
@@ -52,9 +54,9 @@ export function ReceiptModal({ receipt, onClose }: Props) {
             loading={printing}
             onClick={handlePrint}
           >
-            Print
+            {t('receipt.print')}
           </Button>
-          <Button className="flex-1" onClick={onClose}>New Sale</Button>
+          <Button className="flex-1" onClick={onClose}>{t('receipt.newSale')}</Button>
         </>
       }
     >

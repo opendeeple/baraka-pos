@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useSessionStore } from '../../store/session.store'
 import { fmtUZS } from '../../lib/currency'
 import { NumPad } from '../../components/pos/NumPad'
@@ -17,6 +18,7 @@ interface SessionSummary {
 
 export default function CloseSessionScreen() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { session, clearSession } = useSessionStore()
   const [actualCash, setActualCash] = useState('0')
   const [summary, setSummary] = useState<SessionSummary | null>(null)
@@ -86,8 +88,8 @@ export default function CloseSessionScreen() {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1 className="text-white font-bold text-lg leading-tight">Close Register</h1>
-            <p className="text-xs text-gray-500">Session summary</p>
+            <h1 className="text-white font-bold text-lg leading-tight">{t('session.closeRegister')}</h1>
+            <p className="text-xs text-gray-500">{t('session.sessionSummary')}</p>
           </div>
         </div>
 
@@ -98,14 +100,14 @@ export default function CloseSessionScreen() {
               <div className="bg-dark-card rounded-2xl p-4 border border-dark-border">
                 <div className="flex items-center gap-2 mb-2">
                   <ShoppingBag size={14} className="text-primary" />
-                  <span className="text-xs text-gray-500 uppercase tracking-wider">Transactions</span>
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">{t('session.transactions')}</span>
                 </div>
                 <div className="text-2xl font-bold text-white">{summary.saleCount}</div>
               </div>
               <div className="bg-dark-card rounded-2xl p-4 border border-dark-border">
                 <div className="flex items-center gap-2 mb-2">
                   <TrendingUp size={14} className="text-green-400" />
-                  <span className="text-xs text-gray-500 uppercase tracking-wider">Total Sales</span>
+                  <span className="text-xs text-gray-500 uppercase tracking-wider">{t('session.totalSales')}</span>
                 </div>
                 <div className="text-lg font-bold text-white leading-tight">{fmtUZS(summary.totalSales)}</div>
                 <div className="text-xs text-gray-500">UZS</div>
@@ -115,31 +117,31 @@ export default function CloseSessionScreen() {
             {/* Payment breakdown */}
             <div className="bg-dark-card rounded-2xl border border-dark-border overflow-hidden">
               <div className="px-4 py-3 border-b border-dark-border">
-                <span className="text-xs text-gray-500 uppercase tracking-wider">Payment Breakdown</span>
+                <span className="text-xs text-gray-500 uppercase tracking-wider">{t('session.paymentBreakdown')}</span>
               </div>
               <div className="divide-y divide-dark-border">
-                <PayRow icon={<Banknote size={15} className="text-green-400" />} label="Cash" value={summary.totalCash} />
-                <PayRow icon={<CreditCard size={15} className="text-blue-400" />} label="Card" value={summary.totalCard} />
-                <PayRow icon={<Smartphone size={15} className="text-purple-400" />} label="Other" value={summary.totalOther} />
+                <PayRow icon={<Banknote size={15} className="text-green-400" />} label={t('payment.methodCash')} value={summary.totalCash} />
+                <PayRow icon={<CreditCard size={15} className="text-blue-400" />} label={t('payment.methodCard')} value={summary.totalCard} />
+                <PayRow icon={<Smartphone size={15} className="text-purple-400" />} label={t('session.other')} value={summary.totalOther} />
               </div>
             </div>
 
             {/* Cash reconciliation */}
             <div className="bg-dark-card rounded-2xl border border-dark-border overflow-hidden">
               <div className="px-4 py-3 border-b border-dark-border">
-                <span className="text-xs text-gray-500 uppercase tracking-wider">Cash Reconciliation</span>
+                <span className="text-xs text-gray-500 uppercase tracking-wider">{t('session.cashReconciliation')}</span>
               </div>
               <div className="p-4 space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Opening balance</span>
+                  <span className="text-gray-400">{t('session.openingBalance')}</span>
                   <span className="text-white">{fmtUZS(summary.openingBalance)} UZS</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">+ Cash sales</span>
+                  <span className="text-gray-400">{t('session.plusCashSales')}</span>
                   <span className="text-white">{fmtUZS(summary.totalCash)} UZS</span>
                 </div>
                 <div className="flex justify-between text-sm font-semibold border-t border-dark-border pt-3">
-                  <span className="text-gray-300">Expected in drawer</span>
+                  <span className="text-gray-300">{t('session.expectedInDrawer')}</span>
                   <span className="text-white">{fmtUZS(summary.theoreticalCash)} UZS</span>
                 </div>
               </div>
@@ -150,7 +152,7 @@ export default function CloseSessionScreen() {
               <div className={`rounded-2xl p-4 border ${variancePositive ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
                 <div className="flex justify-between items-center">
                   <span className={`text-sm font-semibold ${variancePositive ? 'text-green-400' : 'text-red-400'}`}>
-                    Variance {variancePositive ? '(Over)' : '(Short)'}
+                    {t('session.variance')} {variancePositive ? t('session.over') : t('session.short')}
                   </span>
                   <span className={`text-lg font-bold ${variancePositive ? 'text-green-400' : 'text-red-400'}`}>
                     {variancePositive ? '+' : ''}{fmtUZS(variance)} UZS
@@ -161,7 +163,7 @@ export default function CloseSessionScreen() {
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
-            Loading summary...
+            {t('session.loadingSummary')}
           </div>
         )}
       </div>
@@ -169,8 +171,8 @@ export default function CloseSessionScreen() {
       {/* Right panel — actual cash numpad */}
       <div className="flex-1 flex flex-col items-center justify-center p-10">
         <div className="w-full max-w-sm">
-          <h2 className="text-xl font-bold text-white mb-1">Count Actual Cash</h2>
-          <p className="text-gray-500 text-sm mb-6">Enter the cash amount physically in the drawer</p>
+          <h2 className="text-xl font-bold text-white mb-1">{t('session.countActualCash')}</h2>
+          <p className="text-gray-500 text-sm mb-6">{t('session.enterActualCashHint')}</p>
 
           <NumPad
             value={actualCash}
@@ -182,14 +184,14 @@ export default function CloseSessionScreen() {
               onClick={() => navigate('/pos')}
               className="flex-1 border border-dark-border text-gray-400 hover:text-white font-medium py-4 rounded-2xl text-sm transition-colors"
             >
-              Back to POS
+              {t('nav.backToPos')}
             </button>
             <button
               onClick={handleClose}
               disabled={loading}
               className="flex-1 bg-red-600 hover:bg-red-700 active:scale-[0.98] disabled:opacity-50 text-white font-bold py-4 rounded-2xl text-sm transition-all"
             >
-              {loading ? 'Closing...' : 'Close Register'}
+              {loading ? t('session.closing') : t('session.closeRegister')}
             </button>
           </div>
         </div>

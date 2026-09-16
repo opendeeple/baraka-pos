@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Save, Printer, TestTube2, RefreshCw } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Save, Printer, TestTube2, RefreshCw, Globe, Maximize, Minimize } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 import { toast } from 'sonner'
 import { Select } from '../../components/ui/Select'
+import { LANGUAGES, setAppLanguage, type AppLanguage } from '../../i18n'
 
 interface StoreSetting { meta_key: string; meta_value: string }
 
@@ -17,6 +19,48 @@ interface PrinterConfig {
 interface ReceiptSettings {
   header: string; footer: string; show_logo: boolean
   show_barcode: boolean; show_cashier: boolean; copies: number
+}
+
+type ReceiptElementKey =
+  | 'storeName' | 'storeInfo' | 'invoiceInfo' | 'items' | 'itemQty'
+  | 'totals' | 'totalRow' | 'footer' | 'barcode'
+
+interface ElementStyle { fontPx: number; shiftPx: number }
+
+interface ReceiptLayout {
+  paperWidthMm: number
+  marginMm: number
+  charWidth: number
+  elements: Record<ReceiptElementKey, ElementStyle>
+}
+
+const ELEMENT_LABELS: Array<[ReceiptElementKey, string]> = [
+  ['storeName', 'Store Name'],
+  ['storeInfo', 'Address / Phone / Header'],
+  ['invoiceInfo', 'Invoice / Cashier / Date'],
+  ['items', 'Item Name + Price'],
+  ['itemQty', 'Item Qty × Unit Price'],
+  ['totals', 'Charges / Payment / Change'],
+  ['totalRow', 'TOTAL AMOUNT'],
+  ['footer', 'Footer (Thank You)'],
+  ['barcode', 'Barcode Line'],
+]
+
+const DEFAULT_LAYOUT: ReceiptLayout = {
+  paperWidthMm: 60,
+  marginMm: 3,
+  charWidth: 28,
+  elements: {
+    storeName: { fontPx: 13, shiftPx: 0 },
+    storeInfo: { fontPx: 11, shiftPx: 0 },
+    invoiceInfo: { fontPx: 11, shiftPx: 0 },
+    items: { fontPx: 11, shiftPx: 0 },
+    itemQty: { fontPx: 10, shiftPx: 0 },
+    totals: { fontPx: 11, shiftPx: 0 },
+    totalRow: { fontPx: 11, shiftPx: 0 },
+    footer: { fontPx: 13, shiftPx: 0 },
+    barcode: { fontPx: 11, shiftPx: 0 },
+  },
 }
 
 interface ChargeRow { id: number; name: string; rate_type: string; rate_value: number; is_active: number }
@@ -33,6 +77,7 @@ export default function SettingsScreen() {
   const [receipt, setReceipt] = useState<ReceiptSettings>({
     header: '', footer: 'Thank you for shopping with us!', show_logo: false, show_barcode: true, show_cashier: true, copies: 1,
   })
+  const [layout, setLayout] = useState<ReceiptLayout>(DEFAULT_LAYOUT)
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [storeName, setStoreName] = useState('')
   const [storeAddress, setStoreAddress] = useState('')
@@ -40,8 +85,31 @@ export default function SettingsScreen() {
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [changingLang, setChangingLang] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
+  const [togglingFullscreen, setTogglingFullscreen] = useState(false)
+  const { t, i18n } = useTranslation()
 
   useEffect(() => { loadSettings() }, [])
+  useEffect(() => {
+    window.electronAPI.window.isFullscreen().then((r) => setFullscreen(r.fullscreen))
+  }, [])
+
+  async function changeLanguage(lang: AppLanguage) {
+    if (lang === i18n.language) return
+    setChangingLang(true)
+    try { await setAppLanguage(lang) } finally { setChangingLang(false) }
+  }
+
+  async function toggleFullscreen() {
+    setTogglingFullscreen(true)
+    try {
+      const r = await window.electronAPI.window.toggleFullscreen()
+      setFullscreen(r.fullscreen)
+    } finally {
+      setTogglingFullscreen(false)
+    }
+  }
 
   async function loadSettings() {
     const rows = await window.electronAPI.db.query(`SELECT meta_key, meta_value FROM settings`, []) as StoreSetting[]
@@ -54,6 +122,16 @@ export default function SettingsScreen() {
     }
     if (map.receipt_template) {
       try { setReceipt(JSON.parse(map.receipt_template)) } catch {}
+    }
+    if (map.receipt_layout) {
+      try {
+        const saved = JSON.parse(map.receipt_layout) as Partial<ReceiptLayout>
+        setLayout({
+          ...DEFAULT_LAYOUT,
+          ...saved,
+          elements: { ...DEFAULT_LAYOUT.elements, ...saved.elements },
+        })
+      } catch {}
     }
 
     const storeRow = await window.electronAPI.db.query(`SELECT name, address, phone FROM stores LIMIT 1`, []) as Array<{name:string;address:string;phone:string}>
@@ -84,6 +162,7 @@ export default function SettingsScreen() {
     try {
       await saveSetting('printer_config', JSON.stringify(printer))
       await saveSetting('receipt_template', JSON.stringify(receipt))
+      await saveSetting('receipt_layout', JSON.stringify(layout))
       await window.electronAPI.db.exec(`UPDATE stores SET name=?,address=?,phone=?,updated_at=? WHERE id=1`, [storeName, storeAddress, storePhone, now])
     } finally { setSaving(false) }
   }
@@ -116,29 +195,73 @@ export default function SettingsScreen() {
 
   const p = (k: keyof PrinterConfig, v: string) => setPrinter((prev) => ({ ...prev, [k]: v }))
   const r = (k: keyof ReceiptSettings, v: string | boolean | number) => setReceipt((prev) => ({ ...prev, [k]: v }))
+  const l = (k: 'paperWidthMm' | 'marginMm' | 'charWidth', v: number) =>
+    setLayout((prev) => ({ ...prev, [k]: v }))
+  const le = (key: ReceiptElementKey, field: keyof ElementStyle, v: number) =>
+    setLayout((prev) => ({
+      ...prev,
+      elements: { ...prev.elements, [key]: { ...prev.elements[key], [field]: v } },
+    }))
 
   return (
     <BackOfficeLayout>
       <div className="shrink-0 px-6 py-4 border-b border-dark-border bg-dark-surface flex items-center justify-between">
-        <h1 className="text-lg font-bold text-white">Settings</h1>
+        <h1 className="text-lg font-bold text-white">{t('nav.settings')}</h1>
         <div className="flex gap-2">
           <button onClick={syncNow} disabled={syncing}
             className="flex items-center gap-2 border border-dark-border text-gray-300 hover:text-white px-4 py-2 rounded-xl text-sm transition-colors">
-            <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> Sync Now
+            <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {t('settings.syncNow')}
           </button>
           <button onClick={saveAll} disabled={saving}
             className="flex items-center gap-2 bg-primary hover:bg-orange-600 disabled:opacity-40 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">
-            <Save size={14} /> {saving ? 'Saving…' : 'Save Changes'}
+            <Save size={14} /> {saving ? t('common.saving') : t('settings.saveChanges')}
           </button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Language */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm flex items-center gap-2"><Globe size={15} /> {t('settings.language')}</h2>
+          <div className="flex gap-2">
+            {LANGUAGES.map((lng) => (
+              <button
+                key={lng.code}
+                onClick={() => changeLanguage(lng.code)}
+                disabled={changingLang}
+                className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors border ${
+                  i18n.language === lng.code
+                    ? 'bg-primary/15 border-primary text-primary'
+                    : 'border-dark-border text-gray-300 hover:text-white hover:bg-dark-card'
+                }`}
+              >
+                {lng.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Fullscreen */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm flex items-center gap-2">
+            {fullscreen ? <Minimize size={15} /> : <Maximize size={15} />} {t('posSettings.fullscreen')}
+          </h2>
+          <button
+            onClick={toggleFullscreen}
+            disabled={togglingFullscreen}
+            className="w-full flex items-center justify-center gap-2 border border-dark-border text-gray-300 hover:text-white hover:bg-dark-card px-4 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {fullscreen
+              ? <><Minimize size={14} /> {t('posSettings.exitFullscreen')}</>
+              : <><Maximize size={14} /> {t('posSettings.enterFullscreen')}</>}
+          </button>
+        </div>
+
         {/* Store Info */}
         <div className={SECTION_CLS}>
-          <h2 className="text-white font-semibold text-sm">Store Information</h2>
+          <h2 className="text-white font-semibold text-sm">{t('settings.storeInformation')}</h2>
           <div className="grid grid-cols-3 gap-3">
-            {[['Store Name', storeName, setStoreName], ['Address', storeAddress, setStoreAddress], ['Phone', storePhone, setStorePhone]].map(([label, val, set]) => (
+            {[[t('settings.storeName'), storeName, setStoreName], [t('common.address'), storeAddress, setStoreAddress], [t('common.phone'), storePhone, setStorePhone]].map(([label, val, set]) => (
               <div key={label as string}>
                 <label className={LABEL_CLS}>{label as string}</label>
                 <input value={val as string} onChange={(e) => (set as (v: string) => void)(e.target.value)} className={INPUT_CLS} />
@@ -205,6 +328,62 @@ export default function SettingsScreen() {
             <span className="text-xs text-gray-500">Printer settings are applied immediately when you print</span>
           </div>
         </div>
+
+        {/* Receipt Print Layout — only affects the "Windows Printer" path (printer.type === 'windows');
+            direct USB/network ESC/POS printing has its own fixed layout. */}
+        {printer.type === 'windows' && (
+          <div className={SECTION_CLS}>
+            <h2 className="text-white font-semibold text-sm">Receipt Print Layout</h2>
+            <p className="text-xs text-gray-500 -mt-2">
+              Tune these to match your paper roll and printer — sizes/margins vary by hardware and can't be
+              previewed from here, so print a test receipt after each change.
+            </p>
+
+            <div className="grid grid-cols-3 gap-3">
+              {([
+                ['Paper Width (mm)', 'paperWidthMm', 1],
+                ['Side Margin (mm)', 'marginMm', 0.5],
+                ['Characters per Line', 'charWidth', 1],
+              ] as Array<[string, 'paperWidthMm' | 'marginMm' | 'charWidth', number]>).map(([label, key, step]) => (
+                <div key={key}>
+                  <label className={LABEL_CLS}>{label}</label>
+                  <input type="number" step={step} min={0} value={layout[key]}
+                    onChange={(e) => l(key, Number(e.target.value) || 0)} className={INPUT_CLS} />
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <label className={LABEL_CLS}>Per-text size &amp; position</label>
+              <p className="text-xs text-gray-600 mb-2">
+                Position moves the text left (negative) or right (positive) in pixels, independent of size.
+              </p>
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-[1fr,88px,96px] gap-2 px-1">
+                  <span className="text-xs text-gray-500">Text</span>
+                  <span className="text-xs text-gray-500">Size (px)</span>
+                  <span className="text-xs text-gray-500">Position (px)</span>
+                </div>
+                {ELEMENT_LABELS.map(([key, label]) => (
+                  <div key={key} className="grid grid-cols-[1fr,88px,96px] gap-2 items-center bg-dark-card rounded-lg px-3 py-2">
+                    <span className="text-sm text-gray-300">{label}</span>
+                    <input type="number" min={6} value={layout.elements[key].fontPx}
+                      onChange={(e) => le(key, 'fontPx', Number(e.target.value) || 0)}
+                      className="w-full bg-dark border border-dark-border rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-primary" />
+                    <input type="number" value={layout.elements[key].shiftPx}
+                      onChange={(e) => le(key, 'shiftPx', Number(e.target.value) || 0)}
+                      className="w-full bg-dark border border-dark-border rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-primary" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button onClick={() => setLayout(DEFAULT_LAYOUT)}
+              className="text-xs text-gray-500 hover:text-primary transition-colors">
+              Reset to defaults
+            </button>
+          </div>
+        )}
 
         {/* Receipt */}
         <div className={SECTION_CLS}>

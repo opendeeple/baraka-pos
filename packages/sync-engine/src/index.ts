@@ -682,8 +682,13 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     expenses: ({ sync_id }) => {
       const e = db.get<any>(`SELECT * FROM expenses WHERE sync_id=?`, [sync_id])
       if (!e) return null
+      // expense_date is stored date-only ("YYYY-MM-DD"); the server's field is
+      // a full DateTime and rejects a bare date with a Prisma validation error.
+      const expenseDate = String(e.expense_date).includes('T')
+        ? e.expense_date
+        : `${e.expense_date}T00:00:00.000Z`
       return {
-        description: e.description, amount: e.amount, expenseDate: e.expense_date,
+        description: e.description, amount: e.amount, expenseDate,
         source: e.category ?? e.source ?? null, createdBy: e.created_by,
         sessionSyncId: syncIdForLocalId('pos_sessions', e.session_id),
         _updatedAt: e.updated_at,
