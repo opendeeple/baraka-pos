@@ -11,7 +11,8 @@ router.use(authMiddleware)
 router.get('/daily', async (req: Request, res: Response) => {
   try {
     const date = (req.query.date as string) || new Date().toISOString().split('T')[0]
-    const data = await getDailySummary(req.user!.storeId, date)
+    const dateTo = req.query.date_to as string | undefined
+    const data = await getDailySummary(req.user!.storeId, date, dateTo)
     res.json(data)
   } catch (err: unknown) {
     res.status(400).json({ error: err instanceof Error ? err.message : 'Failed' })

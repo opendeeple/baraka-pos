@@ -1,8 +1,11 @@
 import { prisma } from '../../config/database'
 
-export async function getDailySummary(storeId: number, date: string) {
+// `dateTo` lets the same aggregation serve both the single-day view and the
+// "Date Range" tab — omit it (or pass the same value as `date`) for a
+// single day.
+export async function getDailySummary(storeId: number, date: string, dateTo?: string) {
   const startDate = new Date(date + 'T00:00:00.000Z')
-  const endDate = new Date(date + 'T23:59:59.999Z')
+  const endDate = new Date((dateTo ?? date) + 'T23:59:59.999Z')
 
   const [sales, payments, expenses, cashLogs] = await Promise.all([
     prisma.sale.aggregate({
