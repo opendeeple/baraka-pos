@@ -28,6 +28,7 @@ export default function POSScreen() {
   const [showPayment, setShowPayment] = useState(false)
   const [openApps, setOpenApps] = useState<PosApp[]>([])
   const [activeAppId, setActiveAppId] = useState<string | null>(null)
+  const [categoryRefreshKey, setCategoryRefreshKey] = useState(0)
 
   // Startup sync + periodic refresh
   const { pullAll, pushPending } = useSync()
@@ -39,10 +40,18 @@ export default function POSScreen() {
     toast.success(t('pos.dataRefreshed'))
   }
 
-  // WebSocket: refresh products on stock/product updates from other terminals
+  // WebSocket: refresh products on stock/product updates from other terminals.
+  // onSyncChanged fires for ANY successful push from ANY device (e.g. a new
+  // product added in Office) — pull it down and reload immediately instead
+  // of waiting for the 5-minute poll or a manual refresh click.
   useWebSocket({
     onStockUpdated: () => loadProducts(),
     onProductUpdated: () => loadProducts(),
+    onSyncChanged: async (tables) => {
+      await pullAll()
+      loadProducts()
+      if (tables.includes('collections')) setCategoryRefreshKey((k) => k + 1)
+    },
   })
 
   // HID barcode scanner — same lookup used everywhere a scan can land (this
@@ -193,6 +202,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
           <CategorySidebar
             selectedCategory={selectedCategory}
             onSelect={setSelectedCategory}
+            refreshKey={categoryRefreshKey}
           />
           <div className="flex-1 overflow-auto p-3">
             <ProductGrid products={products} onAddToCart={addToCart} />

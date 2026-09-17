@@ -11,9 +11,12 @@ interface Category {
 interface Props {
   selectedCategory: number | null
   onSelect: (id: number | null) => void
+  /** Bump this (e.g. from a sync:changed websocket event) to reload the list
+   *  without needing to remount the component. */
+  refreshKey?: number
 }
 
-export default function CategoryBar({ selectedCategory, onSelect }: Props) {
+export default function CategoryBar({ selectedCategory, onSelect, refreshKey }: Props) {
   const { t } = useTranslation()
   const [categories, setCategories] = useState<Category[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -22,7 +25,7 @@ export default function CategoryBar({ selectedCategory, onSelect }: Props) {
     window.electronAPI.db
       .query(`SELECT * FROM collections WHERE collection_type='category' AND deleted_at IS NULL ORDER BY sort_order, name`, [])
       .then((rows) => setCategories(rows as Category[]))
-  }, [])
+  }, [refreshKey])
 
   // Redirect vertical mouse-wheel to horizontal scroll
   useEffect(() => {

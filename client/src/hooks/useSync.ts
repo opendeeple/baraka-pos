@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { useSyncStore } from '../store/sync.store'
 import { useAuthStore } from '../store/auth.store'
@@ -20,32 +20,57 @@ const SYNC_TABLES = [
 export function useSync() {
   const { setStatus, setPendingCount, setLastSync, setLastError } = useSyncStore()
   const { isAuthenticated } = useAuthStore()
+  // pullAll is triggered from several independent places — mount, the 5-min
+  // interval, the 20s error-retry chain below, the manual refresh button,
+  // the browser 'online' event, and now the sync:changed websocket handler —
+  // which can overlap (e.g. a websocket event landing while the periodic
+  // interval is already mid-pull). Two concurrent pulls racing on the shared
+  // status/error state caused the badge to get stuck on Error even though
+  // data was syncing fine. A guard that just skips a second call fixes that,
+  // but breaks callers that specifically need to know once fresh data has
+  // landed (e.g. reloading the product list right after a sync:changed
+  // event) — they'd skip out immediately and read stale local data instead
+  // of waiting for the already-in-flight pull to actually finish. Sharing
+  // the in-flight promise solves both: only one real pull ever runs, and
+  // every caller — the one that started it and any that arrive while it's
+  // running — resolves once it's actually done.
+  const inFlightRef = useRef<Promise<void> | null>(null)
 
-  const pullAll = useCallback(async () => {
-    if (!isAuthenticated) return
-    // Login sets isAuthenticated before device registration's network round
-    // trip resolves (so login still works while offline) — a pull racing that
-    // gap would hit "Device not registered" and falsely flash Error. Skip
-    // quietly; the next interval retries once registration has landed.
-    if (!(await window.electronAPI.sync.isDeviceRegistered())) return
-    setStatus('syncing')
-    try {
-      for (const table of SYNC_TABLES) {
-        await window.electronAPI.sync.pullLatest(table)
+  const pullAll = useCallback((): Promise<void> => {
+    if (!isAuthenticated) return Promise.resolve()
+    if (inFlightRef.current) return inFlightRef.current
+
+    const run = async () => {
+      try {
+        // Login sets isAuthenticated before device registration's network round
+        // trip resolves (so login still works while offline) — a pull racing that
+        // gap would hit "Device not registered" and falsely flash Error. Skip
+        // quietly; the next interval retries once registration has landed.
+        if (!(await window.electronAPI.sync.isDeviceRegistered())) return
+        setStatus('syncing')
+        for (const table of SYNC_TABLES) {
+          await window.electronAPI.sync.pullLatest(table)
+        }
+        setLastSync(new Date().toISOString())
+        setLastError(null)
+        setStatus('online')
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Sync failed'
+        setStatus('error')
+        setLastError(msg)
+        toast.error(`Sync error: ${msg}`, { id: 'sync-error', duration: 6000 })
+        // Most failures here are transient (a cold Render free-tier instance,
+        // a brief network blip) — retry soon instead of leaving the badge
+        // stuck on Error for up to the full 5-minute interval.
+        setTimeout(() => { pullAll() }, 20_000)
+      } finally {
+        inFlightRef.current = null
       }
-      setLastSync(new Date().toISOString())
-      setLastError(null)
-      setStatus('online')
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Sync failed'
-      setStatus('error')
-      setLastError(msg)
-      toast.error(`Sync error: ${msg}`, { id: 'sync-error', duration: 6000 })
-      // Most failures here are transient (a cold Render free-tier instance,
-      // a brief network blip) — retry soon instead of leaving the badge
-      // stuck on Error for up to the full 5-minute interval.
-      setTimeout(() => { pullAll() }, 20_000)
     }
+
+    const promise = run()
+    inFlightRef.current = promise
+    return promise
   }, [isAuthenticated, setStatus, setLastSync, setLastError])
 
   const pushPending = useCallback(async () => {
