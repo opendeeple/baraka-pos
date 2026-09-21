@@ -643,7 +643,8 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       if (!p) return null
       return {
         name: p.name, description: p.description, sku: p.sku, barcode: p.barcode,
-        imageUrl: p.image_url, unit: p.unit, productType: p.product_type,
+        imageUrl: p.image_url, unit: p.unit, unitsPerPackage: p.units_per_package,
+        productType: p.product_type,
         isStockManaged: Boolean(p.is_stock_managed), isActive: Boolean(p.is_active),
         isFeatured: Boolean(p.is_featured), alertQuantity: p.alert_quantity,
         discount: p.discount,

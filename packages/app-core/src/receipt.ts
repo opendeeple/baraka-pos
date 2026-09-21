@@ -48,11 +48,11 @@ export function renderReceiptText(doc: ReceiptDoc, width = 32): string {
   if (doc.cashierName) out.push(line(`Cashier: ${doc.cashierName}`, ''))
   out.push(line(doc.timestamp.slice(0, 19).replace('T', ' '), ''))
   out.push(divider)
-  for (const item of doc.items) {
-    out.push(item.name.slice(0, width))
+  doc.items.forEach((item, i) => {
+    out.push(`${i + 1}. ${item.name}`.slice(0, width))
     const qtyPrice = `${item.quantity} x ${item.price.toLocaleString()}`
     out.push(line(`  ${qtyPrice}`, (item.quantity * item.price).toLocaleString()))
-  }
+  })
   out.push(divider)
   for (const c of doc.charges) out.push(line(c.name, c.amount.toLocaleString()))
   if (doc.discount) out.push(line('Discount', `-${doc.discount.toLocaleString()}`))

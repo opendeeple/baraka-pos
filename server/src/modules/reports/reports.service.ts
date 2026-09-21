@@ -56,17 +56,50 @@ export async function getDailySummary(storeId: number, date: string, dateTo?: st
   }
 }
 
-export async function getTopProducts(storeId: number, dateFrom: string, dateTo: string, limit = 10) {
+export async function getTopProducts(
+  storeId: number,
+  dateFrom: string,
+  dateTo: string,
+  limit = 10,
+  sortBy: 'quantity' | 'revenue' = 'quantity'
+) {
+  const startDate = new Date(dateFrom + 'T00:00:00.000Z')
+  const endDate = new Date(dateTo + 'T23:59:59.999Z')
+
+  // Revenue ranking needs SUM(quantity * unitPrice) per product — a row-level
+  // product before summing, which groupBy's _sum can't express (it can only
+  // sum a single column as-is), so this branch uses raw SQL the same way
+  // getCategorySales already does for the identical reason.
+  if (sortBy === 'revenue') {
+    const rows = await prisma.$queryRaw<Array<{ productId: number; name: string; quantitySold: number; revenue: number }>>`
+      SELECT si."productId" as "productId", p.name as name,
+             SUM(si.quantity) as "quantitySold",
+             SUM(si.quantity * si."unitPrice") as revenue
+      FROM sale_items si
+      JOIN sales s ON s.id = si."saleId"
+      JOIN products p ON p.id = si."productId"
+      WHERE s."storeId" = ${storeId} AND s.status = 'completed'
+        AND s."createdAt" >= ${startDate} AND s."createdAt" <= ${endDate}
+        AND si."productId" IS NOT NULL
+      GROUP BY si."productId", p.name
+      ORDER BY revenue DESC
+      LIMIT ${limit}
+    `
+    return rows.map((r) => ({
+      productId: r.productId,
+      name: r.name,
+      quantitySold: Number(r.quantitySold),
+      revenue: Number(r.revenue),
+    }))
+  }
+
   const items = await prisma.saleItem.groupBy({
     by: ['productId'],
     where: {
       sale: {
         storeId,
         status: 'completed',
-        createdAt: {
-          gte: new Date(dateFrom + 'T00:00:00.000Z'),
-          lte: new Date(dateTo + 'T23:59:59.999Z'),
-        },
+        createdAt: { gte: startDate, lte: endDate },
       },
     },
     _sum: { quantity: true },

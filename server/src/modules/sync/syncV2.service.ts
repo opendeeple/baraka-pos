@@ -387,7 +387,7 @@ function slugify(name: string, syncId: string): string {
 
 const CONTACT_FIELDS = ['name', 'email', 'phone', 'whatsapp', 'address', 'type', 'notes', 'metaData']
 const COLLECTION_FIELDS = ['collectionType', 'name', 'description', 'sortOrder']
-const PRODUCT_FIELDS = ['name', 'description', 'sku', 'barcode', 'imageUrl', 'unit', 'productType', 'isStockManaged', 'isActive', 'isFeatured', 'alertQuantity', 'discount', 'metaData']
+const PRODUCT_FIELDS = ['name', 'description', 'sku', 'barcode', 'imageUrl', 'unit', 'unitsPerPackage', 'productType', 'isStockManaged', 'isActive', 'isFeatured', 'alertQuantity', 'discount', 'metaData']
 const BATCH_FIELDS = ['batchNumber', 'expiryDate', 'cost', 'price', 'discount', 'isActive', 'isFeatured']
 const EXPENSE_FIELDS = ['description', 'amount', 'expenseDate', 'source', 'createdBy']
 const SESSION_FIELDS = ['terminalId', 'state', 'openingBalance', 'closingBalanceTheoretical', 'closingBalanceActual', 'variance', 'openedAt', 'closedAt']

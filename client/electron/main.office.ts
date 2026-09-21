@@ -42,7 +42,9 @@ function createMainWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
-      webSecurity: !is.dev,
+      // See main.ts's identical setting for why this checks the live dev
+      // server specifically instead of just `is.dev`.
+      webSecurity: !(is.dev && !!process.env['ELECTRON_RENDERER_URL']),
     },
   })
 

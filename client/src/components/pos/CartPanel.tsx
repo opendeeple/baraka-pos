@@ -230,6 +230,30 @@ function CartItemRow({
   const close = useCallback(() => syncOffset(0), [])
   const justSwiped = useRef(false)
 
+  // Tap the quantity number to type an exact value instead of only stepping
+  // by 1 — same onQtyChange as the +/- buttons, just fed a typed number.
+  // inputMode="decimal" so kg/weight-based products (fractional quantity,
+  // already supported all the way through cart.store.ts with no rounding)
+  // can be entered directly too.
+  const [editingQty, setEditingQty] = useState(false)
+  const [qtyDraft, setQtyDraft] = useState('')
+  const qtyInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editingQty) qtyInputRef.current?.focus()
+  }, [editingQty])
+
+  function startEditQty() {
+    setQtyDraft(String(item.quantity))
+    setEditingQty(true)
+  }
+
+  function commitQtyDraft() {
+    setEditingQty(false)
+    const parsed = parseFloat(qtyDraft.replace(',', '.'))
+    if (Number.isFinite(parsed) && parsed > 0) onQtyChange(parsed)
+  }
+
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     startX.current = e.clientX
     startY.current = e.clientY
@@ -318,9 +342,31 @@ function CartItemRow({
             >
               <Minus size={15} />
             </button>
-            <span className="w-10 text-center text-white font-bold text-base">
-              {item.quantity}
-            </span>
+            {editingQty ? (
+              <input
+                ref={qtyInputRef}
+                type="text"
+                inputMode="decimal"
+                value={qtyDraft}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setQtyDraft(e.target.value)}
+                onBlur={commitQtyDraft}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.currentTarget.blur() }
+                  if (e.key === 'Escape') { setEditingQty(false) }
+                }}
+                className="w-10 text-center text-white font-bold text-base bg-transparent border-b border-primary focus:outline-none"
+              />
+            ) : (
+              <span
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); startEditQty() }}
+                className="w-10 text-center text-white font-bold text-base"
+              >
+                {item.quantity}
+              </span>
+            )}
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); onQtyChange(item.quantity + 1) }}

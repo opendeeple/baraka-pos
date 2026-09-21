@@ -13,6 +13,7 @@ interface Product {
   category_id: number | null; category_name: string | null; product_type: string
   is_stock_managed: number; is_active: number; alert_quantity: number
   batch_id: number | null; price: number; cost: number; stock: number
+  unit: string | null; units_per_package: number | null
 }
 
 interface Category { id: number; name: string }
@@ -20,11 +21,13 @@ interface Category { id: number; name: string }
 interface ProductForm {
   name: string; sku: string; barcode: string; category_id: string
   price: string; cost: string; alert_quantity: string; is_stock_managed: boolean; is_active: boolean
+  unit: string; units_per_package: string
 }
 
 const EMPTY_FORM: ProductForm = {
   name: '', sku: '', barcode: '', category_id: '',
   price: '', cost: '', alert_quantity: '5', is_stock_managed: true, is_active: true,
+  unit: 'piece', units_per_package: '',
 }
 
 export default function ProductsScreen() {
@@ -58,6 +61,7 @@ export default function ProductsScreen() {
       SELECT p.id, p.name, p.sku, p.barcode, p.category_id,
              c.name as category_name, p.product_type,
              p.is_stock_managed, p.is_active, p.alert_quantity,
+             p.unit, p.units_per_package,
              pb.id as batch_id, pb.price, pb.cost,
              COALESCE(ps.quantity, 0) as stock
       FROM products p
@@ -95,7 +99,8 @@ export default function ProductsScreen() {
       category_id: p.category_id ? String(p.category_id) : '',
       price: String(p.price), cost: String(p.cost),
       alert_quantity: String(p.alert_quantity), is_stock_managed: Boolean(p.is_stock_managed),
-      is_active: Boolean(p.is_active) })
+      is_active: Boolean(p.is_active),
+      unit: p.unit ?? 'piece', units_per_package: p.units_per_package ? String(p.units_per_package) : '' })
     setShowForm(true)
   }
 
@@ -108,9 +113,10 @@ export default function ProductsScreen() {
     try {
       if (editId) {
         await window.electronAPI.db.exec(
-          `UPDATE products SET name=?,sku=?,barcode=?,category_id=?,is_stock_managed=?,is_active=?,alert_quantity=?,updated_at=? WHERE id=?`,
+          `UPDATE products SET name=?,sku=?,barcode=?,category_id=?,is_stock_managed=?,is_active=?,alert_quantity=?,unit=?,units_per_package=?,updated_at=? WHERE id=?`,
           [form.name, form.sku || null, form.barcode || null, form.category_id || null,
-           form.is_stock_managed ? 1 : 0, form.is_active ? 1 : 0, Number(form.alert_quantity) || 0, now, editId])
+           form.is_stock_managed ? 1 : 0, form.is_active ? 1 : 0, Number(form.alert_quantity) || 0,
+           form.unit, form.unit === 'box' ? (Number(form.units_per_package) || null) : null, now, editId])
         await window.electronAPI.db.exec(
           `UPDATE product_batches SET price=?,cost=?,updated_at=? WHERE product_id=? AND is_active=1`,
           [Number(form.price), Number(form.cost) || 0, now, editId])
@@ -127,10 +133,11 @@ export default function ProductsScreen() {
         const productSyncId = uuidv4()
         const batchSyncId = uuidv4()
         await window.electronAPI.db.exec(
-          `INSERT INTO products (sync_id,name,sku,barcode,category_id,is_stock_managed,alert_quantity,is_active,product_type,created_at,updated_at)
-           VALUES (?,?,?,?,?,?,?,1,'simple',?,?)`,
+          `INSERT INTO products (sync_id,name,sku,barcode,category_id,is_stock_managed,alert_quantity,is_active,product_type,unit,units_per_package,created_at,updated_at)
+           VALUES (?,?,?,?,?,?,?,1,'simple',?,?,?,?)`,
           [productSyncId, form.name, form.sku || null, form.barcode || null, form.category_id || null,
-           form.is_stock_managed ? 1 : 0, Number(form.alert_quantity) || 0, now, now])
+           form.is_stock_managed ? 1 : 0, Number(form.alert_quantity) || 0,
+           form.unit, form.unit === 'box' ? (Number(form.units_per_package) || null) : null, now, now])
         const rows = await window.electronAPI.db.query(`SELECT last_insert_rowid() as id`, []) as Array<{id:number}>
         const pid = rows[0].id
         await window.electronAPI.db.exec(
@@ -306,6 +313,27 @@ export default function ProductsScreen() {
                   />
                 </div>
                 <Input label={t('products.alertQty')} type="number" value={form.alert_quantity} onChange={(e) => f('alert_quantity', e.target.value)} />
+                <div>
+                  <label className="text-xs text-gray-400 mb-1 block">{t('products.unit')}</label>
+                  <Select
+                    value={form.unit}
+                    onChange={(v) => f('unit', v)}
+                    options={[
+                      { value: 'piece', label: t('products.unitPiece') },
+                      { value: 'kg', label: t('products.unitKg') },
+                      { value: 'box', label: t('products.unitBox') },
+                    ]}
+                  />
+                </div>
+                {form.unit === 'box' && (
+                  <Input
+                    label={t('products.unitsPerPackage')}
+                    type="number"
+                    value={form.units_per_package}
+                    onChange={(e) => f('units_per_package', e.target.value)}
+                    placeholder={t('products.unitsPerPackageHint')}
+                  />
+                )}
                 <div className="col-span-2 flex items-center gap-6">
                   <label className="flex items-center gap-3 cursor-pointer">
                     <button onClick={() => f('is_stock_managed', !form.is_stock_managed)}

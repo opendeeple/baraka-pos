@@ -11,6 +11,8 @@ import TopBar from '../../components/layout/TopBar'
 import AppLauncherBar, { PosApp } from '../../components/pos/AppLauncherBar'
 import AppWebView from '../../components/pos/AppWebView'
 import PaymentScreen from './PaymentScreen'
+import { QuickAddProductModal } from '../../components/pos/QuickAddProductModal'
+import { UnitCalculatorModal } from '../../components/pos/UnitCalculatorModal'
 import { useBarcodeScanner } from '../../hooks/useBarcode'
 import { useSync } from '../../hooks/useSync'
 import { useWebSocket } from '../../hooks/useWebSocket'
@@ -29,6 +31,8 @@ export default function POSScreen() {
   const [openApps, setOpenApps] = useState<PosApp[]>([])
   const [activeAppId, setActiveAppId] = useState<string | null>(null)
   const [categoryRefreshKey, setCategoryRefreshKey] = useState(0)
+  const [quickAddBarcode, setQuickAddBarcode] = useState<string | null>(null)
+  const [calculatorProduct, setCalculatorProduct] = useState<LocalProduct | null>(null)
 
   // Startup sync + periodic refresh
   const { pullAll, pushPending } = useSync()
@@ -58,7 +62,7 @@ export default function POSScreen() {
   // global listener, and Enter in the search box below).
   useBarcodeScanner(async (barcode) => {
     if (!(await handleBarcodeScanned(barcode))) {
-      toast.error(t('pos.productNotFound', { barcode }))
+      setQuickAddBarcode(barcode)
     }
   })
 
@@ -85,6 +89,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
     let sql = `
       SELECT p.id, p.name, p.barcode, p.image_url, p.category_id,
              p.is_stock_managed, p.is_active, p.alert_quantity,
+             p.unit, p.units_per_package,
              pb.id as batch_id, pb.price, pb.cost,
              COALESCE(ps.quantity, 0) as stock
       FROM products p
@@ -115,7 +120,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
   /** Exact barcode lookup — used by the HID scanner and by Enter in the search box. Returns whether a product was found and added. */
   async function handleBarcodeScanned(barcode: string): Promise<boolean> {
     const rows = await window.electronAPI.db.query(
-      `SELECT p.id, p.name, p.barcode, pb.id as batch_id, pb.price, pb.cost,
+      `SELECT p.id, p.name, p.barcode, p.unit, p.units_per_package, pb.id as batch_id, pb.price, pb.cost,
               COALESCE(ps.quantity,0) as stock
        FROM products p
        JOIN product_batches pb ON pb.id = (
@@ -127,7 +132,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
        WHERE p.barcode = ? AND p.is_active = 1 LIMIT 1`,
       [barcode]
     ) as LocalProduct[]
-    if (rows.length > 0) { addToCart(rows[0]); return true }
+    if (rows.length > 0) { handleProductTap(rows[0]); return true }
     return false
   }
 
@@ -142,14 +147,26 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
     }
   }
 
-  function addToCart(product: LocalProduct) {
+  /** Tapping a product card in the grid — routes kg/box-priced products to
+   *  the unit calculator instead of adding a flat quantity of 1. */
+  function handleProductTap(product: LocalProduct) {
+    if (product.unit === 'kg' || product.unit === 'box') {
+      setCalculatorProduct(product)
+      return
+    }
+    addToCart(product)
+  }
+
+  /** Always adds directly with the given quantity — used by the calculator
+   *  (already-computed kg/box fraction) and the quick-add-on-scan flow. */
+  function addToCart(product: LocalProduct, quantity = 1) {
     addItem({
       productId: product.id,
       batchId: product.batch_id ?? 0,
       name: product.name,
       barcode: product.barcode,
       imageUrl: product.image_url,
-      quantity: 1,
+      quantity,
       freeQuantity: 0,
       unitPrice: product.price ?? 0,
       unitCost: product.cost ?? 0,
@@ -205,7 +222,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
             refreshKey={categoryRefreshKey}
           />
           <div className="flex-1 overflow-auto p-3">
-            <ProductGrid products={products} onAddToCart={addToCart} />
+            <ProductGrid products={products} onAddToCart={handleProductTap} />
           </div>
         </div>
         <CartPanel onCheckout={() => setShowPayment(true)} onCloseRegister={() => navigate('/session/close')} />
@@ -219,6 +236,29 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
           />
         ))}
       </div>
+
+      {quickAddBarcode !== null && (
+        <QuickAddProductModal
+          barcode={quickAddBarcode}
+          onClose={() => setQuickAddBarcode(null)}
+          onCreated={(product) => {
+            setQuickAddBarcode(null)
+            addToCart(product)
+            loadProducts()
+          }}
+        />
+      )}
+
+      {calculatorProduct && (
+        <UnitCalculatorModal
+          product={calculatorProduct}
+          onClose={() => setCalculatorProduct(null)}
+          onAdd={(quantity) => {
+            addToCart(calculatorProduct, quantity)
+            setCalculatorProduct(null)
+          }}
+        />
+      )}
     </div>
   )
 }

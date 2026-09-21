@@ -439,10 +439,19 @@ function migrateToV4(db: SchemaDb): void {
   addColumnIfMissing(db, 'collections', 'deleted_at', 'TEXT')
 }
 
+// Schema v5 — box/kg unit pricing: `unit` (piece/kg/box) already existed but
+// was never surfaced in the UI; `units_per_package` is how many pieces one
+// box contains, only meaningful when unit='box' (a 'kg' product's existing
+// `price` already means "price per kg", nothing extra needed for that case).
+function migrateToV5(db: SchemaDb): void {
+  addColumnIfMissing(db, 'products', 'units_per_package', 'REAL')
+}
+
 export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb) => void }> = [
   { version: 2, apply: migrateToV2 },
   { version: 3, apply: migrateToV3 },
   { version: 4, apply: migrateToV4 },
+  { version: 5, apply: migrateToV5 },
 ]
 
 export const CURRENT_SCHEMA_VERSION = VERSIONED_MIGRATIONS[VERSIONED_MIGRATIONS.length - 1].version

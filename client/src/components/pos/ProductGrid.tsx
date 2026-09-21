@@ -16,6 +16,11 @@ export interface LocalProduct {
   cost?: number
   stock?: number
   alert_quantity?: number
+  /** 'piece' (default) | 'kg' | 'box' — box/kg products open the unit
+   *  calculator instead of adding a flat quantity of 1. */
+  unit?: string
+  /** Only meaningful when unit==='box': how many pieces one box contains. */
+  units_per_package?: number
 }
 
 interface Props {

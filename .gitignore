@@ -15,6 +15,7 @@ dist/
 out/
 out-office/
 *.tsbuildinfo
+client/.tsc-out/
 
 # Android build outputs (android/ sources stay tracked)
 apps/*/android/app/build/
@@ -28,6 +29,8 @@ apps/*/.expo/
 # Electron packaging
 client/dist/
 client/build/
+client/dist-office/
+*.zip
 
 # Local SQLite (desktop offline DB)
 *.db

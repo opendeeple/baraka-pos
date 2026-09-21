@@ -21,13 +21,14 @@ router.get('/daily', async (req: Request, res: Response) => {
 
 router.get('/top-products', async (req: Request, res: Response) => {
   try {
-    const { date_from, date_to, limit } = req.query
+    const { date_from, date_to, limit, sort_by } = req.query
     const today = new Date().toISOString().split('T')[0]
     const data = await getTopProducts(
       req.user!.storeId,
       (date_from as string) || today,
       (date_to as string) || today,
-      limit ? Number(limit) : 10
+      limit ? Number(limit) : 10,
+      sort_by === 'revenue' ? 'revenue' : 'quantity'
     )
     res.json(data)
   } catch (err: unknown) {

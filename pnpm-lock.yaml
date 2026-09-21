@@ -202,9 +202,66 @@ importers:
       '@electron-toolkit/utils':
         specifier: ^4.0.0
         version: 4.0.0(electron@31.7.7)
+      ajv:
+        specifier: ^6.15.0
+        version: 6.15.0
+      argparse:
+        specifier: ^2.0.1
+        version: 2.0.1
+      asn1:
+        specifier: ^0.2.6
+        version: 0.2.6
+      assert-plus:
+        specifier: ^1.0.0
+        version: 1.0.0
+      asynckit:
+        specifier: ^0.4.0
+        version: 0.4.0
+      aws-sign2:
+        specifier: ^0.7.0
+        version: 0.7.0
+      aws4:
+        specifier: ^1.13.2
+        version: 1.13.2
+      bcrypt-pbkdf:
+        specifier: ^1.0.2
+        version: 1.0.2
       better-sqlite3:
         specifier: ^11.0.0
         version: 11.10.0
+      bindings:
+        specifier: ^1.5.0
+        version: 1.5.0
+      builder-util-runtime:
+        specifier: ^9.7.0
+        version: 9.7.0
+      caseless:
+        specifier: ^0.12.0
+        version: 0.12.0
+      combined-stream:
+        specifier: ^1.0.8
+        version: 1.0.8
+      core-util-is:
+        specifier: ^1.0.2
+        version: 1.0.3
+      cwise-compiler:
+        specifier: ^1.1.3
+        version: 1.1.3
+      dashdash:
+        specifier: ^1.14.1
+        version: 1.14.1
+      data-uri-to-buffer:
+        specifier: ^0.0.3
+        version: 0.0.3
+      debug:
+        specifier: ^4.4.3
+        version: 4.4.3
+      delayed-stream:
+        specifier: ^1.0.0
+        version: 1.0.0
+      ecc-jsbn:
+        specifier: ^0.1.2
+        version: 0.1.2
       electron-updater:
         specifier: ^6.8.9
         version: 6.8.9
@@ -217,21 +274,201 @@ importers:
       escpos-usb:
         specifier: ^3.0.0-alpha
         version: 3.0.0-alpha.4
+      extend:
+        specifier: ^3.0.2
+        version: 3.0.2
+      extsprintf:
+        specifier: ^1.3.0
+        version: 1.4.1
+      fast-deep-equal:
+        specifier: ^3.1.3
+        version: 3.1.3
+      fast-json-stable-stringify:
+        specifier: ^2.1.0
+        version: 2.1.0
+      file-uri-to-path:
+        specifier: ^1.0.0
+        version: 1.0.0
+      forever-agent:
+        specifier: ^0.6.1
+        version: 0.6.1
+      form-data:
+        specifier: ^2.3.3
+        version: 2.3.3
       fs-extra:
         specifier: ^10.1.0
         version: 10.1.0
+      get-pixels:
+        specifier: ^3.3.3
+        version: 3.3.3
+      getpass:
+        specifier: ^0.1.7
+        version: 0.1.7
+      graceful-fs:
+        specifier: ^4.2.11
+        version: 4.2.11
+      har-schema:
+        specifier: ^2.0.0
+        version: 2.0.0
+      har-validator:
+        specifier: ^5.1.5
+        version: 5.1.5
+      http-signature:
+        specifier: ^1.2.0
+        version: 1.2.0
       i18next:
         specifier: 26.4.2
         version: 26.4.2(typescript@5.9.3)
+      iconv-lite:
+        specifier: ^0.6.3
+        version: 0.6.3
+      iota-array:
+        specifier: ^1.0.0
+        version: 1.0.0
+      is-buffer:
+        specifier: ^1.1.6
+        version: 1.1.6
+      is-typedarray:
+        specifier: ^1.0.0
+        version: 1.0.0
+      isstream:
+        specifier: ^0.1.2
+        version: 0.1.2
+      jpeg-js:
+        specifier: ^0.4.4
+        version: 0.4.4
+      js-yaml:
+        specifier: ^4.2.0
+        version: 4.2.0
+      jsbn:
+        specifier: ^0.1.1
+        version: 0.1.1
+      json-schema:
+        specifier: ^0.4.0
+        version: 0.4.0
+      json-schema-traverse:
+        specifier: ^0.4.1
+        version: 0.4.1
+      json-stringify-safe:
+        specifier: ^5.0.1
+        version: 5.0.1
+      jsonfile:
+        specifier: ^6.2.1
+        version: 6.2.1
+      jsprim:
+        specifier: ^1.4.2
+        version: 1.4.2
       keytar:
         specifier: ^7.9.0
         version: 7.9.0
+      lazy-val:
+        specifier: ^1.0.5
+        version: 1.0.5
+      lodash.escaperegexp:
+        specifier: ^4.1.2
+        version: 4.1.2
+      lodash.isequal:
+        specifier: ^4.5.0
+        version: 4.5.0
+      mime-db:
+        specifier: ^1.52.0
+        version: 1.54.0
+      mime-types:
+        specifier: ^2.1.35
+        version: 2.1.35
+      ms:
+        specifier: ^2.1.3
+        version: 2.1.3
+      mutable-buffer:
+        specifier: ^2.2.5
+        version: 2.2.5
+      ndarray:
+        specifier: ^1.0.19
+        version: 1.0.19
+      ndarray-pack:
+        specifier: ^1.2.1
+        version: 1.2.1
+      node-bitmap:
+        specifier: ^0.0.1
+        version: 0.0.1
+      oauth-sign:
+        specifier: ^0.9.0
+        version: 0.9.0
+      omggif:
+        specifier: ^1.0.10
+        version: 1.0.10
+      parse-data-uri:
+        specifier: ^0.2.0
+        version: 0.2.0
+      performance-now:
+        specifier: ^2.1.0
+        version: 2.1.0
+      pngjs:
+        specifier: ^3.4.0
+        version: 3.4.0
+      psl:
+        specifier: ^1.15.0
+        version: 1.15.0
+      punycode:
+        specifier: ^2.3.1
+        version: 2.3.1
+      qr-image:
+        specifier: ^3.2.0
+        version: 3.2.0
+      qs:
+        specifier: ^6.5.5
+        version: 6.15.2
       react-i18next:
         specifier: 17.0.14
         version: 17.0.14(i18next@26.4.2(typescript@5.9.3))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3)
+      request:
+        specifier: ^2.88.2
+        version: 2.88.2
+      safe-buffer:
+        specifier: ^5.2.1
+        version: 5.2.1
+      safer-buffer:
+        specifier: ^2.1.2
+        version: 2.1.2
+      sax:
+        specifier: ^1.6.0
+        version: 1.6.0
+      semver:
+        specifier: ^7.7.4
+        version: 7.8.5
+      sshpk:
+        specifier: ^1.18.0
+        version: 1.18.0
+      through:
+        specifier: ^2.3.8
+        version: 2.3.8
+      tiny-typed-emitter:
+        specifier: ^2.1.0
+        version: 2.1.0
+      tough-cookie:
+        specifier: ^2.5.0
+        version: 2.5.0
+      tunnel-agent:
+        specifier: ^0.6.0
+        version: 0.6.0
+      tweetnacl:
+        specifier: ^0.14.5
+        version: 0.14.5
+      uniq:
+        specifier: ^1.0.1
+        version: 1.0.1
+      universalify:
+        specifier: ^2.0.1
+        version: 2.0.1
+      uri-js:
+        specifier: ^4.4.1
+        version: 4.4.1
       usb:
         specifier: ^3.0.0
         version: 3.0.0
+      verror:
+        specifier: ^1.10.0
+        version: 1.10.1
     devDependencies:
       '@baraka/app-core':
         specifier: workspace:*
@@ -335,6 +572,10 @@ importers:
       zustand:
         specifier: ^4.5.4
         version: 4.5.7(@types/react@18.3.31)(react@18.3.1)
+    optionalDependencies:
+      '@node-usb/usb-win32-x64-msvc':
+        specifier: ^3.0.0
+        version: 3.0.0
 
   packages/app-core:
     dependencies:
@@ -7769,7 +8010,7 @@ snapshots:
 
   compressible@2.0.18:
     dependencies:
-      mime-db: 1.52.0
+      mime-db: 1.54.0
 
   compression@1.8.1:
     dependencies:
@@ -8290,7 +8531,7 @@ snapshots:
   escpos@3.0.0-alpha.6:
     dependencies:
       get-pixels: 3.3.3
-      iconv-lite: 0.4.24
+      iconv-lite: 0.6.3
       mutable-buffer: 2.2.5
       qr-image: 3.2.0
 
@@ -8558,8 +8799,7 @@ snapshots:
 
   extsprintf@1.3.0: {}
 
-  extsprintf@1.4.1:
-    optional: true
+  extsprintf@1.4.1: {}
 
   fast-deep-equal@3.1.3: {}
 
@@ -10853,14 +11093,13 @@ snapshots:
     dependencies:
       assert-plus: 1.0.0
       core-util-is: 1.0.2
-      extsprintf: 1.3.0
+      extsprintf: 1.4.1
 
   verror@1.10.1:
     dependencies:
       assert-plus: 1.0.0
       core-util-is: 1.0.2
       extsprintf: 1.4.1
-    optional: true
 
   victory-vendor@36.9.2:
     dependencies:

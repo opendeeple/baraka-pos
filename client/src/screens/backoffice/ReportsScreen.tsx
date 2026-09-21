@@ -27,7 +27,7 @@ interface DailySummary {
   cashFlow: Array<{ type: string; amount: number; source: string; description?: string }>
 }
 
-interface TopProduct { productId: number; name: string; quantitySold: number }
+interface TopProduct { productId: number; name: string; quantitySold: number; revenue?: number }
 interface CategorySale { category: string; revenue: number; qty: number }
 interface HourlySlot { hour: number; label: string; revenue: number; transactions: number }
 interface LowStockItem { productId: number; name: string; sku?: string; stock: number; alertQuantity: number }
@@ -55,6 +55,7 @@ export default function ReportsScreen() {
 
   const [daily, setDaily] = useState<DailySummary | null>(null)
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
+  const [topProductsSort, setTopProductsSort] = useState<'quantity' | 'revenue'>('quantity')
   const [categorySales, setCategorySales] = useState<CategorySale[]>([])
   const [hourly, setHourly] = useState<HourlySlot[]>([])
   const [lowStock, setLowStock] = useState<LowStockItem[]>([])
@@ -76,7 +77,7 @@ export default function ReportsScreen() {
     try {
       const [d, tp, cs, h, ls] = await Promise.all([
         apiFetch<DailySummary>(summaryUrl, authToken),
-        apiFetch<TopProduct[]>(`${base}/top-products?date_from=${dateFrom}&date_to=${dateTo}&limit=10`, authToken),
+        apiFetch<TopProduct[]>(`${base}/top-products?date_from=${dateFrom}&date_to=${dateTo}&limit=10&sort_by=${topProductsSort}`, authToken),
         apiFetch<CategorySale[]>(`${base}/category-sales?date_from=${dateFrom}&date_to=${dateTo}`, authToken),
         apiFetch<HourlySlot[]>(`${base}/hourly?date=${date}`, authToken),
         apiFetch<LowStockItem[]>(`${base}/low-stock`, authToken),
@@ -86,7 +87,7 @@ export default function ReportsScreen() {
       setError(t('reports.failedToLoad'))
       console.error(e)
     } finally { setLoading(false) }
-  }, [token, date, dateFrom, dateTo, tab])
+  }, [token, date, dateFrom, dateTo, tab, topProductsSort])
 
   useEffect(() => { load() }, [load])
 
@@ -212,9 +213,25 @@ export default function ReportsScreen() {
         <div className="grid grid-cols-2 gap-6">
           {/* Top products */}
           <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
-            <h3 className="text-white font-semibold text-sm mb-4">{t('reports.topProducts')}
-              <span className="text-gray-500 font-normal ml-1.5 text-xs">({dateFrom} → {dateTo})</span>
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold text-sm">{t('reports.topProducts')}
+                <span className="text-gray-500 font-normal ml-1.5 text-xs">({dateFrom} → {dateTo})</span>
+              </h3>
+              <div className="flex bg-dark-card border border-dark-border rounded-lg p-0.5 text-xs">
+                <button
+                  onClick={() => setTopProductsSort('quantity')}
+                  className={`px-2.5 py-1 rounded-md transition-colors ${topProductsSort === 'quantity' ? 'bg-primary text-white' : 'text-gray-400'}`}
+                >
+                  {t('reports.byQuantity')}
+                </button>
+                <button
+                  onClick={() => setTopProductsSort('revenue')}
+                  className={`px-2.5 py-1 rounded-md transition-colors ${topProductsSort === 'revenue' ? 'bg-primary text-white' : 'text-gray-400'}`}
+                >
+                  {t('reports.byRevenue')}
+                </button>
+              </div>
+            </div>
             {topProducts.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={topProducts.slice(0, 8)} layout="vertical" margin={{ left: 0, right: 16 }}>
@@ -224,8 +241,13 @@ export default function ReportsScreen() {
                     tick={{ fill: '#9ca3af', fontSize: 10 }}
                     tickFormatter={(v: string) => v.length > 18 ? v.slice(0, 18) + '…' : v} />
                   <Tooltip contentStyle={{ background: '#2a2a3e', border: '1px solid #404060', borderRadius: 8 }}
-                    labelStyle={{ color: '#fff' }} itemStyle={{ color: '#f97316' }} />
-                  <Bar dataKey="quantitySold" fill="#f97316" radius={[0, 4, 4, 0]} name={t('reports.units')} />
+                    labelStyle={{ color: '#fff' }} itemStyle={{ color: '#f97316' }}
+                    formatter={(value: number) => topProductsSort === 'revenue' ? `UZS ${fmtUZS(value)}` : value} />
+                  <Bar
+                    dataKey={topProductsSort === 'revenue' ? 'revenue' : 'quantitySold'}
+                    fill="#f97316" radius={[0, 4, 4, 0]}
+                    name={topProductsSort === 'revenue' ? t('reports.revenue') : t('reports.units')}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

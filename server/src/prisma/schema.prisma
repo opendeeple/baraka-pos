@@ -157,6 +157,7 @@ model Product {
   barcode         String?
   imageUrl        String?
   unit            String?
+  unitsPerPackage Decimal?    @db.Decimal(12, 2)
   categoryId      Int?
   brandId         Int?
   productType     ProductType @default(simple)

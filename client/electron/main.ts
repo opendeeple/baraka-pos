@@ -45,7 +45,15 @@ function createMainWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: false,
-      webSecurity: !is.dev, // allow cross-origin fetch in dev (Vite→Express)
+      // Only the live Vite dev server (electron-vite dev) needs this — its
+      // renderer origin (http://localhost:...) differs from the Express API's,
+      // so cross-origin fetch would otherwise be blocked. Running the built
+      // out/main/index.js unpackaged (file:// renderer, same as a real
+      // packaged app) doesn't hit that boundary, so it stays enabled there —
+      // narrower than the old `!is.dev` blanket disable, which turned it off
+      // for every unpackaged run and threw Electron's security-warning
+      // console spam even when nothing needed it.
+      webSecurity: !(is.dev && !!process.env['ELECTRON_RENDERER_URL']),
     },
   })
 
