@@ -82,6 +82,11 @@ model Contact {
   loyaltyPointsBalance Decimal    @default(0) @db.Decimal(12, 2)
   notes               String?
   metaData            Json?
+  // Set once the customer taps their one-time t.me/<bot>?start=<syncId> link
+  // and messages the bot — Telegram's Bot API can only message a chat the
+  // user has initiated, so this stays null (and Telegram sending is skipped)
+  // until they've done that.
+  telegramChatId      String?
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
   deletedAt           DateTime?
@@ -93,6 +98,7 @@ model Contact {
   cashLogs               CashLog[]
   paymentTransactions    PaymentTransaction[]
   productBatchesSupplied ProductBatch[]
+  messageLogs            MessageLog[]
 
   @@index([storeId, updatedAt])
   @@map("contacts")
@@ -677,6 +683,38 @@ model Setting {
   @@unique([storeId, metaKey])
   @@index([storeId, updatedAt])
   @@map("settings")
+}
+
+// Server-managed only — deliberately NOT part of the local-first sync engine.
+// Sending a message inherently needs connectivity (there's no offline
+// Telegram/SMS), so the desktop app calls the REST endpoints in
+// notifications.router.ts directly rather than going through local SQLite +
+// the outbox like everything else in this app.
+model MessageLog {
+  id          Int             @id @default(autoincrement())
+  storeId     Int
+  contactId   Int
+  channel     MessageChannel
+  body        String
+  status      MessageStatus   @default(sent)
+  error       String?
+  sentAt      DateTime        @default(now())
+  createdBy   Int?
+
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@index([contactId, sentAt])
+  @@map("message_logs")
+}
+
+enum MessageChannel {
+  telegram
+  sms
+}
+
+enum MessageStatus {
+  sent
+  failed
 }
 
 model Device {

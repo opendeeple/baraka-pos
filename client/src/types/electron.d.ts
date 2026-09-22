@@ -73,6 +73,7 @@ export interface ElectronAPI {
   }
   reports: {
     fetch: (url: string, token: string) => Promise<unknown>
+    post: (url: string, token: string, body: unknown) => Promise<unknown>
   }
   updater: {
     check: () => Promise<unknown>

@@ -108,6 +108,24 @@
     "lastSync": "Oxirgi sinxronlash: {{time}}",
     "notSynced": "Sinxronlanmagan"
   },
+  "notifications": {
+    "sendMessage": "Xabar yuborish",
+    "send": "Yuborish",
+    "sent": "Xabar yuborildi",
+    "sendFailed": "Xabar yuborilmadi",
+    "notSyncedYet": "Bu mijoz hali serverga sinxronlanmagan — birozdan keyin qayta urinib ko'ring.",
+    "telegramNotConnected": "Mijoz hali Telegram botni ulamagan. Quyidagi havolani unga yuboring — botga /start bosgach xabar yubora olasiz.",
+    "telegramConnected": "Telegram ulangan",
+    "copyLink": "Havolani nusxalash",
+    "botNotConfigured": "Telegram bot hali sozlanmagan.",
+    "smsNotReady": "SMS hali sozlanmagan — tez orada qo'shiladi.",
+    "templateDebt": "Qarz eslatmasi",
+    "templateHistory": "Xarid tarixi",
+    "preview": "Oldindan ko'rish",
+    "noContent": "Matn yo'q",
+    "linkCopied": "Havola nusxalandi",
+    "connectTelegram": "Telegram ulash"
+  },
   "reports": {
     "failedToLoad": "Hisobotlarni yuklab bo'lmadi. Server aloqasini tekshiring.",
     "subtitle": "Sotuv tahlili va biznes ko'rsatkichlari",
@@ -209,6 +227,13 @@
     "unitCost": "Birlik tannarxi",
     "note": "Izoh",
     "optionalNote": "Ixtiyoriy izoh"
+  },
+  "debtors": {
+    "sortBalanceDesc": "Qarz (ko'pdan kamga)",
+    "sortBalanceAsc": "Qarz (kamdan ko'pga)",
+    "sortName": "Ism bo'yicha",
+    "lastPurchase": "Oxirgi xarid",
+    "noDebtors": "Qarzdorlar yo'q"
   },
   "customers": {
     "newCustomer": "Yangi mijoz",
@@ -430,6 +455,7 @@
     "categories": "Kategoriyalar",
     "sales": "Sotuvlar",
     "customers": "Mijozlar",
+    "debtors": "Qarzdorlar",
     "purchases": "Xaridlar",
     "expenses": "Xarajatlar",
     "reports": "Hisobotlar",

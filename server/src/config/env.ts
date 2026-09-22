@@ -10,6 +10,11 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   SYNC_API_KEY: z.string().min(8),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
+  // Optional: Telegram reminders/purchase-history messages are disabled
+  // (endpoints no-op with a clear error) until this is set, rather than the
+  // whole server failing to boot without it.
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_BOT_USERNAME: z.string().optional(),
 })
 
 export const env = envSchema.parse(process.env)

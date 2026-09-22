@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useTranslation } from 'react-i18next'
-import { Search, Plus, X, Star, ShoppingBag, Users, Edit2, Banknote } from 'lucide-react'
+import { Search, Plus, X, Star, ShoppingBag, Users, Edit2, Banknote, MessageCircle } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { DebtHistoryPanel } from '../../components/pos/DebtHistoryDrawer'
+import { SendMessageModal } from '../../components/backoffice/SendMessageModal'
 
 interface Customer {
   id: number; name: string; phone: string | null; email: string | null
   balance: number; loyalty_points_balance: number; type: string; created_at: string
-  total_sales: number; sale_count: number
+  total_sales: number; sale_count: number; server_id: number | null
 }
 
 interface CustomerForm { name: string; phone: string; email: string; address: string }
@@ -29,6 +30,7 @@ export default function CustomersScreen() {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [showDebtPanel, setShowDebtPanel] = useState(false)
+  const [showSendMessage, setShowSendMessage] = useState(false)
   const debouncedSearch = useDebouncedValue(search)
 
   useEffect(() => { loadCustomers() }, [debouncedSearch])
@@ -36,6 +38,7 @@ export default function CustomersScreen() {
   async function loadCustomers() {
     let sql = `
       SELECT c.id, c.name, c.phone, c.email, c.balance, c.loyalty_points_balance, c.type, c.created_at,
+             c.server_id,
              COALESCE(SUM(s.total_amount), 0) as total_sales,
              COUNT(s.id) as sale_count
       FROM contacts c
@@ -196,11 +199,16 @@ export default function CustomersScreen() {
                 ))}
               </div>
 
-              {Number(selected.balance) > 0 && (
-                <Button icon={Banknote} className="w-full" onClick={() => setShowDebtPanel(true)}>
-                  {t('debt.payDebt')}
+              <div className="flex gap-2">
+                {Number(selected.balance) > 0 && (
+                  <Button icon={Banknote} className="flex-1" onClick={() => setShowDebtPanel(true)}>
+                    {t('debt.payDebt')}
+                  </Button>
+                )}
+                <Button icon={MessageCircle} variant="secondary" className="flex-1" onClick={() => setShowSendMessage(true)}>
+                  {t('notifications.sendMessage')}
                 </Button>
-              )}
+              </div>
 
               {recentSales.length > 0 && (
                 <div>
@@ -267,6 +275,15 @@ export default function CustomersScreen() {
             />
           </div>
         </Modal>
+      )}
+
+      {selected && showSendMessage && (
+        <SendMessageModal
+          serverContactId={selected.server_id}
+          contactName={selected.name}
+          hasDebt={Number(selected.balance) > 0}
+          onClose={() => setShowSendMessage(false)}
+        />
       )}
     </BackOfficeLayout>
   )

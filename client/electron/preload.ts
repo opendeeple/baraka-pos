@@ -78,6 +78,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   reports: {
     fetch: (url: string, token: string) => ipcRenderer.invoke('reports:fetch', url, token),
+    post: (url: string, token: string, body: unknown) => ipcRenderer.invoke('reports:post', url, token, body),
   },
   updater: {
     check: () => ipcRenderer.invoke('updater:check'),

@@ -110,6 +110,24 @@
     "lastSync": "Last sync: {{time}}",
     "notSynced": "Not synced"
   },
+  "notifications": {
+    "sendMessage": "Send Message",
+    "send": "Send",
+    "sent": "Message sent",
+    "sendFailed": "Message failed to send",
+    "notSyncedYet": "This customer hasn't synced to the server yet — try again shortly.",
+    "telegramNotConnected": "The customer hasn't connected the Telegram bot yet. Send them the link below — once they tap /start, you can message them.",
+    "telegramConnected": "Telegram connected",
+    "copyLink": "Copy link",
+    "botNotConfigured": "Telegram bot isn't configured yet.",
+    "smsNotReady": "SMS isn't set up yet — coming soon.",
+    "templateDebt": "Debt reminder",
+    "templateHistory": "Purchase history",
+    "preview": "Preview",
+    "noContent": "No content",
+    "linkCopied": "Link copied",
+    "connectTelegram": "Connect Telegram"
+  },
   "reports": {
     "failedToLoad": "Failed to load reports. Check server connection.",
     "subtitle": "Sales analytics & business insights",
@@ -213,6 +231,13 @@
     "unitCost": "Unit cost",
     "note": "Note",
     "optionalNote": "Optional note"
+  },
+  "debtors": {
+    "sortBalanceDesc": "Debt (highest first)",
+    "sortBalanceAsc": "Debt (lowest first)",
+    "sortName": "By name",
+    "lastPurchase": "Last Purchase",
+    "noDebtors": "No debtors"
   },
   "customers": {
     "newCustomer": "New Customer",
@@ -435,6 +460,7 @@
     "categories": "Categories",
     "sales": "Sales",
     "customers": "Customers",
+    "debtors": "Debtors",
     "purchases": "Purchases",
     "expenses": "Expenses",
     "reports": "Reports",

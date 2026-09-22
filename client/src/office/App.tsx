@@ -15,6 +15,7 @@ const ProductsScreen = lazy(() => import('../screens/backoffice/ProductsScreen')
 const CategoriesScreen = lazy(() => import('../screens/backoffice/CategoriesScreen'))
 const SalesScreen = lazy(() => import('../screens/backoffice/SalesScreen'))
 const CustomersScreen = lazy(() => import('../screens/backoffice/CustomersScreen'))
+const DebtorsScreen = lazy(() => import('../screens/backoffice/DebtorsScreen'))
 const PurchasesScreen = lazy(() => import('../screens/backoffice/PurchasesScreen'))
 const ExpensesScreen = lazy(() => import('../screens/backoffice/ExpensesScreen'))
 const ReportsScreen = lazy(() => import('../screens/backoffice/ReportsScreen'))
@@ -33,6 +34,7 @@ const backofficeRoutes = [
   { path: '/backoffice/categories', element: <CategoriesScreen /> },
   { path: '/backoffice/sales', element: <SalesScreen /> },
   { path: '/backoffice/customers', element: <CustomersScreen /> },
+  { path: '/backoffice/debtors', element: <DebtorsScreen /> },
   { path: '/backoffice/purchases', element: <PurchasesScreen /> },
   { path: '/backoffice/expenses', element: <ExpensesScreen /> },
   { path: '/backoffice/reports', element: <ReportsScreen /> },

@@ -114,6 +114,24 @@
     "lastSync": "Последняя синхронизация: {{time}}",
     "notSynced": "Не синхронизировано"
   },
+  "notifications": {
+    "sendMessage": "Отправить сообщение",
+    "send": "Отправить",
+    "sent": "Сообщение отправлено",
+    "sendFailed": "Не удалось отправить сообщение",
+    "notSyncedYet": "Этот клиент ещё не синхронизирован с сервером — попробуйте чуть позже.",
+    "telegramNotConnected": "Клиент ещё не подключил Telegram-бота. Отправьте ему ссылку ниже — после нажатия /start вы сможете писать ему.",
+    "telegramConnected": "Telegram подключён",
+    "copyLink": "Скопировать ссылку",
+    "botNotConfigured": "Telegram-бот ещё не настроен.",
+    "smsNotReady": "SMS ещё не настроено — скоро появится.",
+    "templateDebt": "Напоминание о долге",
+    "templateHistory": "История покупок",
+    "preview": "Предпросмотр",
+    "noContent": "Нет содержимого",
+    "linkCopied": "Ссылка скопирована",
+    "connectTelegram": "Подключить Telegram"
+  },
   "reports": {
     "failedToLoad": "Не удалось загрузить отчёты. Проверьте соединение с сервером.",
     "subtitle": "Аналитика продаж и бизнес-показатели",
@@ -221,6 +239,13 @@
     "unitCost": "Цена за единицу",
     "note": "Примечание",
     "optionalNote": "Необязательное примечание"
+  },
+  "debtors": {
+    "sortBalanceDesc": "Долг (сначала большой)",
+    "sortBalanceAsc": "Долг (сначала малый)",
+    "sortName": "По имени",
+    "lastPurchase": "Последняя покупка",
+    "noDebtors": "Должников нет"
   },
   "customers": {
     "newCustomer": "Новый клиент",
@@ -445,6 +470,7 @@
     "categories": "Категории",
     "sales": "Продажи",
     "customers": "Клиенты",
+    "debtors": "Должники",
     "purchases": "Закупки",
     "expenses": "Расходы",
     "reports": "Отчёты",
