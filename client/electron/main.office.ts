@@ -11,6 +11,7 @@ import { registerSyncIpc } from './ipc/sync.ipc'
 import { registerAuthIpc } from './ipc/auth.ipc'
 import { registerReportsIpc } from './ipc/reports.ipc'
 import { registerFullscreenIpc } from './ipc/window.ipc'
+import { registerFilesIpc } from './ipc/files.ipc'
 
 // Deliberately the SAME name as main.ts: for now POS and Office are meant to
 // share one local SQLite replica on a single machine (so data added in one
@@ -102,6 +103,7 @@ app.whenReady().then(async () => {
   registerAuthIpc()
   registerReportsIpc()
   registerFullscreenIpc(() => mainWindow)
+  registerFilesIpc(() => mainWindow)
 
   ipcMain.handle('app:getLogPath', () => logger.getLogPath())
   ipcMain.handle('app:openLogs', () => shell.showItemInFolder(logger.getLogPath()))

@@ -2,18 +2,19 @@ import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
-import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, Check } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, Check, ImagePlus, X } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader, Select } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { resizeImageDataUrl } from '../../lib/image'
 
 interface Product {
   id: number; name: string; sku: string | null; barcode: string | null
   category_id: number | null; category_name: string | null; product_type: string
   is_stock_managed: number; is_active: number; alert_quantity: number
   batch_id: number | null; price: number; cost: number; stock: number
-  unit: string | null; units_per_package: number | null
+  unit: string | null; units_per_package: number | null; image_url: string | null
 }
 
 interface Category { id: number; name: string }
@@ -21,13 +22,13 @@ interface Category { id: number; name: string }
 interface ProductForm {
   name: string; sku: string; barcode: string; category_id: string
   price: string; cost: string; alert_quantity: string; is_stock_managed: boolean; is_active: boolean
-  unit: string; units_per_package: string
+  unit: string; units_per_package: string; image_url: string
 }
 
 const EMPTY_FORM: ProductForm = {
   name: '', sku: '', barcode: '', category_id: '',
   price: '', cost: '', alert_quantity: '5', is_stock_managed: true, is_active: true,
-  unit: 'piece', units_per_package: '',
+  unit: 'piece', units_per_package: '', image_url: '',
 }
 
 export default function ProductsScreen() {
@@ -61,7 +62,7 @@ export default function ProductsScreen() {
       SELECT p.id, p.name, p.sku, p.barcode, p.category_id,
              c.name as category_name, p.product_type,
              p.is_stock_managed, p.is_active, p.alert_quantity,
-             p.unit, p.units_per_package,
+             p.unit, p.units_per_package, p.image_url,
              pb.id as batch_id, pb.price, pb.cost,
              COALESCE(ps.quantity, 0) as stock
       FROM products p
@@ -100,7 +101,8 @@ export default function ProductsScreen() {
       price: String(p.price), cost: String(p.cost),
       alert_quantity: String(p.alert_quantity), is_stock_managed: Boolean(p.is_stock_managed),
       is_active: Boolean(p.is_active),
-      unit: p.unit ?? 'piece', units_per_package: p.units_per_package ? String(p.units_per_package) : '' })
+      unit: p.unit ?? 'piece', units_per_package: p.units_per_package ? String(p.units_per_package) : '',
+      image_url: p.image_url ?? '' })
     setShowForm(true)
   }
 
@@ -113,10 +115,11 @@ export default function ProductsScreen() {
     try {
       if (editId) {
         await window.electronAPI.db.exec(
-          `UPDATE products SET name=?,sku=?,barcode=?,category_id=?,is_stock_managed=?,is_active=?,alert_quantity=?,unit=?,units_per_package=?,updated_at=? WHERE id=?`,
+          `UPDATE products SET name=?,sku=?,barcode=?,category_id=?,is_stock_managed=?,is_active=?,alert_quantity=?,unit=?,units_per_package=?,image_url=?,updated_at=? WHERE id=?`,
           [form.name, form.sku || null, form.barcode || null, form.category_id || null,
            form.is_stock_managed ? 1 : 0, form.is_active ? 1 : 0, Number(form.alert_quantity) || 0,
-           form.unit, form.unit === 'box' ? (Number(form.units_per_package) || null) : null, now, editId])
+           form.unit, form.unit === 'box' ? (Number(form.units_per_package) || null) : null,
+           form.image_url || null, now, editId])
         await window.electronAPI.db.exec(
           `UPDATE product_batches SET price=?,cost=?,updated_at=? WHERE product_id=? AND is_active=1`,
           [Number(form.price), Number(form.cost) || 0, now, editId])
@@ -133,11 +136,12 @@ export default function ProductsScreen() {
         const productSyncId = uuidv4()
         const batchSyncId = uuidv4()
         await window.electronAPI.db.exec(
-          `INSERT INTO products (sync_id,name,sku,barcode,category_id,is_stock_managed,alert_quantity,is_active,product_type,unit,units_per_package,created_at,updated_at)
-           VALUES (?,?,?,?,?,?,?,1,'simple',?,?,?,?)`,
+          `INSERT INTO products (sync_id,name,sku,barcode,category_id,is_stock_managed,alert_quantity,is_active,product_type,unit,units_per_package,image_url,created_at,updated_at)
+           VALUES (?,?,?,?,?,?,?,1,'simple',?,?,?,?,?)`,
           [productSyncId, form.name, form.sku || null, form.barcode || null, form.category_id || null,
            form.is_stock_managed ? 1 : 0, Number(form.alert_quantity) || 0,
-           form.unit, form.unit === 'box' ? (Number(form.units_per_package) || null) : null, now, now])
+           form.unit, form.unit === 'box' ? (Number(form.units_per_package) || null) : null,
+           form.image_url || null, now, now])
         const rows = await window.electronAPI.db.query(`SELECT last_insert_rowid() as id`, []) as Array<{id:number}>
         const pid = rows[0].id
         await window.electronAPI.db.exec(
@@ -201,6 +205,13 @@ export default function ProductsScreen() {
   }
 
   const f = (k: keyof ProductForm, v: string | boolean) => setForm((prev) => ({ ...prev, [k]: v }))
+
+  async function pickImage() {
+    const picked = await window.electronAPI.files.pickImage()
+    if (!picked) return
+    const resized = await resizeImageDataUrl(picked)
+    f('image_url', resized)
+  }
 
   return (
     <BackOfficeLayout>
@@ -290,6 +301,27 @@ export default function ProductsScreen() {
         }
       >
             <div className="p-5 space-y-3 max-h-[70vh] overflow-y-auto">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={pickImage}
+                  className="relative w-16 h-16 rounded-xl border border-dashed border-dark-border bg-dark-card flex items-center justify-center shrink-0 overflow-hidden hover:border-primary transition-colors"
+                >
+                  {form.image_url ? (
+                    <img src={form.image_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImagePlus size={20} className="text-gray-500" />
+                  )}
+                </button>
+                <div className="flex-1 flex items-center gap-2">
+                  <Button variant="secondary" onClick={pickImage} type="button">{t('products.chooseImage')}</Button>
+                  {form.image_url && (
+                    <button type="button" onClick={() => f('image_url', '')} className="text-gray-500 hover:text-red-400 p-1.5">
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <Input label={t('products.nameRequired')} value={form.name} onChange={(e) => f('name', e.target.value)} />

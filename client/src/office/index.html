@@ -6,7 +6,7 @@
     <!-- connect-src must be explicit: without it, fetch/WebSocket fall back to
          default-src 'self', which blocks the renderer's own connections to
          the API server outright. Same fix as src/index.html. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://barakapos-server.onrender.com wss://barakapos-server.onrender.com" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://barakapos-server.onrender.com wss://barakapos-server.onrender.com; img-src 'self' data:" />
     <title>BarakaPOS Office</title>
   </head>
   <body>

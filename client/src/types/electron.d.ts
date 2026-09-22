@@ -59,6 +59,11 @@ export interface ElectronAPI {
     toggleFullscreen: () => Promise<{ fullscreen: boolean }>
     isFullscreen: () => Promise<{ fullscreen: boolean }>
   }
+  files: {
+    /** Opens a native file picker filtered to images; returns a data: URI of
+     *  the picked file, or null if cancelled. */
+    pickImage: () => Promise<string | null>
+  }
   app: {
     isTraining: () => Promise<boolean>
     getVersion: () => Promise<string>

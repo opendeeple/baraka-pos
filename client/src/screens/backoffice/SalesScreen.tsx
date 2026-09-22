@@ -40,6 +40,8 @@ export default function SalesScreen() {
   const [dateFrom, setDateFrom] = useState(new Date().toISOString().split('T')[0])
   const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0])
   const [statusFilter, setStatusFilter] = useState('')
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState('')
+  const [totalExpensesInRange, setTotalExpensesInRange] = useState(0)
   const [detail, setDetail] = useState<SaleDetail | null>(null)
   const [voiding, setVoiding] = useState(false)
   const [confirmVoid, setConfirmVoid] = useState(false)
@@ -51,7 +53,8 @@ export default function SalesScreen() {
   const { user, store } = useAuthStore()
   const debouncedSearch = useDebouncedValue(search)
 
-  useEffect(() => { loadSales() }, [debouncedSearch, dateFrom, dateTo, statusFilter])
+  useEffect(() => { loadSales() }, [debouncedSearch, dateFrom, dateTo, statusFilter, paymentMethodFilter])
+  useEffect(() => { loadExpensesTotal() }, [dateFrom, dateTo])
   useEffect(() => { setConfirmVoid(false) }, [detail?.id])
 
   async function loadSales() {
@@ -66,6 +69,10 @@ export default function SalesScreen() {
     if (dateFrom) { sql += ` AND s.sale_date >= ?`; params.push(dateFrom) }
     if (dateTo) { sql += ` AND s.sale_date <= ?`; params.push(dateTo) }
     if (statusFilter) { sql += ` AND s.status = ?`; params.push(statusFilter) }
+    if (paymentMethodFilter) {
+      sql += ` AND EXISTS (SELECT 1 FROM payment_transactions pt WHERE pt.sale_id = s.id AND pt.payment_method = ?)`
+      params.push(paymentMethodFilter)
+    }
     if (debouncedSearch.trim()) {
       sql += ` AND (s.invoice_number LIKE ? OR c.name LIKE ?)`;
       const q = `%${debouncedSearch}%`; params.push(q, q)
@@ -75,6 +82,17 @@ export default function SalesScreen() {
     try {
       setSales(await window.electronAPI.db.query(sql, params) as Sale[])
     } finally { setLoading(false) }
+  }
+
+  /** Same date range as the sales list, so the header can show sold vs.
+   *  spent side by side for whatever period/payment-method is selected. */
+  async function loadExpensesTotal() {
+    const rows = await window.electronAPI.db.query(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM expenses
+       WHERE expense_date >= ? AND expense_date <= ? AND deleted_at IS NULL`,
+      [dateFrom, dateTo]
+    ) as Array<{ total: number }>
+    setTotalExpensesInRange(Number(rows[0]?.total ?? 0))
   }
 
   async function loadDetail(id: number) {
@@ -212,6 +230,8 @@ export default function SalesScreen() {
           <h1 className="text-base font-bold text-white leading-tight">{t('sales.salesHistory')}</h1>
           <p className="text-xs text-gray-400 mt-0.5">
             {t('common.total')}: <span className="text-primary font-semibold">UZS {fmtUZS(totalRevenue)}</span>
+            <span className="mx-1.5 text-gray-600">·</span>
+            {t('nav.expenses')}: <span className="text-red-400 font-semibold">UZS {fmtUZS(totalExpensesInRange)}</span>
           </p>
         </div>
         <div className="relative shrink-0">
@@ -233,6 +253,18 @@ export default function SalesScreen() {
             { value: '', label: t('sales.allStatus') },
             { value: 'completed', label: t('sales.completed') },
             { value: 'cancelled', label: t('sales.cancelled') },
+          ]}
+        />
+        <Select
+          value={paymentMethodFilter}
+          onChange={setPaymentMethodFilter}
+          className="w-32 shrink-0"
+          options={[
+            { value: '', label: t('sales.allPaymentMethods') },
+            { value: 'Cash', label: t('payment.methodCash') },
+            { value: 'Card', label: t('payment.methodCard') },
+            { value: 'Click', label: t('payment.methodClick') },
+            { value: 'Debt', label: t('payment.methodDebt') },
           ]}
         />
       </div>

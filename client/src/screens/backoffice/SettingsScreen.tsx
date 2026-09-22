@@ -88,6 +88,7 @@ export default function SettingsScreen() {
   const [changingLang, setChangingLang] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [togglingFullscreen, setTogglingFullscreen] = useState(false)
+  const [ownerPin, setOwnerPin] = useState('')
   const { t, i18n } = useTranslation()
 
   useEffect(() => { loadSettings() }, [])
@@ -133,6 +134,7 @@ export default function SettingsScreen() {
         })
       } catch {}
     }
+    if (map.owner_expense_pin) setOwnerPin(map.owner_expense_pin)
 
     const storeRow = await window.electronAPI.db.query(`SELECT name, address, phone FROM stores LIMIT 1`, []) as Array<{name:string;address:string;phone:string}>
     if (storeRow[0]) {
@@ -163,6 +165,7 @@ export default function SettingsScreen() {
       await saveSetting('printer_config', JSON.stringify(printer))
       await saveSetting('receipt_template', JSON.stringify(receipt))
       await saveSetting('receipt_layout', JSON.stringify(layout))
+      await saveSetting('owner_expense_pin', ownerPin)
       await window.electronAPI.db.exec(`UPDATE stores SET name=?,address=?,phone=?,updated_at=? WHERE id=1`, [storeName, storeAddress, storePhone, now])
     } finally { setSaving(false) }
   }
@@ -267,6 +270,24 @@ export default function SettingsScreen() {
                 <input value={val as string} onChange={(e) => (set as (v: string) => void)(e.target.value)} className={INPUT_CLS} />
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Owner personal-expense PIN */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm">{t('settings.ownerExpensePin')}</h2>
+          <p className="text-xs text-gray-500">{t('settings.ownerExpensePinHint')}</p>
+          <div className="max-w-xs">
+            <label className={LABEL_CLS}>{t('settings.pinCode')}</label>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              value={ownerPin}
+              onChange={(e) => setOwnerPin(e.target.value.replace(/\D/g, ''))}
+              placeholder="••••"
+              className={INPUT_CLS}
+            />
           </div>
         </div>
 

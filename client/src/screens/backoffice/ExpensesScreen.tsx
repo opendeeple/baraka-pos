@@ -5,15 +5,16 @@ import { Plus, Receipt } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { useAuthStore } from '../../store/auth.store'
 import { fmtUZS } from '../../lib/currency'
-import { Modal, Button, Input, EmptyState, PageHeader, Select, DatePicker } from '../../components/ui'
+import { Modal, Button, Input, EmptyState, PageHeader, Select, DatePicker, PinConfirmModal } from '../../components/ui'
 
 interface Expense {
   id: number; expense_date: string; category: string; description: string
   amount: number; payment_method: string; reference: string | null; created_at: string
 }
 
-const CATEGORIES = ['Rent', 'Utilities', 'Salaries', 'Transport', 'Supplies', 'Repairs', 'Other']
+const CATEGORIES = ['Rent', 'Utilities', 'Salaries', 'Transport', 'Supplies', 'Repairs', 'Owner', 'Other']
 const PAYMENT_METHODS = ['Cash', 'Card', 'Bank Transfer', 'Mobile Money']
+const OWNER_CATEGORY = 'Owner'
 
 export default function ExpensesScreen() {
   const { t } = useTranslation()
@@ -30,22 +31,43 @@ export default function ExpensesScreen() {
     category: 'Supplies', description: '', amount: '', payment_method: 'Cash', reference: '',
   })
   const [saving, setSaving] = useState(false)
+  const [ownerPin, setOwnerPin] = useState('')
+  const [pendingOwnerConfirm, setPendingOwnerConfirm] = useState(false)
+  const [catFilter, setCatFilter] = useState('')
   const { user, store } = useAuthStore()
 
-  useEffect(() => { loadExpenses() }, [dateFrom, dateTo])
+  useEffect(() => { loadExpenses() }, [dateFrom, dateTo, catFilter])
+  useEffect(() => { loadOwnerPin() }, [])
+
+  async function loadOwnerPin() {
+    const rows = await window.electronAPI.db.query(
+      `SELECT meta_value FROM settings WHERE meta_key='owner_expense_pin' LIMIT 1`, []
+    ) as Array<{ meta_value: string }>
+    setOwnerPin(rows[0]?.meta_value ?? '')
+  }
 
   async function loadExpenses() {
-    const rows = await window.electronAPI.db.query(
-      `SELECT id, expense_date, category, description, amount, payment_method, reference, created_at
-       FROM expenses WHERE expense_date >= ? AND expense_date <= ? AND deleted_at IS NULL
-       ORDER BY expense_date DESC, created_at DESC`,
-      [dateFrom, dateTo]
-    )
+    let sql = `SELECT id, expense_date, category, description, amount, payment_method, reference, created_at
+       FROM expenses WHERE expense_date >= ? AND expense_date <= ? AND deleted_at IS NULL`
+    const params: unknown[] = [dateFrom, dateTo]
+    if (catFilter) { sql += ` AND category = ?`; params.push(catFilter) }
+    sql += ` ORDER BY expense_date DESC, created_at DESC`
+    const rows = await window.electronAPI.db.query(sql, params)
     setExpenses(rows as Expense[])
   }
 
-  async function saveExpense() {
+  /** Save button: "Personal (Owner)" expenses need the owner's PIN before
+   *  the actual insert runs — everything else saves immediately. */
+  function handleSaveClick() {
     if (!form.description.trim() || !form.amount) return
+    if (form.category === OWNER_CATEGORY && ownerPin) {
+      setPendingOwnerConfirm(true)
+      return
+    }
+    saveExpense()
+  }
+
+  async function saveExpense() {
     setSaving(true)
     const now = new Date().toISOString()
     try {
@@ -86,6 +108,11 @@ export default function ExpensesScreen() {
         <DatePicker value={dateFrom} onChange={setDateFrom} className="w-36 shrink-0" />
         <span className="text-xs text-gray-500 shrink-0">{t('expenses.to')}</span>
         <DatePicker value={dateTo} onChange={setDateTo} className="w-36 shrink-0" />
+        <Select
+          value={catFilter}
+          onChange={setCatFilter}
+          options={[{ value: '', label: t('products.allCategories') }, ...CATEGORIES.map((c) => ({ value: c, label: tCategory(c) }))]}
+        />
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -122,7 +149,7 @@ export default function ExpensesScreen() {
         footer={
           <>
             <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
-            <Button className="flex-1" onClick={saveExpense} loading={saving} disabled={!form.description || !form.amount}>
+            <Button className="flex-1" onClick={handleSaveClick} loading={saving} disabled={!form.description || !form.amount}>
               {saving ? t('common.saving') : t('common.save')}
             </Button>
           </>
@@ -161,6 +188,15 @@ export default function ExpensesScreen() {
                 onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))} />
             </div>
       </Modal>
+
+      {pendingOwnerConfirm && (
+        <PinConfirmModal
+          expectedPin={ownerPin}
+          title={t('settings.ownerExpensePin')}
+          onClose={() => setPendingOwnerConfirm(false)}
+          onConfirmed={() => { setPendingOwnerConfirm(false); saveExpense() }}
+        />
+      )}
     </BackOfficeLayout>
   )
 }

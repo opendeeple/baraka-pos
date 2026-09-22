@@ -66,6 +66,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     toggleFullscreen: () => ipcRenderer.invoke('window:toggleFullscreen'),
     isFullscreen: () => ipcRenderer.invoke('window:isFullscreen'),
   },
+  files: {
+    pickImage: () => ipcRenderer.invoke('files:pickImage') as Promise<string | null>,
+  },
   app: {
     isTraining: () => ipcRenderer.invoke('app:isTraining'),
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
