@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Save, Printer, TestTube2, RefreshCw, Globe, Maximize, Minimize } from 'lucide-react'
+import { Save, Printer, TestTube2, RefreshCw, Globe, Maximize, Minimize, Send } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 import { toast } from 'sonner'
@@ -14,6 +14,11 @@ interface PrinterConfig {
   vendorId: string; productId: string
   host: string; port: string
   name: string
+}
+
+interface TelegramConfig {
+  botToken: string
+  botUsername: string
 }
 
 interface ReceiptSettings {
@@ -46,14 +51,17 @@ const ELEMENT_LABELS: Array<[ReceiptElementKey, string]> = [
   ['barcode', 'Barcode Line'],
 ]
 
+// Matches printer.ipc.ts's DEFAULT_RECEIPT_LAYOUT — the values already
+// hand-tuned against the real till printer (Xprinter XP-365B, 76mm/75mm
+// roll) in an earlier session.
 const DEFAULT_LAYOUT: ReceiptLayout = {
-  paperWidthMm: 60,
-  marginMm: 3,
-  charWidth: 28,
+  paperWidthMm: 75,
+  marginMm: 5,
+  charWidth: 34,
   elements: {
-    storeName: { fontPx: 13, shiftPx: 0 },
-    storeInfo: { fontPx: 11, shiftPx: 0 },
-    invoiceInfo: { fontPx: 11, shiftPx: 0 },
+    storeName: { fontPx: 22, shiftPx: 10 },
+    storeInfo: { fontPx: 11, shiftPx: 25 },
+    invoiceInfo: { fontPx: 11, shiftPx: -1 },
     items: { fontPx: 11, shiftPx: 0 },
     itemQty: { fontPx: 10, shiftPx: 0 },
     totals: { fontPx: 11, shiftPx: 0 },
@@ -78,6 +86,7 @@ export default function SettingsScreen() {
     header: '', footer: 'Thank you for shopping with us!', show_logo: false, show_barcode: true, show_cashier: true, copies: 1,
   })
   const [layout, setLayout] = useState<ReceiptLayout>(DEFAULT_LAYOUT)
+  const [telegram, setTelegram] = useState<TelegramConfig>({ botToken: '', botUsername: '' })
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [storeName, setStoreName] = useState('')
   const [storeAddress, setStoreAddress] = useState('')
@@ -135,6 +144,9 @@ export default function SettingsScreen() {
       } catch {}
     }
     if (map.owner_expense_pin) setOwnerPin(map.owner_expense_pin)
+    if (map.telegram_config) {
+      try { setTelegram({ botToken: '', botUsername: '', ...JSON.parse(map.telegram_config) }) } catch {}
+    }
 
     const storeRow = await window.electronAPI.db.query(`SELECT name, address, phone FROM stores LIMIT 1`, []) as Array<{name:string;address:string;phone:string}>
     if (storeRow[0]) {
@@ -166,6 +178,7 @@ export default function SettingsScreen() {
       await saveSetting('receipt_template', JSON.stringify(receipt))
       await saveSetting('receipt_layout', JSON.stringify(layout))
       await saveSetting('owner_expense_pin', ownerPin)
+      await saveSetting('telegram_config', JSON.stringify(telegram))
       await window.electronAPI.db.exec(`UPDATE stores SET name=?,address=?,phone=?,updated_at=? WHERE id=1`, [storeName, storeAddress, storePhone, now])
     } finally { setSaving(false) }
   }
@@ -288,6 +301,34 @@ export default function SettingsScreen() {
               placeholder="••••"
               className={INPUT_CLS}
             />
+          </div>
+        </div>
+
+        {/* Telegram messaging — runs client-side (this app polls Telegram
+            directly, no server involved yet); see notifications.* keys. */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm flex items-center gap-2"><Send size={15} /> {t('settings.telegramBot')}</h2>
+          <p className="text-xs text-gray-500">{t('settings.telegramBotHint')}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL_CLS}>{t('settings.telegramBotToken')}</label>
+              <input
+                type="password"
+                value={telegram.botToken}
+                onChange={(e) => setTelegram((p) => ({ ...p, botToken: e.target.value }))}
+                placeholder="123456789:AAE..."
+                className={INPUT_CLS}
+              />
+            </div>
+            <div>
+              <label className={LABEL_CLS}>{t('settings.telegramBotUsername')}</label>
+              <input
+                value={telegram.botUsername}
+                onChange={(e) => setTelegram((p) => ({ ...p, botUsername: e.target.value.replace(/^@/, '') }))}
+                placeholder="baraka_mini_market_bot"
+                className={INPUT_CLS}
+              />
+            </div>
           </div>
         </div>
 

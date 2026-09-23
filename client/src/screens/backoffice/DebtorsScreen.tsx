@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, Users2, MessageCircle } from 'lucide-react'
+import { Search, Users2, MessageCircle, CheckCircle2, XCircle } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 import { PageHeader, EmptyState, SkeletonRow, Select } from '../../components/ui'
@@ -9,7 +9,7 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 
 interface Debtor {
   id: number; server_id: number | null; name: string; phone: string | null
-  balance: number; last_sale_at: string | null
+  balance: number; last_sale_at: string | null; telegram_chat_id: string | null
 }
 
 type SortBy = 'balance_desc' | 'balance_asc' | 'name'
@@ -29,10 +29,16 @@ export default function DebtorsScreen() {
   const debouncedSearch = useDebouncedValue(search)
 
   useEffect(() => { loadDebtors() }, [debouncedSearch, sortBy])
+  useEffect(() => {
+    // Telegram connection happens outside this screen (customer taps the
+    // deep link in their own Telegram), so refresh periodically to reflect it.
+    const timer = setInterval(() => { loadDebtors(true) }, 5000)
+    return () => clearInterval(timer)
+  }, [debouncedSearch, sortBy])
 
-  async function loadDebtors() {
+  async function loadDebtors(silent = false) {
     let sql = `
-      SELECT c.id, c.server_id, c.name, c.phone, c.balance,
+      SELECT c.id, c.server_id, c.name, c.phone, c.balance, c.telegram_chat_id,
              (SELECT MAX(s.created_at) FROM sales s WHERE s.contact_id = c.id) as last_sale_at
       FROM contacts c
       WHERE c.type IN ('customer','both') AND c.deleted_at IS NULL AND c.balance > 0`
@@ -45,10 +51,10 @@ export default function DebtorsScreen() {
       : sortBy === 'name' ? ` ORDER BY c.name ASC`
       : ` ORDER BY c.balance DESC`
     sql += ` LIMIT 200`
-    setLoading(true)
+    if (!silent) setLoading(true)
     try {
       setDebtors(await window.electronAPI.db.query(sql, params) as Debtor[])
-    } finally { setLoading(false) }
+    } finally { if (!silent) setLoading(false) }
   }
 
   const totalDebt = debtors.reduce((sum, d) => sum + Number(d.balance), 0)
@@ -81,12 +87,12 @@ export default function DebtorsScreen() {
       <div className="flex-1 overflow-auto">
         <table className="w-full">
           <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-            <tr>{[t('common.name'), t('common.phone'), t('debtors.lastPurchase'), t('customers.balanceCol'), ''].map((h) => (
+            <tr>{[t('common.name'), t('common.phone'), t('debtors.lastPurchase'), t('customers.balanceCol'), t('debtors.telegramCol'), ''].map((h) => (
               <th key={h} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
             ))}</tr>
           </thead>
           <tbody className="divide-y divide-dark-border">
-            {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={5} />)}
+            {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={6} />)}
             {!loading && debtors.map((d) => (
               <tr key={d.id} className="hover:bg-dark-card/40 group">
                 <td className="px-4 py-3 text-white text-sm font-medium">{d.name}</td>
@@ -95,6 +101,17 @@ export default function DebtorsScreen() {
                   {d.last_sale_at ? new Date(d.last_sale_at).toLocaleDateString() : '—'}
                 </td>
                 <td className="px-4 py-3 text-red-400 text-sm font-semibold">UZS {fmtUZS(Number(d.balance))}</td>
+                <td className="px-4 py-3">
+                  {d.telegram_chat_id ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-green-400">
+                      <CheckCircle2 size={13} /> {t('notifications.telegramConnected')}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                      <XCircle size={13} /> {t('debtors.notConnected')}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <button
                     onClick={() => setMessageTarget(d)}
@@ -114,7 +131,7 @@ export default function DebtorsScreen() {
 
       {messageTarget && (
         <SendMessageModal
-          serverContactId={messageTarget.server_id}
+          contactId={messageTarget.id}
           contactName={messageTarget.name}
           hasDebt
           onClose={() => setMessageTarget(null)}

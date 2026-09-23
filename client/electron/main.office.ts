@@ -12,6 +12,8 @@ import { registerAuthIpc } from './ipc/auth.ipc'
 import { registerReportsIpc } from './ipc/reports.ipc'
 import { registerFullscreenIpc } from './ipc/window.ipc'
 import { registerFilesIpc } from './ipc/files.ipc'
+import { registerTelegramIpc } from './ipc/telegram.ipc'
+import { startTelegramPolling } from './services/telegram.service'
 
 // Deliberately the SAME name as main.ts: for now POS and Office are meant to
 // share one local SQLite replica on a single machine (so data added in one
@@ -104,6 +106,8 @@ app.whenReady().then(async () => {
   registerReportsIpc()
   registerFullscreenIpc(() => mainWindow)
   registerFilesIpc(() => mainWindow)
+  registerTelegramIpc()
+  startTelegramPolling()
 
   ipcMain.handle('app:getLogPath', () => logger.getLogPath())
   ipcMain.handle('app:openLogs', () => shell.showItemInFolder(logger.getLogPath()))

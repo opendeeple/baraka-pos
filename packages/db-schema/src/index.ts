@@ -447,11 +447,30 @@ function migrateToV5(db: SchemaDb): void {
   addColumnIfMissing(db, 'products', 'units_per_package', 'REAL')
 }
 
+// Schema v6 — Telegram customer messaging, running entirely client-side for
+// now (Electron main process polls Telegram directly, no server round trip)
+// so it works without any server deploy: telegram_chat_id is set once a
+// contact taps their /start deep link, message_log keeps a local history.
+function migrateToV6(db: SchemaDb): void {
+  addColumnIfMissing(db, 'contacts', 'telegram_chat_id', 'TEXT')
+  db.exec(`CREATE TABLE IF NOT EXISTS message_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contact_id INTEGER NOT NULL,
+    channel TEXT NOT NULL,
+    body TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'sent',
+    error TEXT,
+    created_at TEXT NOT NULL
+  )`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_message_log_contact ON message_log(contact_id)`)
+}
+
 export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb) => void }> = [
   { version: 2, apply: migrateToV2 },
   { version: 3, apply: migrateToV3 },
   { version: 4, apply: migrateToV4 },
   { version: 5, apply: migrateToV5 },
+  { version: 6, apply: migrateToV6 },
 ]
 
 export const CURRENT_SCHEMA_VERSION = VERSIONED_MIGRATIONS[VERSIONED_MIGRATIONS.length - 1].version

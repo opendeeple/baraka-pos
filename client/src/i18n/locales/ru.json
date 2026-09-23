@@ -53,6 +53,10 @@
     "storeInformation": "Информация о магазине",
     "ownerExpensePin": "PIN-код личных расходов владельца",
     "ownerExpensePinHint": "Запрашивается при выборе категории \"Личное (Владелец)\" — сотрудники не смогут записывать расходы от имени владельца.",
+    "telegramBot": "Telegram-бот",
+    "telegramBotHint": "Для отправки клиентам напоминаний о долге и истории покупок через Telegram. Создайте бота через @BotFather.",
+    "telegramBotToken": "Токен бота",
+    "telegramBotUsername": "Имя пользователя бота",
     "pinCode": "PIN-код",
     "wrongPin": "Неверный PIN-код",
     "storeName": "Название магазина"
@@ -245,7 +249,9 @@
     "sortBalanceAsc": "Долг (сначала малый)",
     "sortName": "По имени",
     "lastPurchase": "Последняя покупка",
-    "noDebtors": "Должников нет"
+    "noDebtors": "Должников нет",
+    "telegramCol": "Telegram",
+    "notConnected": "Не подключён"
   },
   "customers": {
     "newCustomer": "Новый клиент",

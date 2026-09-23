@@ -53,6 +53,10 @@
     "storeInformation": "Do'kon ma'lumotlari",
     "ownerExpensePin": "Egasi xarajatlari uchun PIN-kod",
     "ownerExpensePinHint": "Xarajat qo'shishda \"Shaxsiy (Egasi)\" toifasi tanlansa, shu kod so'raladi — shunda xodimlar egasi nomidan xarajat yoza olmaydi.",
+    "telegramBot": "Telegram bot",
+    "telegramBotHint": "Mijozlarga qarz eslatmasi va xarid tarixini Telegram orqali yuborish uchun. Botni @BotFather orqali yarating.",
+    "telegramBotToken": "Bot token",
+    "telegramBotUsername": "Bot foydalanuvchi nomi",
     "pinCode": "PIN-kod",
     "wrongPin": "PIN-kod noto'g'ri",
     "storeName": "Do'kon nomi"
@@ -233,7 +237,9 @@
     "sortBalanceAsc": "Qarz (kamdan ko'pga)",
     "sortName": "Ism bo'yicha",
     "lastPurchase": "Oxirgi xarid",
-    "noDebtors": "Qarzdorlar yo'q"
+    "noDebtors": "Qarzdorlar yo'q",
+    "telegramCol": "Telegram",
+    "notConnected": "Ulanmagan"
   },
   "customers": {
     "newCustomer": "Yangi mijoz",

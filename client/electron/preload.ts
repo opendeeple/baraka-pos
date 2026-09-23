@@ -69,6 +69,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   files: {
     pickImage: () => ipcRenderer.invoke('files:pickImage') as Promise<string | null>,
   },
+  telegram: {
+    send: (chatId: string, text: string) => ipcRenderer.invoke('telegram:send', chatId, text) as Promise<{ success: boolean; error?: string }>,
+    getDeepLink: (contactSyncId: string) => ipcRenderer.invoke('telegram:getDeepLink', contactSyncId) as Promise<string | null>,
+    status: () => ipcRenderer.invoke('telegram:status') as Promise<boolean>,
+  },
   app: {
     isTraining: () => ipcRenderer.invoke('app:isTraining'),
     getVersion: () => ipcRenderer.invoke('app:getVersion'),

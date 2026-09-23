@@ -53,6 +53,10 @@
     "storeInformation": "Store Information",
     "ownerExpensePin": "Owner Expense PIN",
     "ownerExpensePinHint": "Required when \"Personal (Owner)\" is selected as an expense category — keeps staff from logging expenses under the owner's name.",
+    "telegramBot": "Telegram Bot",
+    "telegramBotHint": "For sending customers debt reminders and purchase history via Telegram. Create the bot via @BotFather.",
+    "telegramBotToken": "Bot Token",
+    "telegramBotUsername": "Bot Username",
     "pinCode": "PIN Code",
     "wrongPin": "Incorrect PIN",
     "storeName": "Store Name"
@@ -237,7 +241,9 @@
     "sortBalanceAsc": "Debt (lowest first)",
     "sortName": "By name",
     "lastPurchase": "Last Purchase",
-    "noDebtors": "No debtors"
+    "noDebtors": "No debtors",
+    "telegramCol": "Telegram",
+    "notConnected": "Not connected"
   },
   "customers": {
     "newCustomer": "New Customer",

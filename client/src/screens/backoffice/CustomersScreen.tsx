@@ -279,7 +279,7 @@ export default function CustomersScreen() {
 
       {selected && showSendMessage && (
         <SendMessageModal
-          serverContactId={selected.server_id}
+          contactId={selected.id}
           contactName={selected.name}
           hasDebt={Number(selected.balance) > 0}
           onClose={() => setShowSendMessage(false)}

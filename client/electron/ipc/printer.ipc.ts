@@ -56,14 +56,18 @@ type ReceiptLayoutConfig = {
 // particular element's setting (there's no longer a single "body" font).
 const REFERENCE_FONT_PX = 11
 
+// Matches the values already hand-tuned against the real till printer
+// (Xprinter XP-365B, 76mm/75mm roll) in an earlier session, so a fresh
+// install starts pre-calibrated instead of needing that trial-and-error
+// real-hardware pass redone from scratch.
 const DEFAULT_RECEIPT_LAYOUT: ReceiptLayoutConfig = {
-  paperWidthMm: 60,
-  marginMm: 3,
-  charWidth: 28,
+  paperWidthMm: 75,
+  marginMm: 5,
+  charWidth: 34,
   elements: {
-    storeName: { fontPx: 13, shiftPx: 0 },
-    storeInfo: { fontPx: 11, shiftPx: 0 },
-    invoiceInfo: { fontPx: 11, shiftPx: 0 },
+    storeName: { fontPx: 22, shiftPx: 10 },
+    storeInfo: { fontPx: 11, shiftPx: 25 },
+    invoiceInfo: { fontPx: 11, shiftPx: -1 },
     items: { fontPx: 11, shiftPx: 0 },
     itemQty: { fontPx: 10, shiftPx: 0 },
     totals: { fontPx: 11, shiftPx: 0 },
@@ -124,6 +128,35 @@ function escapeHtml(s: string): string {
 function padRow(left: string, right: string, width: number): string {
   const space = Math.max(1, width - left.length - right.length)
   return left + ' '.repeat(space) + right
+}
+
+// A real bordered items table (№ / Nomi / Soni / Narx columns), drawn with
+// plain +/-/| characters inside the same plain <div> primitive as every
+// other line here — no CSS table/width/flex involved, so it doesn't touch
+// any of the properties already proven to blank the page on this printer.
+// Column widths are chars, sized to sum to exactly `width` including the 5
+// border pipes, so every row/border line lines up under the same font.
+const TABLE_NO_W = 2
+const TABLE_QTY_W = 3
+const TABLE_PRICE_W = 8
+function tableNameWidth(width: number): number {
+  return Math.max(4, width - 5 - TABLE_NO_W - TABLE_QTY_W - TABLE_PRICE_W)
+}
+function tableBorder(width: number): string {
+  const nameW = tableNameWidth(width)
+  return '+' + '-'.repeat(TABLE_NO_W) + '+' + '-'.repeat(nameW) + '+' + '-'.repeat(TABLE_QTY_W) + '+' + '-'.repeat(TABLE_PRICE_W) + '+'
+}
+// Pads to width; never truncates (a too-long number would lose its most
+// significant digits) — an overflowing cell just nudges that one row's
+// border alignment slightly instead of corrupting the value.
+function tableCell(s: string, w: number, align: 'l' | 'r' = 'l'): string {
+  if (s.length >= w) return s
+  const pad = ' '.repeat(w - s.length)
+  return align === 'l' ? s + pad : pad + s
+}
+function tableRow(no: string, name: string, qty: string, price: string, width: number): string {
+  const nameW = tableNameWidth(width)
+  return `|${tableCell(no, TABLE_NO_W)}|${tableCell(name.slice(0, nameW), nameW)}|${tableCell(qty, TABLE_QTY_W, 'r')}|${tableCell(price, TABLE_PRICE_W, 'r')}|`
 }
 
 // Leading-space centering instead of CSS text-align:center — every element
@@ -230,20 +263,18 @@ function receiptHtml(doc: ReceiptDoc, layout: ReceiptLayoutConfig): string {
   lines.push(div('invoiceInfo', doc.timestamp.slice(0, 19).replace('T', ' ')))
   lines.push(`<div class="divider"></div>`)
 
-  // Column header row, same safe primitive (padRow) as every other aligned
-  // line here — no table/flex/grid involved.
-  lines.push(div('itemQty', padRow('ITEM', 'TOTAL', W), 'letter-spacing:0.5px;'))
+  // Bordered items table (№ / Nomi / Soni / Narx) — every row, including
+  // the borders, renders at the SAME element style ('items') so the
+  // monospace character grid lines up between them; mixing font sizes
+  // within this table would throw off the border alignment.
+  lines.push(div('items', tableBorder(W)))
+  lines.push(div('items', tableRow('№', 'Nomi', 'Soni', 'Narx', W), 'font-weight:700;'))
+  lines.push(div('items', tableBorder(W)))
   doc.items.forEach((item, i) => {
     const itemTotal = (item.quantity * item.price).toLocaleString()
-    // margin-top (not margin-bottom) so it only ever adds space ABOVE a row —
-    // same property/direction as .footer's already-proven margin-top, just
-    // applied per item instead of once. Skipped on the first item so it
-    // doesn't add a gap right under the ITEM/TOTAL header.
-    const gap = i > 0 ? 'margin-top:5px;' : ''
-    lines.push(div('items', `${i + 1}. ${item.name}`.slice(0, W), `font-weight:600;${gap}`))
-    lines.push(div('itemQty', padRow(`  ${item.quantity} x ${item.price.toLocaleString()}`, itemTotal, W)))
+    lines.push(div('items', tableRow(String(i + 1), item.name, String(item.quantity), itemTotal, W)))
   })
-  lines.push(`<div class="divider"></div>`)
+  lines.push(div('items', tableBorder(W)))
 
   for (const c of doc.charges) lines.push(div('totals', padRow(c.name, c.amount.toLocaleString(), W)))
   if (doc.discount) lines.push(div('totals', padRow('DISCOUNT:', `-${doc.discount.toLocaleString()}`, W)))

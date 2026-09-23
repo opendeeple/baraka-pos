@@ -13,8 +13,10 @@
   ; Remove from startup
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "BarakaPOS"
 
-  ; Remove user data (ask first)
+  ; Remove user data (ask first) — app.setName('baraka-pos') in main.ts makes
+  ; this the real userData dir; "$APPDATA\BarakaPOS" (productName casing)
+  ; was never the actual path, so this prompt silently deleted nothing.
   MessageBox MB_YESNO "Do you want to remove all BarakaPOS data? This will delete your local sales database." IDNO done
-  RMDir /r "$APPDATA\BarakaPOS"
+  RMDir /r "$APPDATA\baraka-pos"
   done:
 !macroend

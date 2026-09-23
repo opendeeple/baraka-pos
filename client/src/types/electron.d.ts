@@ -64,6 +64,11 @@ export interface ElectronAPI {
      *  the picked file, or null if cancelled. */
     pickImage: () => Promise<string | null>
   }
+  telegram: {
+    send: (chatId: string, text: string) => Promise<{ success: boolean; error?: string }>
+    getDeepLink: (contactSyncId: string) => Promise<string | null>
+    status: () => Promise<boolean>
+  }
   app: {
     isTraining: () => Promise<boolean>
     getVersion: () => Promise<string>
