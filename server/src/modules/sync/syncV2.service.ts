@@ -122,6 +122,13 @@ const PULL_CONFIG: Record<SyncV2PullTable, PullConfig> = {
         orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
         take,
       }),
+    // telegramChatId is a dormant leftover from an earlier server-side
+    // Telegram design, superseded by a local-only client implementation
+    // (client/electron/services/telegram.service.ts) — the server never
+    // sets this field, so every pull would otherwise overwrite the local
+    // chat_id with null the moment a contact's balance/anything else
+    // changes and triggers a pull. Stripped so sync never touches it.
+    map: ({ telegramChatId, ...row }) => row,
   },
   collections: {
     // Collections are global (slug is globally unique); no store scope exists.
