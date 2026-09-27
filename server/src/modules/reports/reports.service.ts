@@ -179,6 +179,7 @@ export async function getLowStockReport(storeId: number) {
   const rows = await prisma.productStock.findMany({
     where: {
       storeId,
+      location: 'shop',
       product: { isStockManaged: true, deletedAt: null, isActive: true },
     },
     include: {

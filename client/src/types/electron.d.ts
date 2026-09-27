@@ -68,6 +68,7 @@ export interface ElectronAPI {
     send: (chatId: string, text: string) => Promise<{ success: boolean; error?: string }>
     getDeepLink: (contactSyncId: string) => Promise<string | null>
     status: () => Promise<boolean>
+    runAutoReminders: () => Promise<{ sent: number; skipped: number; failed: number }>
   }
   app: {
     isTraining: () => Promise<boolean>

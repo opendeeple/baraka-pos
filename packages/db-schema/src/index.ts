@@ -465,12 +465,61 @@ function migrateToV6(db: SchemaDb): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_message_log_contact ON message_log(contact_id)`)
 }
 
+// Schema v7 — automatic debt-reminder scheduler (electron/services/
+// autoReminder.service.ts): distinguishes a scheduler-sent reminder from a
+// staff-initiated one so "when was this contact last reminded" queries don't
+// need a separate table.
+function migrateToV7(db: SchemaDb): void {
+  addColumnIfMissing(db, 'message_log', 'trigger', "TEXT DEFAULT 'manual'")
+}
+
+// Schema v8 — Warehouse module: product_stocks gains a `location` dimension
+// ('shop' | 'warehouse') so a product can carry separate on-hand quantities
+// on the shop floor vs in the warehouse. SQLite can't ALTER a table-level
+// UNIQUE constraint, so (unlike every purely-additive migration above) the
+// table is rebuilt to widen (store_id, product_id, batch_id) to
+// (store_id, product_id, batch_id, location). Every existing row is stamped
+// 'shop' — today's stock IS shop stock, so this moves/duplicates nothing.
+// quantity_adjustments also gains `location`: it's the only path a
+// client-side stock delta reaches the server (see sync-engine's
+// quantity_adjustments CHANGE_BUILDER and the server's matching
+// PUSH_HANDLER, both of which now key on the same 4-column tuple), so a
+// warehouse adjustment has to say which location's row it applies to or it
+// would silently land on the shop row instead.
+function migrateToV8(db: SchemaDb): void {
+  addColumnIfMissing(db, 'quantity_adjustments', 'location', "TEXT DEFAULT 'shop'")
+
+  if (!columnExists(db, 'product_stocks', 'location')) {
+    db.exec(`CREATE TABLE product_stocks_v8 (
+      id INTEGER PRIMARY KEY,
+      store_id INTEGER,
+      product_id INTEGER,
+      batch_id INTEGER,
+      location TEXT NOT NULL DEFAULT 'shop',
+      quantity REAL DEFAULT 0,
+      updated_at TEXT,
+      sync_id TEXT,
+      server_id INTEGER,
+      UNIQUE(store_id, product_id, batch_id, location)
+    )`)
+    db.exec(`INSERT INTO product_stocks_v8
+      (id, store_id, product_id, batch_id, location, quantity, updated_at, sync_id, server_id)
+      SELECT id, store_id, product_id, batch_id, 'shop', quantity, updated_at, sync_id, server_id
+      FROM product_stocks`)
+    db.exec(`DROP TABLE product_stocks`)
+    db.exec(`ALTER TABLE product_stocks_v8 RENAME TO product_stocks`)
+    db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_product_stocks_sync_id ON product_stocks(sync_id)`)
+  }
+}
+
 export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb) => void }> = [
   { version: 2, apply: migrateToV2 },
   { version: 3, apply: migrateToV3 },
   { version: 4, apply: migrateToV4 },
   { version: 5, apply: migrateToV5 },
   { version: 6, apply: migrateToV6 },
+  { version: 7, apply: migrateToV7 },
+  { version: 8, apply: migrateToV8 },
 ]
 
 export const CURRENT_SCHEMA_VERSION = VERSIONED_MIGRATIONS[VERSIONED_MIGRATIONS.length - 1].version

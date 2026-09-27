@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   LayoutDashboard, Package, Tags, ShoppingBag, Users, Truck,
   Receipt, Settings, ArrowLeft, ChevronRight, BarChart2, UserCog, LogOut, Users2,
+  Warehouse,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/auth.store'
 import { SyncStatusBadge } from './SyncStatusBadge'
@@ -16,6 +17,7 @@ const NAV = [
   { to: '/backoffice/customers', labelKey: 'nav.customers', icon: Users },
   { to: '/backoffice/debtors', labelKey: 'nav.debtors', icon: Users2 },
   { to: '/backoffice/purchases', labelKey: 'nav.purchases', icon: Truck },
+  { to: '/backoffice/warehouse', labelKey: 'nav.warehouse', icon: Warehouse },
   { to: '/backoffice/expenses', labelKey: 'nav.expenses', icon: Receipt },
   { to: '/backoffice/reports', labelKey: 'nav.reports', icon: BarChart2 },
   { to: '/backoffice/employees', labelKey: 'nav.employees', icon: UserCog },

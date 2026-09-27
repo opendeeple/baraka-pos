@@ -201,7 +201,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                    item.discount, 0, item.isFree ? 1 : 0, now, syncId],
         })
         ops.push({
-          sql: `UPDATE product_stocks SET quantity = quantity - ? WHERE product_id = ? AND batch_id = ?`,
+          sql: `UPDATE product_stocks SET quantity = quantity - ? WHERE product_id = ? AND batch_id = ? AND location = 'shop'`,
           params: [item.quantity, item.productId, item.batchId],
         })
       }

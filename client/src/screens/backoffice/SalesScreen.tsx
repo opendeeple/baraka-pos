@@ -189,7 +189,7 @@ export default function SalesScreen() {
         )
         if (item.productId) {
           await window.electronAPI.db.exec(
-            `UPDATE product_stocks SET quantity = quantity + ? WHERE product_id=? AND batch_id=?`,
+            `UPDATE product_stocks SET quantity = quantity + ? WHERE product_id=? AND batch_id=? AND location='shop'`,
             [item.returnQty, item.productId, item.batchId ?? 0]
           )
         }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Save, Printer, TestTube2, RefreshCw, Globe, Maximize, Minimize, Send } from 'lucide-react'
+import { Save, Printer, TestTube2, RefreshCw, Globe, Maximize, Minimize, Send, BellRing } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 import { toast } from 'sonner'
@@ -19,6 +19,11 @@ interface PrinterConfig {
 interface TelegramConfig {
   botToken: string
   botUsername: string
+}
+
+interface AutoReminderConfig {
+  enabled: boolean
+  intervalDays: number
 }
 
 interface ReceiptSettings {
@@ -87,6 +92,8 @@ export default function SettingsScreen() {
   })
   const [layout, setLayout] = useState<ReceiptLayout>(DEFAULT_LAYOUT)
   const [telegram, setTelegram] = useState<TelegramConfig>({ botToken: '', botUsername: '' })
+  const [autoReminder, setAutoReminder] = useState<AutoReminderConfig>({ enabled: false, intervalDays: 3 })
+  const [runningReminders, setRunningReminders] = useState(false)
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [storeName, setStoreName] = useState('')
   const [storeAddress, setStoreAddress] = useState('')
@@ -147,6 +154,9 @@ export default function SettingsScreen() {
     if (map.telegram_config) {
       try { setTelegram({ botToken: '', botUsername: '', ...JSON.parse(map.telegram_config) }) } catch {}
     }
+    if (map.auto_reminder_config) {
+      try { setAutoReminder({ enabled: false, intervalDays: 3, ...JSON.parse(map.auto_reminder_config) }) } catch {}
+    }
 
     const storeRow = await window.electronAPI.db.query(`SELECT name, address, phone FROM stores LIMIT 1`, []) as Array<{name:string;address:string;phone:string}>
     if (storeRow[0]) {
@@ -179,8 +189,22 @@ export default function SettingsScreen() {
       await saveSetting('receipt_layout', JSON.stringify(layout))
       await saveSetting('owner_expense_pin', ownerPin)
       await saveSetting('telegram_config', JSON.stringify(telegram))
+      await saveSetting('auto_reminder_config', JSON.stringify(autoReminder))
       await window.electronAPI.db.exec(`UPDATE stores SET name=?,address=?,phone=?,updated_at=? WHERE id=1`, [storeName, storeAddress, storePhone, now])
     } finally { setSaving(false) }
+  }
+
+  async function runRemindersNow() {
+    setRunningReminders(true)
+    try {
+      await saveSetting('auto_reminder_config', JSON.stringify(autoReminder))
+      const r = await window.electronAPI.telegram.runAutoReminders()
+      toast.success(t('settings.autoReminderRunResult', { sent: r.sent, skipped: r.skipped, failed: r.failed }))
+    } catch (e) {
+      toast.error(String(e))
+    } finally {
+      setRunningReminders(false)
+    }
   }
 
   async function testPrint() {
@@ -329,6 +353,40 @@ export default function SettingsScreen() {
                 className={INPUT_CLS}
               />
             </div>
+          </div>
+        </div>
+
+        {/* Automatic debt reminders — a scheduler in the Electron main
+            process (autoReminder.service.ts) checks hourly and messages any
+            Telegram-connected debtor whose last reminder is older than the
+            interval below; a contact stops being selected the moment their
+            balance reaches 0, so a paid-off debt is never reminded again. */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm flex items-center gap-2"><BellRing size={15} /> {t('settings.autoReminder')}</h2>
+          <p className="text-xs text-gray-500">{t('settings.autoReminderHint')}</p>
+          <label className="flex items-center gap-2 text-sm text-gray-300">
+            <input
+              type="checkbox"
+              checked={autoReminder.enabled}
+              onChange={(e) => setAutoReminder((p) => ({ ...p, enabled: e.target.checked }))}
+              className="w-4 h-4"
+            />
+            {t('settings.autoReminderEnabled')}
+          </label>
+          <div className="grid grid-cols-2 gap-3 items-end">
+            <div>
+              <label className={LABEL_CLS}>{t('settings.autoReminderInterval')}</label>
+              <input
+                type="number" min={1} step={1}
+                value={autoReminder.intervalDays}
+                onChange={(e) => setAutoReminder((p) => ({ ...p, intervalDays: Number(e.target.value) || 1 }))}
+                className={INPUT_CLS}
+              />
+            </div>
+            <button onClick={runRemindersNow} disabled={runningReminders}
+              className="flex items-center justify-center gap-2 border border-dark-border text-gray-300 hover:text-white px-3 py-2 rounded-lg text-xs transition-colors h-[38px]">
+              <BellRing size={13} /> {runningReminders ? t('common.loading') : t('settings.autoReminderRunNow')}
+            </button>
           </div>
         </div>
 

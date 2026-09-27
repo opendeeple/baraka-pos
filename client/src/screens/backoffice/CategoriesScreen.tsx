@@ -150,7 +150,7 @@ export default function CategoriesScreen() {
                 <td className="px-4 py-3 text-gray-400 text-sm">{c.description || '—'}</td>
                 <td className="px-4 py-3 text-gray-400 text-sm">{c.product_count}</td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                  <div className="flex items-center gap-1">
                     <button onClick={() => openEdit(c)} className="text-gray-500 hover:text-white p-1 rounded">
                       <Edit2 size={14} />
                     </button>

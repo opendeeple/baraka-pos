@@ -90,14 +90,16 @@ export async function checkout(data: SaleCheckoutRequest, userId: number) {
         },
       })
 
+      // Sales only ever move shop-floor stock — warehouse stock is only
+      // touched by an explicit transfer-to-shop, never by a sale directly.
       await tx.productStock.updateMany({
-        where: { storeId: data.storeId, productId: item.productId, batchId: item.batchId },
+        where: { storeId: data.storeId, productId: item.productId, batchId: item.batchId, location: 'shop' },
         data: { quantity: isReturn ? { increment: item.quantity } : { decrement: item.quantity } },
       })
 
       // Get updated stock for broadcast
       const updatedStock = await tx.productStock.findFirst({
-        where: { storeId: data.storeId, productId: item.productId, batchId: item.batchId },
+        where: { storeId: data.storeId, productId: item.productId, batchId: item.batchId, location: 'shop' },
       })
       if (updatedStock) {
         broadcastStockUpdated(data.storeId, {

@@ -71,7 +71,7 @@ export default function ProductsScreen() {
         SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
       )
       LEFT JOIN product_stocks ps ON ps.id = (
-        SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id ORDER BY id DESC LIMIT 1
+        SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id AND location = 'shop' ORDER BY id DESC LIMIT 1
       )
       WHERE p.deleted_at IS NULL`
     const params: unknown[] = []
@@ -149,7 +149,7 @@ export default function ProductsScreen() {
           [batchSyncId, pid, Number(form.price), Number(form.cost) || 0, now, now])
         const bRows = await window.electronAPI.db.query(`SELECT id FROM product_batches WHERE product_id=? LIMIT 1`, [pid]) as Array<{id:number}>
         await window.electronAPI.db.exec(
-          `INSERT INTO product_stocks (sync_id,product_id,batch_id,quantity,updated_at) VALUES (?,?,?,0,?)`,
+          `INSERT INTO product_stocks (sync_id,product_id,batch_id,location,quantity,updated_at) VALUES (?,?,?,'shop',0,?)`,
           [uuidv4(), pid, bRows[0].id, now])
         await window.electronAPI.sync.enqueue('products', productSyncId, 'upsert')
         await window.electronAPI.sync.enqueue('product_batches', batchSyncId, 'upsert')
@@ -168,13 +168,13 @@ export default function ProductsScreen() {
     try {
       const now = new Date().toISOString()
       await window.electronAPI.db.exec(
-        `UPDATE product_stocks SET quantity=?,updated_at=? WHERE product_id=? AND batch_id=?`,
+        `UPDATE product_stocks SET quantity=?,updated_at=? WHERE product_id=? AND batch_id=? AND location='shop'`,
         [Number(adjustQty), now, adjustId, p.batch_id])
       // Always record the adjustment — it is the unit of stock sync (deltas).
       const adjSyncId = uuidv4()
-      const stockRow = await window.electronAPI.db.query(`SELECT id FROM product_stocks WHERE product_id=? AND batch_id=?`, [adjustId, p.batch_id]) as Array<{id:number}>
+      const stockRow = await window.electronAPI.db.query(`SELECT id FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop'`, [adjustId, p.batch_id]) as Array<{id:number}>
       await window.electronAPI.db.exec(
-        `INSERT INTO quantity_adjustments (sync_id,batch_id,stock_id,previous_quantity,adjusted_quantity,reason,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)`,
+        `INSERT INTO quantity_adjustments (sync_id,batch_id,stock_id,previous_quantity,adjusted_quantity,reason,location,created_at,updated_at) VALUES (?,?,?,?,?,?,'shop',?,?)`,
         [adjSyncId, p.batch_id, stockRow[0]?.id, p.stock, Number(adjustQty), adjustReason || null, now, now])
       await window.electronAPI.sync.enqueue('quantity_adjustments', adjSyncId, 'upsert')
       window.electronAPI.sync.pushPending().catch(() => {})
@@ -259,7 +259,7 @@ export default function ProductsScreen() {
                     <span className={`text-sm font-semibold ${p.stock === 0 ? 'text-red-400' : p.stock <= p.alert_quantity ? 'text-yellow-400' : 'text-white'}`}>{p.stock}</span>
                     {p.stock <= p.alert_quantity && p.is_stock_managed === 1 && <AlertTriangle size={12} className="text-yellow-400" />}
                     <button onClick={() => { setAdjustId(p.id); setAdjustQty(String(p.stock)) }}
-                      className="text-xs text-gray-500 hover:text-primary opacity-0 group-hover:opacity-100 transition-all">{t('products.adjust')}</button>
+                      className="text-xs text-gray-500 hover:text-primary">{t('products.adjust')}</button>
                   </div>
                 </td>
                 <td className="px-4 py-3">
@@ -268,7 +268,7 @@ export default function ProductsScreen() {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                  <div className="flex items-center gap-1">
                     <button onClick={() => openEdit(p)} className="text-gray-500 hover:text-white p-1 rounded">
                       <Edit2 size={14} />
                     </button>

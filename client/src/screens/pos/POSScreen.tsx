@@ -97,7 +97,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
         SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
       )
       LEFT JOIN product_stocks ps ON ps.id = (
-        SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id ORDER BY id DESC LIMIT 1
+        SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id AND location = 'shop' ORDER BY id DESC LIMIT 1
       )
       WHERE p.is_active = 1 AND p.deleted_at IS NULL
     `
@@ -127,7 +127,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
          SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
        )
        LEFT JOIN product_stocks ps ON ps.id = (
-         SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id ORDER BY id DESC LIMIT 1
+         SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id AND location = 'shop' ORDER BY id DESC LIMIT 1
        )
        WHERE p.barcode = ? AND p.is_active = 1 LIMIT 1`,
       [barcode]

@@ -73,6 +73,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     send: (chatId: string, text: string) => ipcRenderer.invoke('telegram:send', chatId, text) as Promise<{ success: boolean; error?: string }>,
     getDeepLink: (contactSyncId: string) => ipcRenderer.invoke('telegram:getDeepLink', contactSyncId) as Promise<string | null>,
     status: () => ipcRenderer.invoke('telegram:status') as Promise<boolean>,
+    runAutoReminders: () => ipcRenderer.invoke('telegram:runAutoReminders') as Promise<{ sent: number; skipped: number; failed: number }>,
   },
   app: {
     isTraining: () => ipcRenderer.invoke('app:isTraining'),

@@ -115,7 +115,7 @@ export default function DebtorsScreen() {
                 <td className="px-4 py-3">
                   <button
                     onClick={() => setMessageTarget(d)}
-                    className="flex items-center gap-1.5 text-xs text-primary hover:underline opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="flex items-center gap-1.5 text-xs text-primary hover:underline"
                   >
                     <MessageCircle size={13} /> {t('notifications.sendMessage')}
                   </button>

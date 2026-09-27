@@ -229,6 +229,9 @@ model ProductStock {
   storeId   Int
   productId Int
   batchId   Int
+  // 'shop' (shop-floor, sellable) or 'warehouse' (backroom stock, moved to
+  // 'shop' via a transfer before it can be sold) — see the Warehouse module.
+  location  String   @default("shop")
   quantity  Decimal  @default(0) @db.Decimal(12, 2)
   updatedAt DateTime @updatedAt
 
@@ -237,7 +240,7 @@ model ProductStock {
   batch   ProductBatch @relation(fields: [batchId], references: [id])
   adjustments QuantityAdjustment[]
 
-  @@unique([storeId, productId, batchId])
+  @@unique([storeId, productId, batchId, location])
   @@index([storeId, updatedAt])
   @@map("product_stocks")
 }
@@ -659,6 +662,10 @@ model QuantityAdjustment {
   previousQuantity   Decimal  @db.Decimal(12, 2)
   adjustedQuantity   Decimal  @db.Decimal(12, 2)
   reason             String?
+  // Denormalized copy of the affected stock row's location — stockId
+  // already implies it, but this lets "warehouse adjustments only" style
+  // queries skip the join.
+  location           String   @default("shop")
   createdBy          Int?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @default(now()) @updatedAt

@@ -100,9 +100,12 @@ export async function receivePurchase(id: number, storeId: number) {
 
     for (const item of purchase.items) {
       if (!item.productId || !item.batchId) continue
+      // Regular purchases still receive straight onto the shop floor —
+      // stocking the warehouse is a separate, explicit action (see the
+      // Warehouse module's own receive flow).
       await tx.productStock.upsert({
-        where: { storeId_productId_batchId: { storeId, productId: item.productId, batchId: item.batchId } },
-        create: { storeId, productId: item.productId, batchId: item.batchId, quantity: item.quantity },
+        where: { storeId_productId_batchId_location: { storeId, productId: item.productId, batchId: item.batchId, location: 'shop' } },
+        create: { storeId, productId: item.productId, batchId: item.batchId, location: 'shop', quantity: item.quantity },
         update: { quantity: { increment: item.quantity } },
       })
     }

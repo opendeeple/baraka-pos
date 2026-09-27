@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { sendTelegramMessage, getTelegramDeepLink, isTelegramConfigured } from '../services/telegram.service'
+import { runAutoReminderCheck } from '../services/autoReminder.service'
 
 export function registerTelegramIpc() {
   ipcMain.handle('telegram:send', async (_e, chatId: string, text: string) => {
@@ -13,4 +14,5 @@ export function registerTelegramIpc() {
 
   ipcMain.handle('telegram:getDeepLink', (_e, contactSyncId: string) => getTelegramDeepLink(contactSyncId))
   ipcMain.handle('telegram:status', () => isTelegramConfigured())
+  ipcMain.handle('telegram:runAutoReminders', () => runAutoReminderCheck())
 }

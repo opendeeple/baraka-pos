@@ -531,12 +531,15 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
     const previousQuantity = Number(data.previousQuantity ?? 0)
     const adjustedQuantity = Number(data.adjustedQuantity ?? 0)
     const delta = adjustedQuantity - previousQuantity
+    // Older clients (pre-warehouse-module) never send this — 'shop' matches
+    // the only location that existed before.
+    const location = (data.location as string) || 'shop'
 
     // Stock converges via deltas, never absolute overwrites.
     const stock = await tx.productStock.upsert({
-      where: { storeId_productId_batchId: { storeId: device.storeId, productId, batchId } },
+      where: { storeId_productId_batchId_location: { storeId: device.storeId, productId, batchId, location } },
       update: { quantity: { increment: delta } },
-      create: { storeId: device.storeId, productId, batchId, quantity: Math.max(0, delta) },
+      create: { storeId: device.storeId, productId, batchId, location, quantity: Math.max(0, delta) },
     })
 
     const created = await tx.quantityAdjustment.create({
@@ -549,6 +552,7 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
         adjustedQuantity,
         reason: (data.reason as string) ?? null,
         createdBy: (data.createdBy as number) ?? null,
+        location,
       },
     })
     return { serverId: created.id, status: 'applied' }
@@ -776,7 +780,7 @@ export async function pushSalesV2(
             // Clamp at zero instead of going negative; the discrepancy is loud
             // in logs but must not corrupt stock into negative territory.
             const stock = await tx.productStock.findUnique({
-              where: { storeId_productId_batchId: { storeId: device.storeId, productId, batchId } },
+              where: { storeId_productId_batchId_location: { storeId: device.storeId, productId, batchId, location: 'shop' } },
             })
             if (stock) {
               // Returns put stock back; sales take it out (parity with the

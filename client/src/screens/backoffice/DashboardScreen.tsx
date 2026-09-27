@@ -97,7 +97,7 @@ export default function DashboardScreen() {
            SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
          )
          LEFT JOIN product_stocks ps ON ps.id = (
-           SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id ORDER BY id DESC LIMIT 1
+           SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id AND location = 'shop' ORDER BY id DESC LIMIT 1
          )
          WHERE p.is_stock_managed = 1 AND p.deleted_at IS NULL AND COALESCE(ps.quantity, 0) <= p.alert_quantity
          ORDER BY stock ASC LIMIT 8`,

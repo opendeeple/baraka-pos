@@ -71,7 +71,7 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
       const bRows = await window.electronAPI.db.query(`SELECT id FROM product_batches WHERE product_id=? LIMIT 1`, [pid]) as Array<{ id: number }>
       const stockSyncId = uuidv4()
       await window.electronAPI.db.exec(
-        `INSERT INTO product_stocks (sync_id,product_id,batch_id,quantity,updated_at) VALUES (?,?,?,0,?)`,
+        `INSERT INTO product_stocks (sync_id,product_id,batch_id,location,quantity,updated_at) VALUES (?,?,?,'shop',0,?)`,
         [stockSyncId, pid, bRows[0].id, now]
       )
       await window.electronAPI.sync.enqueue('products', productSyncId, 'upsert')

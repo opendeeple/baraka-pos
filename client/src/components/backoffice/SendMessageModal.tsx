@@ -37,6 +37,9 @@ export function SendMessageModal({ contactId, contactName, hasDebt, onClose }: P
   const [deepLink, setDeepLink] = useState<string | null>(null)
   const [telegramConnected, setTelegramConnected] = useState(false)
   const [telegramConfigured, setTelegramConfigured] = useState(true)
+  // Starts true so the first render doesn't flash "not connected" (the
+  // false/true defaults above) before the real DB state has loaded.
+  const [connectionLoading, setConnectionLoading] = useState(true)
 
   useEffect(() => {
     loadConnectionInfo()
@@ -48,15 +51,19 @@ export function SendMessageModal({ contactId, contactName, hasDebt, onClose }: P
   useEffect(() => { buildPreview() }, [contactId, template])
 
   async function loadConnectionInfo() {
-    const rows = await window.electronAPI.db.query(
-      `SELECT sync_id, telegram_chat_id FROM contacts WHERE id=?`, [contactId]
-    ) as Array<{ sync_id: string; telegram_chat_id: string | null }>
-    const row = rows[0]
-    if (!row) return
-    setTelegramConnected(Boolean(row.telegram_chat_id))
-    const configured = await window.electronAPI.telegram.status()
-    setTelegramConfigured(configured)
-    if (configured) setDeepLink(await window.electronAPI.telegram.getDeepLink(row.sync_id))
+    try {
+      const rows = await window.electronAPI.db.query(
+        `SELECT sync_id, telegram_chat_id FROM contacts WHERE id=?`, [contactId]
+      ) as Array<{ sync_id: string; telegram_chat_id: string | null }>
+      const row = rows[0]
+      if (!row) return
+      setTelegramConnected(Boolean(row.telegram_chat_id))
+      const configured = await window.electronAPI.telegram.status()
+      setTelegramConfigured(configured)
+      if (configured) setDeepLink(await window.electronAPI.telegram.getDeepLink(row.sync_id))
+    } finally {
+      setConnectionLoading(false)
+    }
   }
 
   async function buildPreview() {
@@ -159,7 +166,7 @@ export function SendMessageModal({ contactId, contactName, hasDebt, onClose }: P
       footer={
         <>
           <Button variant="secondary" className="flex-1" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button className="flex-1" icon={Send} onClick={send} loading={sending} disabled={channel === 'telegram' && !telegramConnected}>
+          <Button className="flex-1" icon={Send} onClick={send} loading={sending} disabled={channel === 'telegram' && (connectionLoading || !telegramConnected)}>
             {t('notifications.send')}
           </Button>
         </>
@@ -171,12 +178,15 @@ export function SendMessageModal({ contactId, contactName, hasDebt, onClose }: P
           <button onClick={() => setChannel('sms')} className={`flex-1 py-1.5 rounded-md transition-colors ${channel === 'sms' ? 'bg-primary text-white' : 'text-gray-400'}`}>SMS</button>
         </div>
 
-        {channel === 'telegram' && !telegramConfigured && (
+        {channel === 'telegram' && connectionLoading && (
+          <div className="text-xs text-gray-500">{t('common.loading')}</div>
+        )}
+        {channel === 'telegram' && !connectionLoading && !telegramConfigured && (
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
             <p className="text-xs text-yellow-200">{t('notifications.botNotConfigured')}</p>
           </div>
         )}
-        {channel === 'telegram' && telegramConfigured && !telegramConnected && (
+        {channel === 'telegram' && !connectionLoading && telegramConfigured && !telegramConnected && (
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 space-y-2">
             <p className="text-xs text-yellow-200">{t('notifications.telegramNotConnected')}</p>
             {deepLink && (
@@ -186,7 +196,7 @@ export function SendMessageModal({ contactId, contactName, hasDebt, onClose }: P
             )}
           </div>
         )}
-        {channel === 'telegram' && telegramConnected && (
+        {channel === 'telegram' && !connectionLoading && telegramConnected && (
           <div className="flex items-center gap-1.5 text-xs text-green-400">
             <CheckCircle2 size={12} /> {t('notifications.telegramConnected')}
           </div>

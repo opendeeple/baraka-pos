@@ -63,6 +63,15 @@ test.describe('Back Office - Purchases', () => {
   })
 })
 
+test.describe('Back Office - Warehouse', () => {
+  test('renders without fatal JS errors', async ({ page }) => {
+    const errors = captureErrors(page)
+    await loadAuthenticatedBackOffice(page, '/backoffice/warehouse')
+    await page.waitForTimeout(500)
+    expect(errors).toHaveLength(0)
+  })
+})
+
 test.describe('Back Office - Expenses', () => {
   test('renders without fatal JS errors', async ({ page }) => {
     const errors = captureErrors(page)

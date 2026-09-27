@@ -746,7 +746,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         return {
           productSyncId, batchSyncId,
           previousQuantity: inline.previousQuantity, adjustedQuantity: inline.adjustedQuantity,
-          reason: inline.reason, _updatedAt: new Date().toISOString(),
+          reason: inline.reason, location: inline.location || 'shop', _updatedAt: new Date().toISOString(),
         }
       }
       const a = db.get<any>(`SELECT * FROM quantity_adjustments WHERE sync_id=?`, [row.sync_id])
@@ -758,7 +758,8 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       return {
         productSyncId, batchSyncId,
         previousQuantity: a.previous_quantity, adjustedQuantity: a.adjusted_quantity,
-        reason: a.reason, createdBy: a.created_by, _updatedAt: a.updated_at ?? a.created_at,
+        reason: a.reason, createdBy: a.created_by, location: a.location || 'shop',
+        _updatedAt: a.updated_at ?? a.created_at,
       }
     },
   }

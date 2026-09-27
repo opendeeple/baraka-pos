@@ -127,9 +127,9 @@ export async function updateProduct(id: number, storeId: number, data: Partial<{
   })
 }
 
-export async function adjustStock(storeId: number, productId: number, batchId: number, quantity: number, reason: string, userId: number) {
+export async function adjustStock(storeId: number, productId: number, batchId: number, quantity: number, reason: string, userId: number, location = 'shop') {
   return prisma.$transaction(async (tx) => {
-    const stock = await tx.productStock.findFirst({ where: { storeId, productId, batchId } })
+    const stock = await tx.productStock.findFirst({ where: { storeId, productId, batchId, location } })
     if (!stock) throw new Error('Stock record not found')
 
     const previous = Number(stock.quantity)
@@ -147,6 +147,7 @@ export async function adjustStock(storeId: number, productId: number, batchId: n
         adjustedQuantity: quantity,
         reason,
         createdBy: userId,
+        location,
       },
     })
 
