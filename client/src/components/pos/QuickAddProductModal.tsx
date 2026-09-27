@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle } from 'lucide-react'
-import { Modal, Button, Input } from '../ui'
+import { Modal, Button, Input, Select } from '../ui'
 import { LocalProduct } from './ProductGrid'
 
 interface Props {
@@ -16,6 +16,7 @@ interface Props {
 }
 
 interface SimilarMatch { id: number; name: string; barcode: string | null }
+interface Category { id: number; name: string }
 
 /**
  * Opened the moment a barcode scan or search-enter finds nothing — lets the
@@ -32,9 +33,17 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
   const [price, setPrice] = useState('')
   const [cost, setCost] = useState('')
   const [barcodeValue, setBarcodeValue] = useState(barcode)
+  const [categoryId, setCategoryId] = useState('')
+  const [categories, setCategories] = useState<Category[]>([])
   const [similar, setSimilar] = useState<SimilarMatch[]>([])
   const [saving, setSaving] = useState(false)
   const submittingRef = useRef(false)
+
+  useEffect(() => {
+    window.electronAPI.db.query(
+      `SELECT id, name FROM collections WHERE collection_type='category' AND deleted_at IS NULL ORDER BY name`, []
+    ).then((rows) => setCategories(rows as Category[]))
+  }, [])
 
   async function goToConfirm() {
     if (!name.trim() || !price) return
@@ -58,9 +67,9 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
       const productSyncId = uuidv4()
       const batchSyncId = uuidv4()
       await window.electronAPI.db.exec(
-        `INSERT INTO products (sync_id,name,barcode,is_stock_managed,alert_quantity,is_active,product_type,created_at,updated_at)
-         VALUES (?,?,?,1,5,1,'simple',?,?)`,
-        [productSyncId, name.trim(), barcodeValue.trim() || null, now, now]
+        `INSERT INTO products (sync_id,name,barcode,category_id,is_stock_managed,alert_quantity,is_active,product_type,created_at,updated_at)
+         VALUES (?,?,?,?,1,5,1,'simple',?,?)`,
+        [productSyncId, name.trim(), barcodeValue.trim() || null, categoryId || null, now, now]
       )
       const rows = await window.electronAPI.db.query(`SELECT last_insert_rowid() as id`, []) as Array<{ id: number }>
       const pid = rows[0].id
@@ -82,6 +91,7 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
         id: pid,
         name: name.trim(),
         barcode: barcodeValue.trim() || undefined,
+        category_id: categoryId ? Number(categoryId) : undefined,
         is_stock_managed: 1,
         is_active: 1,
         alert_quantity: 5,
@@ -161,6 +171,14 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
         <p className="text-sm text-gray-400">{t('pos.productNotFound', { barcode })}</p>
         <Input label={t('products.nameRequired')} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         <Input label={t('products.barcode')} value={barcodeValue} onChange={(e) => setBarcodeValue(e.target.value)} />
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block">{t('common.category')}</label>
+          <Select
+            value={categoryId}
+            onChange={setCategoryId}
+            options={[{ value: '', label: '—' }, ...categories.map((c) => ({ value: String(c.id), label: c.name }))]}
+          />
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <Input label={t('common.price')} value={price} onChange={(e) => setPrice(e.target.value)} />
           <Input label={t('common.cost')} value={cost} onChange={(e) => setCost(e.target.value)} />
