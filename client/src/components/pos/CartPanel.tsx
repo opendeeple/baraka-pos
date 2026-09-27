@@ -5,6 +5,8 @@ import { useCartStore } from '../../store/cart.store'
 import { fmtUZS } from '../../lib/currency'
 import { HeldOrdersPanel } from './HeldOrdersDrawer'
 import { DebtHistoryPanel } from './DebtHistoryDrawer'
+import { NumPad } from './NumPad'
+import { Modal, Button } from '../ui'
 import { Debtor } from '../../types/pos.types'
 
 interface Props {
@@ -231,25 +233,20 @@ function CartItemRow({
   const justSwiped = useRef(false)
 
   // Tap the quantity number to type an exact value instead of only stepping
-  // by 1 — same onQtyChange as the +/- buttons, just fed a typed number.
-  // inputMode="decimal" so kg/weight-based products (fractional quantity,
-  // already supported all the way through cart.store.ts with no rounding)
-  // can be entered directly too.
-  const [editingQty, setEditingQty] = useState(false)
+  // by 1 — same onQtyChange as the +/- buttons. A NumPad modal (the same
+  // on-screen keypad used for payment amounts) replaces a plain text input:
+  // this runs on a touchscreen till with no physical keyboard, where typing
+  // into an inline input means fighting the OS's on-screen keyboard.
+  const [showQtyPad, setShowQtyPad] = useState(false)
   const [qtyDraft, setQtyDraft] = useState('')
-  const qtyInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (editingQty) qtyInputRef.current?.focus()
-  }, [editingQty])
 
   function startEditQty() {
     setQtyDraft(String(item.quantity))
-    setEditingQty(true)
+    setShowQtyPad(true)
   }
 
   function commitQtyDraft() {
-    setEditingQty(false)
+    setShowQtyPad(false)
     const parsed = parseFloat(qtyDraft.replace(',', '.'))
     if (Number.isFinite(parsed) && parsed > 0) onQtyChange(parsed)
   }
@@ -342,31 +339,13 @@ function CartItemRow({
             >
               <Minus size={15} />
             </button>
-            {editingQty ? (
-              <input
-                ref={qtyInputRef}
-                type="text"
-                inputMode="decimal"
-                value={qtyDraft}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => setQtyDraft(e.target.value)}
-                onBlur={commitQtyDraft}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') { e.currentTarget.blur() }
-                  if (e.key === 'Escape') { setEditingQty(false) }
-                }}
-                className="w-10 text-center text-white font-bold text-base bg-transparent border-b border-primary focus:outline-none"
-              />
-            ) : (
-              <span
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); startEditQty() }}
-                className="w-10 text-center text-white font-bold text-base"
-              >
-                {item.quantity}
-              </span>
-            )}
+            <span
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); startEditQty() }}
+              className="w-10 text-center text-white font-bold text-base"
+            >
+              {item.quantity}
+            </span>
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); onQtyChange(item.quantity + 1) }}
@@ -380,6 +359,25 @@ function CartItemRow({
           </span>
         </div>
       </div>
+
+      {showQtyPad && (
+        <Modal
+          open
+          onClose={() => setShowQtyPad(false)}
+          title={item.name}
+          maxWidth="max-w-xs"
+          footer={
+            <>
+              <Button variant="secondary" className="flex-1" onClick={() => setShowQtyPad(false)}>{t('common.cancel')}</Button>
+              <Button className="flex-1" onClick={commitQtyDraft}>{t('common.save')}</Button>
+            </>
+          }
+        >
+          <div className="p-4">
+            <NumPad value={qtyDraft} onChange={setQtyDraft} maxDecimals={3} label={t('common.quantity')} />
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
