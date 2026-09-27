@@ -154,6 +154,8 @@
     "topProducts": "Top Products",
     "byQuantity": "By quantity",
     "byRevenue": "By revenue",
+    "byCount": "By times sold",
+    "salesCount": "Sales count",
     "revenue": "Revenue",
     "units": "Units",
     "salesByCategory": "Sales by Category",

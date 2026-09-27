@@ -158,6 +158,8 @@
     "topProducts": "Топ товаров",
     "byQuantity": "По количеству",
     "byRevenue": "По сумме",
+    "byCount": "По числу продаж",
+    "salesCount": "Число продаж",
     "revenue": "Сумма",
     "units": "Единиц",
     "salesByCategory": "Продажи по категориям",

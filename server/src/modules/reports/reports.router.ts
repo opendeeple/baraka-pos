@@ -28,7 +28,7 @@ router.get('/top-products', async (req: Request, res: Response) => {
       (date_from as string) || today,
       (date_to as string) || today,
       limit ? Number(limit) : 10,
-      sort_by === 'revenue' ? 'revenue' : 'quantity'
+      sort_by === 'revenue' ? 'revenue' : sort_by === 'count' ? 'count' : 'quantity'
     )
     res.json(data)
   } catch (err: unknown) {

@@ -27,7 +27,7 @@ interface DailySummary {
   cashFlow: Array<{ type: string; amount: number; source: string; description?: string }>
 }
 
-interface TopProduct { productId: number; name: string; quantitySold: number; revenue?: number }
+interface TopProduct { productId: number; name: string; quantitySold: number; revenue?: number; saleCount?: number }
 interface CategorySale { category: string; revenue: number; qty: number }
 interface HourlySlot { hour: number; label: string; revenue: number; transactions: number }
 interface LowStockItem { productId: number; name: string; sku?: string; stock: number; alertQuantity: number }
@@ -55,7 +55,7 @@ export default function ReportsScreen() {
 
   const [daily, setDaily] = useState<DailySummary | null>(null)
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
-  const [topProductsSort, setTopProductsSort] = useState<'quantity' | 'revenue'>('quantity')
+  const [topProductsSort, setTopProductsSort] = useState<'quantity' | 'revenue' | 'count'>('quantity')
   const [categorySales, setCategorySales] = useState<CategorySale[]>([])
   const [hourly, setHourly] = useState<HourlySlot[]>([])
   const [lowStock, setLowStock] = useState<LowStockItem[]>([])
@@ -230,6 +230,12 @@ export default function ReportsScreen() {
                 >
                   {t('reports.byRevenue')}
                 </button>
+                <button
+                  onClick={() => setTopProductsSort('count')}
+                  className={`px-2.5 py-1 rounded-md transition-colors ${topProductsSort === 'count' ? 'bg-primary text-white' : 'text-gray-400'}`}
+                >
+                  {t('reports.byCount')}
+                </button>
               </div>
             </div>
             {topProducts.length > 0 ? (
@@ -244,9 +250,9 @@ export default function ReportsScreen() {
                     labelStyle={{ color: '#fff' }} itemStyle={{ color: '#f97316' }}
                     formatter={(value: number) => topProductsSort === 'revenue' ? `UZS ${fmtUZS(value)}` : value} />
                   <Bar
-                    dataKey={topProductsSort === 'revenue' ? 'revenue' : 'quantitySold'}
+                    dataKey={topProductsSort === 'revenue' ? 'revenue' : topProductsSort === 'count' ? 'saleCount' : 'quantitySold'}
                     fill="#f97316" radius={[0, 4, 4, 0]}
-                    name={topProductsSort === 'revenue' ? t('reports.revenue') : t('reports.units')}
+                    name={topProductsSort === 'revenue' ? t('reports.revenue') : topProductsSort === 'count' ? t('reports.salesCount') : t('reports.units')}
                   />
                 </BarChart>
               </ResponsiveContainer>

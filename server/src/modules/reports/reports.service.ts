@@ -61,10 +61,37 @@ export async function getTopProducts(
   dateFrom: string,
   dateTo: string,
   limit = 10,
-  sortBy: 'quantity' | 'revenue' = 'quantity'
+  sortBy: 'quantity' | 'revenue' | 'count' = 'quantity'
 ) {
   const startDate = new Date(dateFrom + 'T00:00:00.000Z')
   const endDate = new Date(dateTo + 'T23:59:59.999Z')
+
+  // "Necha marta sotilgan" — how many separate sales included this product
+  // at least once, as opposed to 'quantity' (total units) — a product sold
+  // 1 unit each in 50 sales ranks highest here but low by quantity, and
+  // vice versa for one bulk sale of the same product.
+  if (sortBy === 'count') {
+    const rows = await prisma.$queryRaw<Array<{ productId: number; name: string; quantitySold: number; saleCount: number }>>`
+      SELECT si."productId" as "productId", p.name as name,
+             SUM(si.quantity) as "quantitySold",
+             COUNT(DISTINCT si."saleId") as "saleCount"
+      FROM sale_items si
+      JOIN sales s ON s.id = si."saleId"
+      JOIN products p ON p.id = si."productId"
+      WHERE s."storeId" = ${storeId} AND s.status = 'completed'
+        AND s."createdAt" >= ${startDate} AND s."createdAt" <= ${endDate}
+        AND si."productId" IS NOT NULL
+      GROUP BY si."productId", p.name
+      ORDER BY "saleCount" DESC
+      LIMIT ${limit}
+    `
+    return rows.map((r) => ({
+      productId: r.productId,
+      name: r.name,
+      quantitySold: Number(r.quantitySold),
+      saleCount: Number(r.saleCount),
+    }))
+  }
 
   // Revenue ranking needs SUM(quantity * unitPrice) per product — a row-level
   // product before summing, which groupBy's _sum can't express (it can only

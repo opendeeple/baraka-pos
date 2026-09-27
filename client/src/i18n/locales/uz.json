@@ -152,6 +152,8 @@
     "topProducts": "Top mahsulotlar",
     "byQuantity": "Soni bo'yicha",
     "byRevenue": "Summa bo'yicha",
+    "byCount": "Necha marta sotilgani bo'yicha",
+    "salesCount": "Sotuvlar soni",
     "revenue": "Summa",
     "units": "Dona",
     "salesByCategory": "Kategoriya bo'yicha sotuv",
