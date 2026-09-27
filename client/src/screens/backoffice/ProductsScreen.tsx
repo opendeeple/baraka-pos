@@ -252,7 +252,12 @@ export default function ProductsScreen() {
                   {p.barcode && <p className="text-gray-500 text-xs">{p.barcode}</p>}
                 </td>
                 <td className="px-4 py-3 text-gray-400 text-sm">{p.category_name ?? '—'}</td>
-                <td className="px-4 py-3 text-white text-sm">UZS {fmtUZS(Number(p.price))}</td>
+                <td className="px-4 py-3 text-white text-sm">
+                  UZS {fmtUZS(Number(p.price))}
+                  <span className="text-gray-500 text-xs ml-1">
+                    /{p.unit === 'kg' ? t('products.unitKg') : p.unit === 'box' ? t('products.unitBox') : t('products.unitPiece')}
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-gray-400 text-sm">UZS {fmtUZS(Number(p.cost))}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
@@ -331,8 +336,29 @@ export default function ProductsScreen() {
                     value={form[key as keyof ProductForm] as string}
                     onChange={(e) => f(key as keyof ProductForm, e.target.value)} />
                 ))}
-                <Input label={t('products.priceRequired')} type="number" value={form.price} onChange={(e) => f('price', e.target.value)} />
-                <Input label={t('products.costUzs')} type="number" value={form.cost} onChange={(e) => f('cost', e.target.value)} />
+                <div>
+                  <Input
+                    label={
+                      form.unit === 'kg' ? t('products.priceLabelKg')
+                        : form.unit === 'box' ? t('products.priceLabelBox')
+                        : t('products.priceLabelPiece')
+                    }
+                    type="number" value={form.price} onChange={(e) => f('price', e.target.value)}
+                  />
+                  {form.unit === 'box' && Number(form.units_per_package) > 0 && Number(form.price) > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {t('products.pricePerPieceHint', { price: fmtUZS(Number(form.price) / Number(form.units_per_package)) })}
+                    </p>
+                  )}
+                </div>
+                <Input
+                  label={
+                    form.unit === 'kg' ? t('products.costLabelKg')
+                      : form.unit === 'box' ? t('products.costLabelBox')
+                      : t('products.costLabelPiece')
+                  }
+                  type="number" value={form.cost} onChange={(e) => f('cost', e.target.value)}
+                />
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">{t('common.category')}</label>
                   <Select
