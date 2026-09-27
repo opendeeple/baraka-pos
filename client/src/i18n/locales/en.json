@@ -66,7 +66,11 @@
     "autoReminderRunResult": "Sent: {{sent}}, skipped: {{skipped}}, failed: {{failed}}",
     "pinCode": "PIN Code",
     "wrongPin": "Incorrect PIN",
-    "storeName": "Store Name"
+    "storeName": "Store Name",
+    "openDrawer": "Open Drawer",
+    "openDrawerHint": "The cash drawer already opens automatically after every cash sale. This button opens it manually without a sale (asks for the owner PIN if one is set) — for making change or testing.",
+    "drawerOpened": "Cash drawer opened",
+    "drawerFailed": "Could not open the cash drawer"
   },
   "pos": {
     "sessionSince": "Session since",

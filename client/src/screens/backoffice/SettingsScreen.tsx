@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Save, Printer, TestTube2, RefreshCw, Globe, Maximize, Minimize, Send, BellRing } from 'lucide-react'
+import { Save, Printer, TestTube2, RefreshCw, Globe, Maximize, Minimize, Send, BellRing, Banknote } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 import { toast } from 'sonner'
 import { Select } from '../../components/ui/Select'
+import { PinConfirmModal } from '../../components/ui/PinConfirmModal'
 import { LANGUAGES, setAppLanguage, type AppLanguage } from '../../i18n'
 
 interface StoreSetting { meta_key: string; meta_value: string }
@@ -105,6 +106,8 @@ export default function SettingsScreen() {
   const [fullscreen, setFullscreen] = useState(false)
   const [togglingFullscreen, setTogglingFullscreen] = useState(false)
   const [ownerPin, setOwnerPin] = useState('')
+  const [openingDrawer, setOpeningDrawer] = useState(false)
+  const [pendingDrawerConfirm, setPendingDrawerConfirm] = useState(false)
   const { t, i18n } = useTranslation()
 
   useEffect(() => { loadSettings() }, [])
@@ -211,6 +214,28 @@ export default function SettingsScreen() {
     setTesting(true)
     try { await window.electronAPI.printer.testPrint() } catch (e) { toast.error(String(e)) }
     finally { setTesting(false) }
+  }
+
+  /** Manual drawer-open — gated behind the owner PIN (same one that gates
+   *  Owner-category expenses) since opening the drawer with no sale attached
+   *  is exactly the kind of thing that shouldn't need only a cashier login.
+   *  Same convention as ExpensesScreen: no PIN set means no gate. */
+  function openDrawerClick() {
+    if (ownerPin) { setPendingDrawerConfirm(true); return }
+    openDrawer()
+  }
+
+  async function openDrawer() {
+    setOpeningDrawer(true)
+    try {
+      const r = await window.electronAPI.printer.openCashDrawer()
+      if (r.success) toast.success(t('settings.drawerOpened'))
+      else toast.error(r.error || t('settings.drawerFailed'))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setOpeningDrawer(false)
+    }
   }
 
   async function syncNow() {
@@ -394,11 +419,18 @@ export default function SettingsScreen() {
         <div className={SECTION_CLS}>
           <div className="flex items-center justify-between">
             <h2 className="text-white font-semibold text-sm">Thermal Printer</h2>
-            <button onClick={testPrint} disabled={testing}
-              className="flex items-center gap-2 border border-dark-border text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs transition-colors">
-              <TestTube2 size={13} /> {testing ? 'Printing…' : 'Test Print'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={openDrawerClick} disabled={openingDrawer}
+                className="flex items-center gap-2 border border-dark-border text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs transition-colors">
+                <Banknote size={13} /> {openingDrawer ? '…' : t('settings.openDrawer')}
+              </button>
+              <button onClick={testPrint} disabled={testing}
+                className="flex items-center gap-2 border border-dark-border text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs transition-colors">
+                <TestTube2 size={13} /> {testing ? 'Printing…' : 'Test Print'}
+              </button>
+            </div>
           </div>
+          <p className="text-xs text-gray-500 -mt-2">{t('settings.openDrawerHint')}</p>
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className={LABEL_CLS}>Connection Type</label>
@@ -568,6 +600,15 @@ export default function SettingsScreen() {
           )}
         </div>
       </div>
+
+      {pendingDrawerConfirm && (
+        <PinConfirmModal
+          expectedPin={ownerPin}
+          title={t('settings.openDrawer')}
+          onClose={() => setPendingDrawerConfirm(false)}
+          onConfirmed={() => { setPendingDrawerConfirm(false); openDrawer() }}
+        />
+      )}
     </BackOfficeLayout>
   )
 }

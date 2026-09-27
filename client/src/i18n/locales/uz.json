@@ -66,7 +66,11 @@
     "autoReminderRunResult": "Yuborildi: {{sent}}, o'tkazib yuborildi: {{skipped}}, xato: {{failed}}",
     "pinCode": "PIN-kod",
     "wrongPin": "PIN-kod noto'g'ri",
-    "storeName": "Do'kon nomi"
+    "storeName": "Do'kon nomi",
+    "openDrawer": "Kassani ochish",
+    "openDrawerHint": "Har bir naqd sotuvdan keyin kassa tortmasi avtomatik ochiladi. Bu tugma uni qo'lda, sotuvsiz ochadi (Egasi PIN-kodi qo'yilgan bo'lsa so'raladi) — pul qaytarish yoki tekshirish uchun.",
+    "drawerOpened": "Kassa tortmasi ochildi",
+    "drawerFailed": "Kassa tortmasini ochib bo'lmadi"
   },
   "pos": {
     "sessionSince": "Smena boshlandi",

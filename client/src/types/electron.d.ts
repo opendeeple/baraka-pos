@@ -24,7 +24,7 @@ export interface ElectronAPI {
   }
   printer: {
     print: (receiptData: unknown) => Promise<{ success: boolean; error?: string }>
-    openCashDrawer: () => Promise<{ success: boolean }>
+    openCashDrawer: () => Promise<{ success: boolean; error?: string }>
     testPrint: () => Promise<{ success: boolean; message?: string }>
     listPrinters: () => Promise<unknown[]>
     configure: (config: unknown) => Promise<{ success: boolean }>
