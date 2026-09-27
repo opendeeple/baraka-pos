@@ -59,7 +59,7 @@
     "telegramBotToken": "Bot Token",
     "telegramBotUsername": "Bot Username",
     "autoReminder": "Automatic Debt Reminders",
-    "autoReminderHint": "When enabled, Telegram-connected debtors get an automatic reminder every N days below. Once a debt is fully paid (balance reaches 0), that contact stops being reminded automatically.",
+    "autoReminderHint": "When enabled, Telegram-connected debtors get an automatic reminder every N days below — this is the default. On the Debtors screen you can set a different number per customer to override this default just for them. Once a debt is fully paid (balance reaches 0), that contact stops being reminded automatically.",
     "autoReminderEnabled": "Enable automatic reminders",
     "autoReminderInterval": "Every (days)",
     "autoReminderRunNow": "Check Now",
@@ -256,7 +256,9 @@
     "lastPurchase": "Last Purchase",
     "noDebtors": "No debtors",
     "telegramCol": "Telegram",
-    "notConnected": "Not connected"
+    "notConnected": "Not connected",
+    "reminderInterval": "Reminder (days)",
+    "reminderDefault": "Default"
   },
   "warehouse": {
     "inShop": "In Shop",

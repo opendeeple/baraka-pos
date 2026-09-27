@@ -59,7 +59,7 @@
     "telegramBotToken": "Bot token",
     "telegramBotUsername": "Bot foydalanuvchi nomi",
     "autoReminder": "Avtomatik qarz eslatmasi",
-    "autoReminderHint": "Yoqilgan bo'lsa, Telegram ulangan qarzdorlarga belgilangan necha kunda bir avtomatik eslatma xabari yuboriladi. Qarz to'liq to'langach (balans 0 bo'lgach), o'sha mijozga eslatma yuborilishi avtomatik to'xtaydi.",
+    "autoReminderHint": "Yoqilgan bo'lsa, Telegram ulangan qarzdorlarga shu yerda belgilangan necha kunda bir avtomatik eslatma xabari yuboriladi — bu standart qiymat. Qarzdorlar ro'yxatida har bir mijoz uchun alohida son kiritib, shu standartni o'sha mijozga bekor qilish mumkin. Qarz to'liq to'langach (balans 0 bo'lgach), o'sha mijozga eslatma yuborilishi avtomatik to'xtaydi.",
     "autoReminderEnabled": "Avtomatik eslatmalarni yoqish",
     "autoReminderInterval": "Necha kunda bir (kun)",
     "autoReminderRunNow": "Hozir tekshirish",
@@ -252,7 +252,9 @@
     "lastPurchase": "Oxirgi xarid",
     "noDebtors": "Qarzdorlar yo'q",
     "telegramCol": "Telegram",
-    "notConnected": "Ulanmagan"
+    "notConnected": "Ulanmagan",
+    "reminderInterval": "Eslatma (kun)",
+    "reminderDefault": "Standart"
   },
   "warehouse": {
     "inShop": "Do'konda",

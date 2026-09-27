@@ -39,6 +39,7 @@ interface DebtorContact {
   name: string
   balance: number
   telegram_chat_id: string | null
+  reminder_interval_days: number | null
 }
 
 // Lists the sales that carried a debt portion (payment_transactions with
@@ -84,16 +85,21 @@ export async function runAutoReminderCheck(): Promise<{ sent: number; skipped: n
     if (!config.enabled || !isTelegramConfigured()) return result
 
     const contacts = dbQuery(
-      `SELECT id, sync_id, name, balance, telegram_chat_id FROM contacts
+      `SELECT id, sync_id, name, balance, telegram_chat_id, reminder_interval_days FROM contacts
        WHERE type IN ('customer','both') AND deleted_at IS NULL AND balance > 0 AND telegram_chat_id IS NOT NULL`
     ) as DebtorContact[]
 
-    const intervalMs = config.intervalDays * 24 * 60 * 60 * 1000
     const now = Date.now()
 
     for (const contact of contacts) {
       let body = ''
       try {
+        // A contact's own override wins when set; otherwise fall back to
+        // the global Settings interval.
+        const days = contact.reminder_interval_days && contact.reminder_interval_days > 0
+          ? contact.reminder_interval_days
+          : config.intervalDays
+        const intervalMs = days * 24 * 60 * 60 * 1000
         const lastRows = dbQuery(
           `SELECT MAX(created_at) as last FROM message_log WHERE contact_id=? AND channel='telegram'`,
           [contact.id]

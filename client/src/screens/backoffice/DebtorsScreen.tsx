@@ -10,6 +10,7 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 interface Debtor {
   id: number; server_id: number | null; name: string; phone: string | null
   balance: number; last_sale_at: string | null; telegram_chat_id: string | null
+  reminder_interval_days: number | null
 }
 
 type SortBy = 'balance_desc' | 'balance_asc' | 'name'
@@ -38,7 +39,7 @@ export default function DebtorsScreen() {
 
   async function loadDebtors(silent = false) {
     let sql = `
-      SELECT c.id, c.server_id, c.name, c.phone, c.balance, c.telegram_chat_id,
+      SELECT c.id, c.server_id, c.name, c.phone, c.balance, c.telegram_chat_id, c.reminder_interval_days,
              (SELECT MAX(s.created_at) FROM sales s WHERE s.contact_id = c.id) as last_sale_at
       FROM contacts c
       WHERE c.type IN ('customer','both') AND c.deleted_at IS NULL AND c.balance > 0`
@@ -58,6 +59,16 @@ export default function DebtorsScreen() {
   }
 
   const totalDebt = debtors.reduce((sum, d) => sum + Number(d.balance), 0)
+
+  // NULL means "use the global interval from Settings" — autoReminder.service.ts
+  // falls back the same way. Empty input clears the override back to NULL.
+  async function saveReminderInterval(contactId: number, value: string) {
+    const n = value.trim() === '' ? null : Number(value)
+    await window.electronAPI.db.exec(
+      `UPDATE contacts SET reminder_interval_days=? WHERE id=?`,
+      [n && n > 0 ? n : null, contactId]
+    )
+  }
 
   return (
     <BackOfficeLayout>
@@ -87,12 +98,12 @@ export default function DebtorsScreen() {
       <div className="flex-1 overflow-auto">
         <table className="w-full">
           <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-            <tr>{[t('common.name'), t('common.phone'), t('debtors.lastPurchase'), t('customers.balanceCol'), t('debtors.telegramCol'), ''].map((h) => (
+            <tr>{[t('common.name'), t('common.phone'), t('debtors.lastPurchase'), t('customers.balanceCol'), t('debtors.telegramCol'), t('debtors.reminderInterval'), ''].map((h) => (
               <th key={h} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
             ))}</tr>
           </thead>
           <tbody className="divide-y divide-dark-border">
-            {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={6} />)}
+            {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={7} />)}
             {!loading && debtors.map((d) => (
               <tr key={d.id} className="hover:bg-dark-card/40 group">
                 <td className="px-4 py-3 text-white text-sm font-medium">{d.name}</td>
@@ -111,6 +122,16 @@ export default function DebtorsScreen() {
                       <XCircle size={13} /> {t('debtors.notConnected')}
                     </span>
                   )}
+                </td>
+                <td className="px-4 py-3">
+                  <input
+                    type="number" min={1}
+                    placeholder={t('debtors.reminderDefault')}
+                    defaultValue={d.reminder_interval_days ?? ''}
+                    onBlur={(e) => saveReminderInterval(d.id, e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                    className="w-24 bg-dark-card border border-dark-border rounded-lg px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary"
+                  />
                 </td>
                 <td className="px-4 py-3">
                   <button
