@@ -39,6 +39,7 @@ export default function WarehouseScreen() {
   const [categories, setCategories] = useState<Category[]>([])
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('')
+  const [locationFilter, setLocationFilter] = useState<'all' | 'shop' | 'warehouse'>('all')
   const [valuation, setValuation] = useState<Valuation>('cost')
   const [loading, setLoading] = useState(true)
   const [receiveTarget, setReceiveTarget] = useState<StockRow | null>(null)
@@ -117,6 +118,16 @@ export default function WarehouseScreen() {
     }
     return { shopQty, shopValue, whQty, whValue, totalQty: shopQty + whQty, totalValue: shopValue + whValue }
   }, [rows, valuation])
+
+  // The summary cards above always show shop/warehouse/combined together;
+  // this only narrows which ROWS the table lists, so "faqat ombor" (only
+  // warehouse) genuinely separates the two instead of always showing every
+  // product with both columns side by side.
+  const displayRows = useMemo(() => {
+    if (locationFilter === 'shop') return rows.filter((r) => Number(r.shop_qty) > 0)
+    if (locationFilter === 'warehouse') return rows.filter((r) => Number(r.warehouse_qty) > 0)
+    return rows
+  }, [rows, locationFilter])
 
   async function receive(productId: number, batchId: number, qty: number, reason: string) {
     const now = new Date().toISOString()
@@ -241,6 +252,16 @@ export default function WarehouseScreen() {
           options={[{ value: '', label: t('common.all') }, ...categories.map((c) => ({ value: String(c.id), label: c.name }))]}
         />
         <Select
+          value={locationFilter}
+          onChange={(v) => setLocationFilter(v as 'all' | 'shop' | 'warehouse')}
+          className="w-40 shrink-0"
+          options={[
+            { value: 'all', label: t('warehouse.filterAll') },
+            { value: 'shop', label: t('warehouse.filterShopOnly') },
+            { value: 'warehouse', label: t('warehouse.filterWarehouseOnly') },
+          ]}
+        />
+        <Select
           value={valuation}
           onChange={(v) => setValuation(v as Valuation)}
           className="w-40 shrink-0"
@@ -254,20 +275,22 @@ export default function WarehouseScreen() {
       <div className="flex-1 overflow-auto">
         <table className="w-full">
           <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-            <tr>{[t('common.name'), t('products.category'), t('warehouse.expiry'), t('warehouse.shopQty'), t('warehouse.warehouseQty'), t('warehouse.value'), ''].map((h, i) => (
+            <tr>{[t('common.name'), t('common.category'), t('warehouse.expiry'), t('warehouse.shopQty'), t('warehouse.warehouseQty'), t('warehouse.value'), ''].map((h, i) => (
               <th key={i} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
             ))}</tr>
           </thead>
           <tbody className="divide-y divide-dark-border">
             {loading && Array.from({ length: 6 }, (_, i) => <SkeletonRow key={i} cols={7} />)}
-            {!loading && rows.map((r) => (
+            {!loading && displayRows.map((r) => (
               <tr key={r.id} className="hover:bg-dark-card/40 group">
                 <td className="px-4 py-3 text-white text-sm font-medium">{r.name}</td>
                 <td className="px-4 py-3 text-gray-400 text-sm">{r.category_name ?? '—'}</td>
                 <td className="px-4 py-3 text-gray-400 text-sm">{r.expiry_date ? r.expiry_date.slice(0, 10) : '—'}</td>
                 <td className="px-4 py-3 text-gray-300 text-sm">{r.shop_qty}</td>
                 <td className="px-4 py-3 text-gray-300 text-sm">{r.warehouse_qty}</td>
-                <td className="px-4 py-3 text-gray-300 text-sm">UZS {fmtUZS((Number(r.shop_qty) + Number(r.warehouse_qty)) * unitValue(r))}</td>
+                <td className="px-4 py-3 text-gray-300 text-sm">
+                  UZS {fmtUZS((locationFilter === 'shop' ? Number(r.shop_qty) : locationFilter === 'warehouse' ? Number(r.warehouse_qty) : Number(r.shop_qty) + Number(r.warehouse_qty)) * unitValue(r))}
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <button onClick={() => setReceiveTarget(r)} className="flex items-center gap-1 text-xs text-primary hover:underline">
@@ -284,7 +307,7 @@ export default function WarehouseScreen() {
             ))}
           </tbody>
         </table>
-        {!loading && rows.length === 0 && (
+        {!loading && displayRows.length === 0 && (
           <EmptyState icon={WarehouseIcon} title={t('warehouse.noProducts')} />
         )}
       </div>
