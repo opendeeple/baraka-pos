@@ -136,7 +136,10 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
     return false
   }
 
-  /** Enter in the search box: if it's an exact barcode match, add it straight to the cart and clear the box (scan-to-checkout flow). Otherwise leave the name-filtered grid as-is. */
+  /** Enter in the search box: if it's an exact barcode match, add it straight to the cart and
+   *  clear the box (scan-to-checkout flow). Otherwise offer the quick-add flow — a HID scanner
+   *  focused on this input (the global useBarcodeScanner listener ignores INPUT/TEXTAREA targets
+   *  on purpose, to avoid double-handling the same keystrokes) has to trigger it from here. */
   async function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== 'Enter') return
     const term = search.trim()
@@ -144,6 +147,8 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
     if (await handleBarcodeScanned(term)) {
       setSearch('')
       searchInputRef.current?.focus()
+    } else {
+      setQuickAddBarcode(term)
     }
   }
 
