@@ -22,6 +22,7 @@ interface StockRow {
 }
 
 interface Category { id: number; name: string }
+interface PickerProduct { id: number; name: string; batch_id: number | null; warehouse_qty: number }
 
 type Valuation = 'cost' | 'price'
 
@@ -42,10 +43,31 @@ export default function WarehouseScreen() {
   const [loading, setLoading] = useState(true)
   const [receiveTarget, setReceiveTarget] = useState<StockRow | null>(null)
   const [transferTarget, setTransferTarget] = useState<StockRow | null>(null)
+  const [showReceivePicker, setShowReceivePicker] = useState(false)
+  const [showTransferPicker, setShowTransferPicker] = useState(false)
+  const [allProducts, setAllProducts] = useState<PickerProduct[]>([])
   const debouncedSearch = useDebouncedValue(search)
 
-  useEffect(() => { loadCategories() }, [])
+  useEffect(() => { loadCategories(); loadAllProducts() }, [])
   useEffect(() => { loadRows() }, [debouncedSearch, catFilter])
+
+  // Independent of the page's category/search filter — the general
+  // Receive/Transfer buttons let you pick ANY product, not just whichever
+  // ones happen to match the current filter.
+  async function loadAllProducts() {
+    setAllProducts(await window.electronAPI.db.query(`
+      SELECT p.id, p.name, pb.id as batch_id, COALESCE(wh.quantity, 0) as warehouse_qty
+      FROM products p
+      LEFT JOIN product_batches pb ON pb.id = (
+        SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
+      )
+      LEFT JOIN product_stocks wh ON wh.id = (
+        SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id AND location = 'warehouse' ORDER BY id DESC LIMIT 1
+      )
+      WHERE p.deleted_at IS NULL AND p.is_stock_managed = 1
+      ORDER BY p.name LIMIT 1000
+    `, []) as PickerProduct[])
+  }
 
   async function loadCategories() {
     setCategories(await window.electronAPI.db.query(
@@ -96,12 +118,15 @@ export default function WarehouseScreen() {
     return { shopQty, shopValue, whQty, whValue, totalQty: shopQty + whQty, totalValue: shopValue + whValue }
   }, [rows, valuation])
 
-  async function receive(qty: number, reason: string) {
-    if (!receiveTarget?.batch_id) return
-    const { id: productId, batch_id: batchId } = receiveTarget
+  async function receive(productId: number, batchId: number, qty: number, reason: string) {
     const now = new Date().toISOString()
+    // ORDER BY id DESC LIMIT 1 matches loadRows()'s display query exactly —
+    // without it, a pre-existing duplicate stock row for the same
+    // product+batch+location could get updated while the DISPLAYED row
+    // (the newest one) stays unchanged, making the transfer look like it
+    // did nothing.
     let stock = (await window.electronAPI.db.query(
-      `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='warehouse'`,
+      `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='warehouse' ORDER BY id DESC LIMIT 1`,
       [productId, batchId]
     ) as Array<{ id: number; quantity: number }>)[0]
     if (!stock) {
@@ -110,7 +135,7 @@ export default function WarehouseScreen() {
         [uuidv4(), productId, batchId, now]
       )
       stock = (await window.electronAPI.db.query(
-        `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='warehouse'`,
+        `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='warehouse' ORDER BY id DESC LIMIT 1`,
         [productId, batchId]
       ) as Array<{ id: number; quantity: number }>)[0]
     }
@@ -126,19 +151,17 @@ export default function WarehouseScreen() {
     window.electronAPI.sync.pushPending().catch(() => {})
   }
 
-  async function transferToShop(qty: number) {
-    if (!transferTarget?.batch_id) return
-    const { id: productId, batch_id: batchId } = transferTarget
+  async function transferToShop(productId: number, batchId: number, qty: number) {
     const now = new Date().toISOString()
 
     const whRow = (await window.electronAPI.db.query(
-      `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='warehouse'`,
+      `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='warehouse' ORDER BY id DESC LIMIT 1`,
       [productId, batchId]
     ) as Array<{ id: number; quantity: number }>)[0]
     if (!whRow || Number(whRow.quantity) < qty) throw new Error(t('warehouse.notEnoughStock'))
 
     let shopRow = (await window.electronAPI.db.query(
-      `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop'`,
+      `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' ORDER BY id DESC LIMIT 1`,
       [productId, batchId]
     ) as Array<{ id: number; quantity: number }>)[0]
     if (!shopRow) {
@@ -147,7 +170,7 @@ export default function WarehouseScreen() {
         [uuidv4(), productId, batchId, now]
       )
       shopRow = (await window.electronAPI.db.query(
-        `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop'`,
+        `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' ORDER BY id DESC LIMIT 1`,
         [productId, batchId]
       ) as Array<{ id: number; quantity: number }>)[0]
     }
@@ -173,7 +196,19 @@ export default function WarehouseScreen() {
 
   return (
     <BackOfficeLayout>
-      <PageHeader title={t('nav.warehouse')} />
+      <PageHeader
+        title={t('nav.warehouse')}
+        actions={
+          <>
+            <Button variant="secondary" icon={PackagePlus} onClick={() => setShowReceivePicker(true)}>
+              {t('warehouse.receive')}
+            </Button>
+            <Button variant="secondary" icon={ArrowRightLeft} onClick={() => setShowTransferPicker(true)}>
+              {t('warehouse.transfer')}
+            </Button>
+          </>
+        }
+      />
 
       <div className="shrink-0 px-6 py-3 border-b border-dark-border grid grid-cols-3 gap-3">
         <div className="bg-dark-card border border-dark-border rounded-lg p-3">
@@ -256,23 +291,49 @@ export default function WarehouseScreen() {
 
       {receiveTarget && (
         <ReceiveModal
-          product={receiveTarget}
+          product={{ id: receiveTarget.id, name: receiveTarget.name, batch_id: receiveTarget.batch_id, warehouse_qty: receiveTarget.warehouse_qty }}
+          products={allProducts}
           onClose={() => setReceiveTarget(null)}
-          onConfirm={async (qty, reason) => {
-            await receive(qty, reason)
+          onConfirm={async (productId, batchId, qty, reason) => {
+            await receive(productId, batchId, qty, reason)
             setReceiveTarget(null)
-            loadRows()
+            loadRows(); loadAllProducts()
+          }}
+        />
+      )}
+      {showReceivePicker && (
+        <ReceiveModal
+          product={null}
+          products={allProducts}
+          onClose={() => setShowReceivePicker(false)}
+          onConfirm={async (productId, batchId, qty, reason) => {
+            await receive(productId, batchId, qty, reason)
+            setShowReceivePicker(false)
+            loadRows(); loadAllProducts()
           }}
         />
       )}
       {transferTarget && (
         <TransferModal
-          product={transferTarget}
+          product={{ id: transferTarget.id, name: transferTarget.name, batch_id: transferTarget.batch_id, warehouse_qty: transferTarget.warehouse_qty }}
+          products={allProducts}
           onClose={() => setTransferTarget(null)}
-          onConfirm={async (qty) => {
-            await transferToShop(qty)
+          onConfirm={async (productId, batchId, qty) => {
+            await transferToShop(productId, batchId, qty)
             setTransferTarget(null)
-            loadRows()
+            loadRows(); loadAllProducts()
+          }}
+        />
+      )}
+      {showTransferPicker && (
+        <TransferModal
+          product={null}
+          products={allProducts}
+          onClose={() => setShowTransferPicker(false)}
+          onConfirm={async (productId, batchId, qty) => {
+            await transferToShop(productId, batchId, qty)
+            setShowTransferPicker(false)
+            loadRows(); loadAllProducts()
           }}
         />
       )}
@@ -280,20 +341,32 @@ export default function WarehouseScreen() {
   )
 }
 
-function ReceiveModal({ product, onClose, onConfirm }: {
-  product: StockRow; onClose: () => void; onConfirm: (qty: number, reason: string) => Promise<void>
+interface ModalProduct { id: number; name: string; batch_id: number | null; warehouse_qty: number }
+
+// `product` pre-selected (opened from a row's own button) or null (opened
+// from the general header button — the picker below lets you choose any
+// product with stock managed, not just ones matching the page's current
+// filter).
+function ReceiveModal({ product, products, onClose, onConfirm }: {
+  product: ModalProduct | null
+  products: PickerProduct[]
+  onClose: () => void
+  onConfirm: (productId: number, batchId: number, qty: number, reason: string) => Promise<void>
 }) {
   const { t } = useTranslation()
+  const [pickedId, setPickedId] = useState(product ? String(product.id) : '')
   const [qty, setQty] = useState('')
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
 
+  const picked = product ?? products.find((p) => String(p.id) === pickedId) ?? null
+
   async function confirm() {
     const n = Number(qty)
-    if (!n || n <= 0) return
+    if (!n || n <= 0 || !picked?.batch_id) return
     setSaving(true)
     try {
-      await onConfirm(n, reason)
+      await onConfirm(picked.id, picked.batch_id, n, reason)
       toast.success(t('warehouse.received'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
@@ -304,19 +377,29 @@ function ReceiveModal({ product, onClose, onConfirm }: {
     <Modal
       open
       onClose={onClose}
-      title={`${t('warehouse.receive')} — ${product.name}`}
+      title={product ? `${t('warehouse.receive')} — ${product.name}` : t('warehouse.receive')}
       maxWidth="max-w-sm"
       footer={
         <>
           <Button variant="secondary" className="flex-1" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button className="flex-1" onClick={confirm} loading={saving} disabled={!qty || Number(qty) <= 0}>{t('common.save')}</Button>
+          <Button className="flex-1" onClick={confirm} loading={saving} disabled={!picked?.batch_id || !qty || Number(qty) <= 0}>{t('common.save')}</Button>
         </>
       }
     >
       <div className="p-5 space-y-4">
+        {!product && (
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">{t('common.name')}</label>
+            <Select
+              value={pickedId}
+              onChange={setPickedId}
+              options={[{ value: '', label: '—' }, ...products.filter((p) => p.batch_id).map((p) => ({ value: String(p.id), label: p.name }))]}
+            />
+          </div>
+        )}
         <div>
           <label className="text-xs text-gray-400 mb-1 block">{t('warehouse.quantity')}</label>
-          <Input type="number" min={0} step="any" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
+          <Input type="number" min={0} step="any" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus={Boolean(product)} />
         </div>
         <div>
           <label className="text-xs text-gray-400 mb-1 block">{t('warehouse.reasonOptional')}</label>
@@ -327,19 +410,25 @@ function ReceiveModal({ product, onClose, onConfirm }: {
   )
 }
 
-function TransferModal({ product, onClose, onConfirm }: {
-  product: StockRow; onClose: () => void; onConfirm: (qty: number) => Promise<void>
+function TransferModal({ product, products, onClose, onConfirm }: {
+  product: ModalProduct | null
+  products: PickerProduct[]
+  onClose: () => void
+  onConfirm: (productId: number, batchId: number, qty: number) => Promise<void>
 }) {
   const { t } = useTranslation()
+  const [pickedId, setPickedId] = useState(product ? String(product.id) : '')
   const [qty, setQty] = useState('')
   const [saving, setSaving] = useState(false)
 
+  const picked = product ?? products.find((p) => String(p.id) === pickedId) ?? null
+
   async function confirm() {
     const n = Number(qty)
-    if (!n || n <= 0) return
+    if (!n || n <= 0 || !picked?.batch_id) return
     setSaving(true)
     try {
-      await onConfirm(n)
+      await onConfirm(picked.id, picked.batch_id, n)
       toast.success(t('warehouse.transferred'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
@@ -350,20 +439,32 @@ function TransferModal({ product, onClose, onConfirm }: {
     <Modal
       open
       onClose={onClose}
-      title={`${t('warehouse.transfer')} — ${product.name}`}
+      title={product ? `${t('warehouse.transfer')} — ${product.name}` : t('warehouse.transfer')}
       maxWidth="max-w-sm"
       footer={
         <>
           <Button variant="secondary" className="flex-1" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button className="flex-1" onClick={confirm} loading={saving} disabled={!qty || Number(qty) <= 0}>{t('common.save')}</Button>
+          <Button className="flex-1" onClick={confirm} loading={saving} disabled={!picked?.batch_id || !qty || Number(qty) <= 0}>{t('common.save')}</Button>
         </>
       }
     >
       <div className="p-5 space-y-4">
-        <p className="text-xs text-gray-500">{t('warehouse.availableInWarehouse', { qty: product.warehouse_qty })}</p>
+        {!product && (
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">{t('common.name')}</label>
+            <Select
+              value={pickedId}
+              onChange={setPickedId}
+              options={[{ value: '', label: '—' }, ...products.filter((p) => p.batch_id && p.warehouse_qty > 0).map((p) => ({ value: String(p.id), label: p.name }))]}
+            />
+          </div>
+        )}
+        {picked && (
+          <p className="text-xs text-gray-500">{t('warehouse.availableInWarehouse', { qty: picked.warehouse_qty })}</p>
+        )}
         <div>
           <label className="text-xs text-gray-400 mb-1 block">{t('warehouse.quantity')}</label>
-          <Input type="number" min={0} max={product.warehouse_qty} step="any" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
+          <Input type="number" min={0} max={picked?.warehouse_qty ?? 0} step="any" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus={Boolean(product)} />
         </div>
       </div>
     </Modal>
