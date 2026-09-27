@@ -56,96 +56,48 @@ export async function getDailySummary(storeId: number, date: string, dateTo?: st
   }
 }
 
+// Returns every product with at least one completed sale in the range, with
+// all three metrics (quantity, revenue, times-sold) together — the "full
+// table" view needs to show all of them at once and let the owner re-sort
+// locally, not refetch per column, and a shop with many products needs to
+// see all of them, not just a top-N slice for a chart.
 export async function getTopProducts(
   storeId: number,
   dateFrom: string,
   dateTo: string,
-  limit = 10,
-  sortBy: 'quantity' | 'revenue' | 'count' = 'quantity'
+  limit = 500
 ) {
   const startDate = new Date(dateFrom + 'T00:00:00.000Z')
   const endDate = new Date(dateTo + 'T23:59:59.999Z')
 
-  // "Necha marta sotilgan" — how many separate sales included this product
-  // at least once, as opposed to 'quantity' (total units) — a product sold
-  // 1 unit each in 50 sales ranks highest here but low by quantity, and
-  // vice versa for one bulk sale of the same product.
-  if (sortBy === 'count') {
-    const rows = await prisma.$queryRaw<Array<{ productId: number; name: string; quantitySold: number; saleCount: number }>>`
-      SELECT si."productId" as "productId", p.name as name,
-             SUM(si.quantity) as "quantitySold",
-             COUNT(DISTINCT si."saleId") as "saleCount"
-      FROM sale_items si
-      JOIN sales s ON s.id = si."saleId"
-      JOIN products p ON p.id = si."productId"
-      WHERE s."storeId" = ${storeId} AND s.status = 'completed'
-        AND s."createdAt" >= ${startDate} AND s."createdAt" <= ${endDate}
-        AND si."productId" IS NOT NULL
-      GROUP BY si."productId", p.name
-      ORDER BY "saleCount" DESC
-      LIMIT ${limit}
-    `
-    return rows.map((r) => ({
-      productId: r.productId,
-      name: r.name,
-      quantitySold: Number(r.quantitySold),
-      saleCount: Number(r.saleCount),
-    }))
-  }
-
-  // Revenue ranking needs SUM(quantity * unitPrice) per product — a row-level
+  // Revenue needs SUM(quantity * unitPrice) per product — a row-level
   // product before summing, which groupBy's _sum can't express (it can only
-  // sum a single column as-is), so this branch uses raw SQL the same way
-  // getCategorySales already does for the identical reason.
-  if (sortBy === 'revenue') {
-    const rows = await prisma.$queryRaw<Array<{ productId: number; name: string; quantitySold: number; revenue: number }>>`
-      SELECT si."productId" as "productId", p.name as name,
-             SUM(si.quantity) as "quantitySold",
-             SUM(si.quantity * si."unitPrice") as revenue
-      FROM sale_items si
-      JOIN sales s ON s.id = si."saleId"
-      JOIN products p ON p.id = si."productId"
-      WHERE s."storeId" = ${storeId} AND s.status = 'completed'
-        AND s."createdAt" >= ${startDate} AND s."createdAt" <= ${endDate}
-        AND si."productId" IS NOT NULL
-      GROUP BY si."productId", p.name
-      ORDER BY revenue DESC
-      LIMIT ${limit}
-    `
-    return rows.map((r) => ({
-      productId: r.productId,
-      name: r.name,
-      quantitySold: Number(r.quantitySold),
-      revenue: Number(r.revenue),
-    }))
-  }
-
-  const items = await prisma.saleItem.groupBy({
-    by: ['productId'],
-    where: {
-      sale: {
-        storeId,
-        status: 'completed',
-        createdAt: { gte: startDate, lte: endDate },
-      },
-    },
-    _sum: { quantity: true },
-    orderBy: { _sum: { quantity: 'desc' } },
-    take: limit,
-  })
-
-  const productIds = items.map((i) => i.productId).filter(Boolean) as number[]
-  const products = await prisma.product.findMany({
-    where: { id: { in: productIds } },
-    select: { id: true, name: true },
-  })
-
-  const nameMap = Object.fromEntries(products.map((p) => [p.id, p.name]))
-
-  return items.map((i) => ({
-    productId: i.productId,
-    name: nameMap[i.productId as number] ?? 'Unknown',
-    quantitySold: Number(i._sum.quantity ?? 0),
+  // sum a single column as-is) — same reason getCategorySales uses raw SQL.
+  // "saleCount" (necha marta sotilgan) is how many separate sales included
+  // this product at least once, as opposed to quantitySold (total units):
+  // a product sold 1 unit each in 50 sales ranks high here but low by
+  // quantity, and vice versa for one bulk sale of the same product.
+  const rows = await prisma.$queryRaw<Array<{ productId: number; name: string; quantitySold: number; revenue: number; saleCount: number }>>`
+    SELECT si."productId" as "productId", p.name as name,
+           SUM(si.quantity) as "quantitySold",
+           SUM(si.quantity * si."unitPrice") as revenue,
+           COUNT(DISTINCT si."saleId") as "saleCount"
+    FROM sale_items si
+    JOIN sales s ON s.id = si."saleId"
+    JOIN products p ON p.id = si."productId"
+    WHERE s."storeId" = ${storeId} AND s.status = 'completed'
+      AND s."createdAt" >= ${startDate} AND s."createdAt" <= ${endDate}
+      AND si."productId" IS NOT NULL
+    GROUP BY si."productId", p.name
+    ORDER BY "quantitySold" DESC
+    LIMIT ${limit}
+  `
+  return rows.map((r) => ({
+    productId: r.productId,
+    name: r.name,
+    quantitySold: Number(r.quantitySold),
+    revenue: Number(r.revenue),
+    saleCount: Number(r.saleCount),
   }))
 }
 

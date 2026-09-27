@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DEFAULT_SERVER_URL } from '@baraka/shared'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { DatePicker } from '../../components/ui/DatePicker'
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { useAuthStore } from '../../store/auth.store'
@@ -77,7 +77,7 @@ export default function ReportsScreen() {
     try {
       const [d, tp, cs, h, ls] = await Promise.all([
         apiFetch<DailySummary>(summaryUrl, authToken),
-        apiFetch<TopProduct[]>(`${base}/top-products?date_from=${dateFrom}&date_to=${dateTo}&limit=10&sort_by=${topProductsSort}`, authToken),
+        apiFetch<TopProduct[]>(`${base}/top-products?date_from=${dateFrom}&date_to=${dateTo}&limit=500`, authToken),
         apiFetch<CategorySale[]>(`${base}/category-sales?date_from=${dateFrom}&date_to=${dateTo}`, authToken),
         apiFetch<HourlySlot[]>(`${base}/hourly?date=${date}`, authToken),
         apiFetch<LowStockItem[]>(`${base}/low-stock`, authToken),
@@ -87,9 +87,17 @@ export default function ReportsScreen() {
       setError(t('reports.failedToLoad'))
       console.error(e)
     } finally { setLoading(false) }
-  }, [token, date, dateFrom, dateTo, tab, topProductsSort])
+  }, [token, date, dateFrom, dateTo, tab])
 
   useEffect(() => { load() }, [load])
+
+  // Sorting is client-side — every row already carries all three metrics,
+  // so switching the toggle just re-orders the already-loaded list instead
+  // of refetching.
+  const sortedTopProducts = useMemo(() => {
+    const key = topProductsSort === 'revenue' ? 'revenue' : topProductsSort === 'count' ? 'saleCount' : 'quantitySold'
+    return [...topProducts].sort((a, b) => (Number(b[key] ?? 0)) - (Number(a[key] ?? 0)))
+  }, [topProducts, topProductsSort])
 
   return (
     <BackOfficeLayout>
@@ -210,83 +218,87 @@ export default function ReportsScreen() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-6">
-          {/* Top products */}
-          <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white font-semibold text-sm">{t('reports.topProducts')}
-                <span className="text-gray-500 font-normal ml-1.5 text-xs">({dateFrom} → {dateTo})</span>
-              </h3>
-              <div className="flex bg-dark-card border border-dark-border rounded-lg p-0.5 text-xs">
-                <button
-                  onClick={() => setTopProductsSort('quantity')}
-                  className={`px-2.5 py-1 rounded-md transition-colors ${topProductsSort === 'quantity' ? 'bg-primary text-white' : 'text-gray-400'}`}
-                >
-                  {t('reports.byQuantity')}
-                </button>
-                <button
-                  onClick={() => setTopProductsSort('revenue')}
-                  className={`px-2.5 py-1 rounded-md transition-colors ${topProductsSort === 'revenue' ? 'bg-primary text-white' : 'text-gray-400'}`}
-                >
-                  {t('reports.byRevenue')}
-                </button>
-                <button
-                  onClick={() => setTopProductsSort('count')}
-                  className={`px-2.5 py-1 rounded-md transition-colors ${topProductsSort === 'count' ? 'bg-primary text-white' : 'text-gray-400'}`}
-                >
-                  {t('reports.byCount')}
-                </button>
-              </div>
+        {/* Top products — a full, scrollable table (not a top-8 chart) so a
+            real shop's whole catalog is visible, not just a handful. */}
+        <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-white font-semibold text-sm">{t('reports.topProducts')}
+              <span className="text-gray-500 font-normal ml-1.5 text-xs">({dateFrom} → {dateTo})</span>
+            </h3>
+            <div className="flex bg-dark-card border border-dark-border rounded-lg p-0.5 text-xs">
+              <button
+                onClick={() => setTopProductsSort('quantity')}
+                className={`px-2.5 py-1 rounded-md transition-colors ${topProductsSort === 'quantity' ? 'bg-primary text-white' : 'text-gray-400'}`}
+              >
+                {t('reports.byQuantity')}
+              </button>
+              <button
+                onClick={() => setTopProductsSort('revenue')}
+                className={`px-2.5 py-1 rounded-md transition-colors ${topProductsSort === 'revenue' ? 'bg-primary text-white' : 'text-gray-400'}`}
+              >
+                {t('reports.byRevenue')}
+              </button>
+              <button
+                onClick={() => setTopProductsSort('count')}
+                className={`px-2.5 py-1 rounded-md transition-colors ${topProductsSort === 'count' ? 'bg-primary text-white' : 'text-gray-400'}`}
+              >
+                {t('reports.byCount')}
+              </button>
             </div>
-            {topProducts.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={topProducts.slice(0, 8)} layout="vertical" margin={{ left: 0, right: 16 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#404060" horizontal={false} />
-                  <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 10 }} />
-                  <YAxis type="category" dataKey="name" width={120}
-                    tick={{ fill: '#9ca3af', fontSize: 10 }}
-                    tickFormatter={(v: string) => v.length > 18 ? v.slice(0, 18) + '…' : v} />
-                  <Tooltip contentStyle={{ background: '#2a2a3e', border: '1px solid #404060', borderRadius: 8 }}
-                    labelStyle={{ color: '#fff' }} itemStyle={{ color: '#f97316' }}
-                    formatter={(value: number) => topProductsSort === 'revenue' ? `UZS ${fmtUZS(value)}` : value} />
-                  <Bar
-                    dataKey={topProductsSort === 'revenue' ? 'revenue' : topProductsSort === 'count' ? 'saleCount' : 'quantitySold'}
-                    fill="#f97316" radius={[0, 4, 4, 0]}
-                    name={topProductsSort === 'revenue' ? t('reports.revenue') : topProductsSort === 'count' ? t('reports.salesCount') : t('reports.units')}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[220px] flex items-center justify-center text-gray-600 text-sm">{t('reports.noData')}</div>
-            )}
           </div>
+          {sortedTopProducts.length > 0 ? (
+            <div className="max-h-[420px] overflow-y-auto">
+              <table className="w-full">
+                <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
+                  <tr>
+                    {['#', t('common.name'), t('reports.units'), t('reports.revenue'), t('reports.salesCount')].map((h) => (
+                      <th key={h} className="text-left px-3 py-2 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-dark-border">
+                  {sortedTopProducts.map((p, i) => (
+                    <tr key={p.productId} className="hover:bg-dark-card/40">
+                      <td className="px-3 py-2 text-gray-500 text-xs">{i + 1}</td>
+                      <td className="px-3 py-2 text-white text-sm font-medium">{p.name}</td>
+                      <td className={`px-3 py-2 text-sm ${topProductsSort === 'quantity' ? 'text-primary font-semibold' : 'text-gray-300'}`}>{p.quantitySold}</td>
+                      <td className={`px-3 py-2 text-sm ${topProductsSort === 'revenue' ? 'text-primary font-semibold' : 'text-gray-300'}`}>UZS {fmtUZS(p.revenue ?? 0)}</td>
+                      <td className={`px-3 py-2 text-sm ${topProductsSort === 'count' ? 'text-primary font-semibold' : 'text-gray-300'}`}>{p.saleCount ?? 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="h-[220px] flex items-center justify-center text-gray-600 text-sm">{t('reports.noData')}</div>
+          )}
+        </div>
 
-          {/* Category sales */}
-          <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
-            <h3 className="text-white font-semibold text-sm mb-4">{t('reports.salesByCategory')}</h3>
-            {categorySales.length > 0 ? (
-              <div className="space-y-3">
-                {categorySales.map((cat, i) => {
-                  const maxRev = categorySales[0].revenue
-                  const pct = maxRev > 0 ? (cat.revenue / maxRev) * 100 : 0
-                  return (
-                    <div key={cat.category}>
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-gray-300">{cat.category}</span>
-                        <span className="text-white font-medium">UZS {fmtUZS(cat.revenue)}</span>
-                      </div>
-                      <div className="h-1.5 bg-dark-card rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all"
-                          style={{ width: `${pct}%`, background: COLORS[i % COLORS.length] }} />
-                      </div>
+        {/* Category sales */}
+        <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
+          <h3 className="text-white font-semibold text-sm mb-4">{t('reports.salesByCategory')}</h3>
+          {categorySales.length > 0 ? (
+            <div className="space-y-3">
+              {categorySales.map((cat, i) => {
+                const maxRev = categorySales[0].revenue
+                const pct = maxRev > 0 ? (cat.revenue / maxRev) * 100 : 0
+                return (
+                  <div key={cat.category}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-gray-300">{cat.category}</span>
+                      <span className="text-white font-medium">UZS {fmtUZS(cat.revenue)}</span>
                     </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="h-[220px] flex items-center justify-center text-gray-600 text-sm">{t('reports.noData')}</div>
-            )}
-          </div>
+                    <div className="h-1.5 bg-dark-card rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all"
+                        style={{ width: `${pct}%`, background: COLORS[i % COLORS.length] }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="h-[220px] flex items-center justify-center text-gray-600 text-sm">{t('reports.noData')}</div>
+          )}
         </div>
 
         {/* Low stock alert */}

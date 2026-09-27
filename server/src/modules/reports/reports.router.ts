@@ -21,14 +21,15 @@ router.get('/daily', async (req: Request, res: Response) => {
 
 router.get('/top-products', async (req: Request, res: Response) => {
   try {
-    const { date_from, date_to, limit, sort_by } = req.query
+    const { date_from, date_to, limit } = req.query
     const today = new Date().toISOString().split('T')[0]
+    // Every row already carries quantity, revenue and sale count together —
+    // the client re-sorts locally instead of refetching per column.
     const data = await getTopProducts(
       req.user!.storeId,
       (date_from as string) || today,
       (date_to as string) || today,
-      limit ? Number(limit) : 10,
-      sort_by === 'revenue' ? 'revenue' : sort_by === 'count' ? 'count' : 'quantity'
+      limit ? Number(limit) : 500
     )
     res.json(data)
   } catch (err: unknown) {
