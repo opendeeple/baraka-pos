@@ -7,12 +7,10 @@ import { dbQuery } from './db.service'
 // host/token are entered in Settings and read from the same 'settings'
 // table pattern as telegram_config/printer_config.
 //
-// The exact request shape (path/body/where the token goes) isn't in public
-// docs as of this writing — this is a best-guess REST convention (Bearer
-// token, POST to the endpoint root, {to, message} body). If the phone
-// rejects it, the error message below surfaces the raw HTTP status + body
-// from the phone, which is normally enough to see what it actually expects
-// and adjust this one function.
+// Confirmed request shape (per traccar.org's HTTP SMS API docs and forum
+// posts describing this exact app): POST to the endpoint root, body
+// {"to": "<phone>", "message": "<text>"}, and the Authorization header
+// carries the raw token with NO "Bearer " prefix.
 
 interface SmsConfig {
   host: string
@@ -45,7 +43,7 @@ export async function sendSms(phoneNumber: string, text: string): Promise<void> 
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(c.token ? { Authorization: `Bearer ${c.token}` } : {}),
+      ...(c.token ? { Authorization: c.token } : {}),
     },
     body: JSON.stringify({ to: phoneNumber, message: text }),
   })
