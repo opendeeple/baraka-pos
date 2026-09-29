@@ -29,12 +29,12 @@ interface AutoReminderConfig {
 
 interface ReceiptSettings {
   header: string; footer: string; show_logo: boolean
-  show_barcode: boolean; show_cashier: boolean; copies: number
+  show_cashier: boolean; copies: number
 }
 
 type ReceiptElementKey =
   | 'storeName' | 'storeInfo' | 'invoiceInfo' | 'items' | 'itemQty'
-  | 'totals' | 'totalRow' | 'footer' | 'barcode'
+  | 'totals' | 'totalRow' | 'footer' | 'saleNumber'
 
 interface ElementStyle { fontPx: number; shiftPx: number }
 
@@ -54,7 +54,7 @@ const ELEMENT_LABELS: Array<[ReceiptElementKey, string]> = [
   ['totals', 'Charges / Payment / Change'],
   ['totalRow', 'TOTAL AMOUNT'],
   ['footer', 'Footer (Thank You)'],
-  ['barcode', 'Barcode Line'],
+  ['saleNumber', 'Sale Number (bottom)'],
 ]
 
 // Matches printer.ipc.ts's DEFAULT_RECEIPT_LAYOUT — the values already
@@ -73,7 +73,7 @@ const DEFAULT_LAYOUT: ReceiptLayout = {
     totals: { fontPx: 11, shiftPx: 0 },
     totalRow: { fontPx: 11, shiftPx: 0 },
     footer: { fontPx: 13, shiftPx: 0 },
-    barcode: { fontPx: 11, shiftPx: 0 },
+    saleNumber: { fontPx: 13, shiftPx: 0 },
   },
 }
 
@@ -89,7 +89,7 @@ export default function SettingsScreen() {
     type: 'usb', vendorId: '0x0416', productId: '0x5011', host: '192.168.1.100', port: '9100', name: '',
   })
   const [receipt, setReceipt] = useState<ReceiptSettings>({
-    header: '', footer: 'Thank you for shopping with us!', show_logo: false, show_barcode: true, show_cashier: true, copies: 1,
+    header: '', footer: 'Thank you for shopping with us!', show_logo: false, show_cashier: true, copies: 1,
   })
   const [layout, setLayout] = useState<ReceiptLayout>(DEFAULT_LAYOUT)
   const [telegram, setTelegram] = useState<TelegramConfig>({ botToken: '', botUsername: '' })
@@ -556,7 +556,6 @@ export default function SettingsScreen() {
           <div className="flex flex-wrap gap-4">
             {[
               { key: 'show_cashier', label: 'Show cashier name' },
-              { key: 'show_barcode', label: 'Show barcode' },
               { key: 'show_logo', label: 'Show store logo' },
             ].map((opt) => (
               <label key={opt.key} className="flex items-center gap-2 cursor-pointer">

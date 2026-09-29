@@ -24,6 +24,10 @@ export interface ElectronAPI {
   }
   printer: {
     print: (receiptData: unknown) => Promise<{ success: boolean; error?: string }>
+    /** The exact HTML the Windows-printer path prints, for on-screen preview. */
+    receiptHtml: (receiptData: unknown) => Promise<{ html: string; paperWidthMm: number }>
+    /** Prints an employee badge page through the system print dialog. */
+    printBadge: (html: string) => Promise<{ success: boolean; error?: string }>
     openCashDrawer: () => Promise<{ success: boolean; error?: string }>
     testPrint: () => Promise<{ success: boolean; message?: string }>
     listPrinters: () => Promise<unknown[]>
@@ -50,6 +54,13 @@ export interface ElectronAPI {
     clearToken: () => Promise<void>
     login: (serverUrl: string, username: string, password: string) => Promise<{ status: number; data: unknown }>
     me: (serverUrl: string, token: string) => Promise<{ status: number; data: unknown }>
+  }
+  /** Badge-scan shifts (POS only). status 0 = offline / device not registered (see data.code). */
+  shift: {
+    start: (badgeCode: string) => Promise<{ status: number; data: unknown }>
+    heartbeat: (shiftId: number) => Promise<{ status: number; data: unknown }>
+    /** Queued and delivered in the background (retried while offline), so it resolves at once. */
+    end: (shiftId: number) => Promise<void>
   }
   window: {
     openCustomerDisplay: () => Promise<{ success: boolean }>

@@ -3,13 +3,20 @@ import { useTranslation } from 'react-i18next'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import {
   Users, Plus, Search, Check, Eye, EyeOff,
-  Shield, ChevronRight, Wallet, Calendar,
+  Shield, ChevronRight, Wallet, Calendar, CalendarClock,
 } from 'lucide-react'
 import { fmtUZS } from '../../lib/currency'
 import { Modal, Button, Input, Select, DatePicker } from '../../components/ui'
+import { BadgeCard } from '../../components/employees/BadgeCard'
+import { AttendanceReport } from '../../components/employees/AttendanceReport'
+import { useAuthStore } from '../../store/auth.store'
 
 interface Employee {
   id: number
+  sync_id: string
+  server_id?: number | null
+  badge_code?: string | null
+  sync_pending?: number
   name: string
   email?: string
   phone?: string
@@ -43,6 +50,8 @@ const ROLES = ['cashier', 'manager', 'admin'] as const
 export default function EmployeesScreen() {
   const { t } = useTranslation()
   const tRole = (r: string) => t(`employees.role${r.replace(/(^|_)([a-z])/g, (_m, _p, c) => c.toUpperCase())}`, { defaultValue: r })
+  const storeName = useAuthStore((s) => s.store?.name) ?? 'BarakaPOS'
+  const [tab, setTab] = useState<'staff' | 'attendance'>('staff')
   const [employees, setEmployees] = useState<Employee[]>([])
   const [search, setSearch] = useState('')
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null)
@@ -63,9 +72,21 @@ export default function EmployeesScreen() {
 
   async function loadEmployees() {
     const rows = await window.electronAPI.db.query<Employee>(
-      `SELECT * FROM users WHERE deleted_at IS NULL ORDER BY name ASC`, []
+      `SELECT u.*, EXISTS (
+         SELECT 1 FROM sync_queue_local q WHERE q.sync_id = u.sync_id AND q.status IN ('pending', 'dead')
+       ) AS sync_pending
+       FROM users u WHERE u.deleted_at IS NULL ORDER BY u.name ASC`, []
     )
     setEmployees(rows)
+    // Keep the open detail panel in step (badge code, sync state) after edits.
+    setSelectedEmp((cur) => (cur ? rows.find((r) => r.id === cur.id) ?? null : null))
+  }
+
+  // Employees must reach the server: that's where badge scans are checked.
+  function pushEmployee(syncId: string) {
+    return window.electronAPI.sync.enqueue('users', syncId, 'upsert').then(() => {
+      window.electronAPI.sync.pushPending().catch(() => {}).finally(loadEmployees)
+    })
   }
 
   async function selectEmployee(emp: Employee) {
@@ -87,16 +108,17 @@ export default function EmployeesScreen() {
            form.pin_code || null, form.salary ? Number(form.salary) : null,
            form.hire_date || null, new Date().toISOString(), selectedEmp.id]
         )
+        await pushEmployee(selectedEmp.sync_id)
       } else {
-        // sync_id assigned for future employee sync; local users (employees
-        // without a server username) are not pushed from desktop yet.
+        const syncId = crypto.randomUUID()
         await window.electronAPI.db.exec(
           `INSERT INTO users (sync_id, name, email, phone, role, pin_code, salary, hire_date, is_active, created_at, updated_at)
            VALUES (?,?,?,?,?,?,?,?,1,?,?)`,
-          [crypto.randomUUID(), form.name, form.email || null, form.phone || null, form.role,
+          [syncId, form.name, form.email || null, form.phone || null, form.role,
            form.pin_code || null, form.salary ? Number(form.salary) : null,
            form.hire_date || null, new Date().toISOString(), new Date().toISOString()]
         )
+        await pushEmployee(syncId)
       }
       await loadEmployees()
       setShowForm(false)
@@ -109,8 +131,9 @@ export default function EmployeesScreen() {
       `UPDATE users SET is_active=?, updated_at=? WHERE id=?`,
       [emp.is_active ? 0 : 1, new Date().toISOString(), emp.id]
     )
-    loadEmployees()
-    if (selectedEmp?.id === emp.id) setSelectedEmp({ ...emp, is_active: emp.is_active ? 0 : 1 })
+    // Deactivating must reach the server too, or their badge keeps working.
+    await pushEmployee(emp.sync_id)
+    await loadEmployees()
   }
 
   async function saveSalary() {
@@ -150,15 +173,39 @@ export default function EmployeesScreen() {
   return (
     <BackOfficeLayout>
       <div className="flex items-center justify-between px-6 py-4 border-b border-dark-border shrink-0">
-        <div>
-          <h1 className="text-white font-bold text-xl">{t('nav.employees')}</h1>
-          <p className="text-gray-500 text-xs mt-0.5">{t('employees.staffMembers', { count: employees.length })}</p>
+        <div className="flex items-center gap-6">
+          <div>
+            <h1 className="text-white font-bold text-xl">{t('nav.employees')}</h1>
+            <p className="text-gray-500 text-xs mt-0.5">{t('employees.staffMembers', { count: employees.length })}</p>
+          </div>
+          <div className="flex gap-1 p-1 bg-dark-card border border-dark-border rounded-xl">
+            {([
+              ['staff', Users, t('employees.tabStaff')],
+              ['attendance', CalendarClock, t('employees.tabAttendance')],
+            ] as const).map(([key, Icon, label]) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  tab === key ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Icon size={13} />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        <Button icon={Plus} onClick={() => { setSelectedEmp(null); setShowForm(true) }}>
-          {t('employees.addEmployee')}
-        </Button>
+        {tab === 'staff' && (
+          <Button icon={Plus} onClick={() => { setSelectedEmp(null); setShowForm(true) }}>
+            {t('employees.addEmployee')}
+          </Button>
+        )}
       </div>
 
+      {tab === 'attendance' ? (
+        <AttendanceReport roleLabel={tRole} />
+      ) : (
       <div className="flex flex-1 overflow-hidden">
         {/* List */}
         <div className="w-72 border-r border-dark-border flex flex-col shrink-0">
@@ -284,6 +331,13 @@ export default function EmployeesScreen() {
                 </div>
               </div>
 
+              <BadgeCard
+                employee={selectedEmp}
+                storeName={storeName}
+                position={tRole(selectedEmp.role)}
+                onChanged={loadEmployees}
+              />
+
               {/* Salary history */}
               <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-4">
@@ -329,6 +383,7 @@ export default function EmployeesScreen() {
           )}
         </div>
       </div>
+      )}
 
       {/* Add/Edit Employee Modal */}
       <Modal

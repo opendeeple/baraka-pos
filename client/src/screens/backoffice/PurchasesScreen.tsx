@@ -86,11 +86,12 @@ export default function PurchasesScreen() {
     const now = new Date().toISOString()
     const total = lines.reduce((s, l) => s + Number(l.qty) * Number(l.cost || 0), 0)
     try {
+      const syncId = crypto.randomUUID()
       await window.electronAPI.db.exec(
-        `INSERT INTO purchases (reference_number,note,total_amount,status,created_at,updated_at) VALUES (?,?,?,'pending',?,?)`,
-        [refNumber || `PO-${Date.now()}`, note || null, total, now, now]
+        `INSERT INTO purchases (sync_id,reference_number,note,total_amount,status,created_at,updated_at) VALUES (?,?,?,?,'pending',?,?)`,
+        [syncId, refNumber || `PO-${Date.now()}`, note || null, total, now, now]
       )
-      const rows = await window.electronAPI.db.query(`SELECT last_insert_rowid() as id`, []) as Array<{id:number}>
+      const rows = await window.electronAPI.db.query(`SELECT id FROM purchases WHERE sync_id=?`, [syncId]) as Array<{id:number}>
       const pid = rows[0].id
       for (const l of lines) {
         await window.electronAPI.db.exec(
@@ -98,6 +99,9 @@ export default function PurchasesScreen() {
           [pid, Number(l.productId), Number(l.batchId), Number(l.qty), Number(l.cost || 0), Number(l.qty) * Number(l.cost || 0), now]
         )
       }
+      // Pushed after its items exist: the payload is built from them at flush time.
+      await window.electronAPI.sync.enqueue('purchases', syncId, 'upsert')
+      window.electronAPI.sync.pushPending().catch(() => {})
       setShowForm(false); setLines([]); setVendorName(''); setRefNumber(''); setNote(''); loadPurchases()
     } finally { setSaving(false) }
   }
@@ -108,14 +112,44 @@ export default function PurchasesScreen() {
     try {
       const items = await window.electronAPI.db.query(
         `SELECT product_id, batch_id, quantity FROM purchase_items WHERE purchase_id=?`, [purchase.id]
-      ) as Array<{product_id:number; batch_id:number; quantity:number}>
+      ) as Array<{product_id:number; batch_id:number | null; quantity:number}>
+      // Received goods go into shop stock — the only location before the
+      // warehouse module, and the one sales draw from. Stock reaches the
+      // server only as quantity_adjustments deltas (a purchase push never
+      // touches stock there), so each line records one; without it the server
+      // never saw the goods and the next stock pull wiped them locally.
       for (const item of items) {
+        if (!item.batch_id) continue
+        const stock = (await window.electronAPI.db.query(
+          `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' LIMIT 1`,
+          [item.product_id, item.batch_id]
+        ) as Array<{ id: number; quantity: number }>)[0]
+        const previous = Number(stock?.quantity ?? 0)
+        const adjusted = previous + Number(item.quantity)
+        if (stock) {
+          await window.electronAPI.db.exec(`UPDATE product_stocks SET quantity=?,updated_at=? WHERE id=?`, [adjusted, now, stock.id])
+        } else {
+          await window.electronAPI.db.exec(
+            `INSERT INTO product_stocks (sync_id,product_id,batch_id,location,quantity,updated_at) VALUES (?,?,?,'shop',?,?)`,
+            [crypto.randomUUID(), item.product_id, item.batch_id, adjusted, now]
+          )
+        }
+        const stockId = stock?.id ?? (await window.electronAPI.db.query(
+          `SELECT id FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' LIMIT 1`,
+          [item.product_id, item.batch_id]
+        ) as Array<{ id: number }>)[0]?.id
+        const adjSyncId = crypto.randomUUID()
         await window.electronAPI.db.exec(
-          `UPDATE product_stocks SET quantity=quantity+?,updated_at=? WHERE product_id=? AND batch_id=?`,
-          [item.quantity, now, item.product_id, item.batch_id]
+          `INSERT INTO quantity_adjustments (sync_id,batch_id,stock_id,previous_quantity,adjusted_quantity,reason,location,created_at,updated_at)
+           VALUES (?,?,?,?,?,?,'shop',?,?)`,
+          [adjSyncId, item.batch_id, stockId ?? null, previous, adjusted, `Purchase ${purchase.reference_number} received`, now, now]
         )
+        await window.electronAPI.sync.enqueue('quantity_adjustments', adjSyncId, 'upsert')
       }
       await window.electronAPI.db.exec(`UPDATE purchases SET status='received',updated_at=? WHERE id=?`, [now, purchase.id])
+      const po = (await window.electronAPI.db.query(`SELECT sync_id FROM purchases WHERE id=?`, [purchase.id]) as Array<{ sync_id: string | null }>)[0]
+      if (po?.sync_id) await window.electronAPI.sync.enqueue('purchases', po.sync_id, 'upsert')
+      window.electronAPI.sync.pushPending().catch(() => {})
       setConfirmReceive(false)
       setSelected(null); loadPurchases()
     } finally { setReceiving(false) }

@@ -5,7 +5,7 @@ import { env } from '../../config/env'
 import { LoginRequest } from '@baraka/shared'
 import { Store, User } from '@prisma/client'
 
-function toAuthResponse(user: User & { store: Store }) {
+export function toAuthResponse(user: User & { store: Store }) {
   return {
     user: {
       id: user.id,
@@ -25,6 +25,15 @@ function toAuthResponse(user: User & { store: Store }) {
   }
 }
 
+export function signUserToken(user: User): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return jwt.sign(
+    { userId: user.id, storeId: user.storeId, role: user.role },
+    env.JWT_SECRET,
+    { expiresIn: env.JWT_EXPIRES_IN as any }
+  )
+}
+
 export async function login(data: LoginRequest) {
   const user = await prisma.user.findFirst({
     where: {
@@ -41,15 +50,8 @@ export async function login(data: LoginRequest) {
   const valid = await bcrypt.compare(data.password, user.passwordHash)
   if (!valid) throw new Error('Invalid credentials')
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const token = jwt.sign(
-    { userId: user.id, storeId: user.storeId, role: user.role },
-    env.JWT_SECRET,
-    { expiresIn: env.JWT_EXPIRES_IN as any }
-  )
-
   return {
-    token,
+    token: signUserToken(user),
     syncApiKey: env.SYNC_API_KEY,
     ...toAuthResponse(user),
   }

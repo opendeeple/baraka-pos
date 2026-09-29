@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client'
+import { CashLogSource, Prisma } from '@prisma/client'
 import dayjs from 'dayjs'
 import { prisma } from '../../config/database'
 import { broadcastSaleCompleted, broadcastStockUpdated, broadcastToStore } from '../../socket'
@@ -196,6 +196,7 @@ const PULL_CONFIG: Record<SyncV2PullTable, PullConfig> = {
           username: true,
           role: true,
           pinCode: true,
+          badgeCode: true,
           isActive: true,
           createdAt: true,
           updatedAt: true,
@@ -398,7 +399,8 @@ const PRODUCT_FIELDS = ['name', 'description', 'sku', 'barcode', 'imageUrl', 'un
 const BATCH_FIELDS = ['batchNumber', 'expiryDate', 'cost', 'price', 'discount', 'isActive', 'isFeatured']
 const EXPENSE_FIELDS = ['description', 'amount', 'expenseDate', 'source', 'createdBy']
 const SESSION_FIELDS = ['terminalId', 'state', 'openingBalance', 'closingBalanceTheoretical', 'closingBalanceActual', 'variance', 'openedAt', 'closedAt']
-const USER_FIELDS = ['name', 'email', 'username', 'role', 'pinCode', 'isActive']
+const USER_FIELDS = ['name', 'email', 'username', 'role', 'pinCode', 'badgeCode', 'isActive']
+const CASH_LOG_SOURCES = new Set<string>(Object.values(CashLogSource))
 const PURCHASE_FIELDS = ['purchaseDate', 'referenceNo', 'totalAmount', 'discount', 'amountPaid', 'paymentStatus', 'status', 'note', 'createdBy']
 
 const PUSH_HANDLERS: Record<string, PushHandler> = {
@@ -576,6 +578,12 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
     const amount = Number(data.amount ?? 0)
     const transactionType = data.transactionType === 'cash_out' ? 'cash_out' : 'cash_in'
     if (amount <= 0) throw new Error('cash_logs amount must be positive')
+    // Clients send sources the enum doesn't have (desktop debt repayments are
+    // 'debt_payment'); passing one through made Prisma reject the row on every
+    // retry until it dead-lettered, so repayments never reached the server.
+    const source = CASH_LOG_SOURCES.has(data.source as string)
+      ? (data.source as CashLogSource)
+      : transactionType === 'cash_in' ? 'deposit' : 'withdrawal'
 
     const created = await tx.cashLog.create({
       data: {
@@ -586,7 +594,7 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
         transactionDate: data.transactionDate ? new Date(data.transactionDate as string) : new Date(),
         transactionType,
         amount,
-        source: (data.source as never) ?? (transactionType === 'cash_in' ? 'deposit' : 'withdrawal'),
+        source,
         description: (data.description as string) ?? null,
         createdBy: (data.createdBy as number) ?? null,
       },
@@ -622,6 +630,9 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
         // never match bcrypt.compare, so the account is PIN/offline-only until
         // an admin sets a real password server-side.
         passwordHash: (data.passwordHash as string) ?? '',
+        // Back-office employees have no login name (they sign in with their
+        // badge); username is required + unique, so derive one from syncId.
+        username: `emp-${syncId.slice(0, 8)}`,
         ...(pick(data, USER_FIELDS) as object),
       } as never,
     })
@@ -717,6 +728,12 @@ export async function pushSalesV2(
     try {
       const existing = await prisma.sale.findUnique({ where: { syncId: sale.syncId } })
       if (existing) {
+        // Re-pushing a sale the server already has is a no-op — except a void
+        // done on the terminal afterwards (Back office > Sales), mirrored the
+        // way sales.service voidSale does it; otherwise it never left the PC.
+        if (sale.status === 'cancelled' && existing.status !== 'cancelled' && existing.storeId === device.storeId) {
+          await prisma.sale.update({ where: { id: existing.id }, data: { status: 'cancelled', deletedAt: new Date() } })
+        }
         synced.push({ syncId: sale.syncId, serverId: existing.id, invoiceNumber: existing.invoiceNumber })
         continue
       }

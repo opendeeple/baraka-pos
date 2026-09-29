@@ -18,6 +18,7 @@ import settingsRouter from './modules/settings/settings.router'
 import devicesRouter from './modules/devices/devices.router'
 import notificationsRouter from './modules/notifications/notifications.router'
 import syncV2Router from './modules/sync/syncV2.router'
+import shiftsRouter from './modules/shifts/shifts.router'
 
 const app = express()
 
@@ -46,6 +47,7 @@ app.use('/api/expenses', expensesRouter)
 app.use('/api/employees', employeesRouter)
 app.use('/api/settings', settingsRouter)
 app.use('/api/notifications', notificationsRouter)
+app.use('/api/shifts', shiftsRouter)
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', version: '1.0.0' })

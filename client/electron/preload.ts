@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   printer: {
     print: (receiptData: unknown) => ipcRenderer.invoke('printer:print', receiptData),
+    receiptHtml: (receiptData: unknown) => ipcRenderer.invoke('printer:receiptHtml', receiptData),
+    printBadge: (html: string) => ipcRenderer.invoke('printer:printBadge', html),
     openCashDrawer: () => ipcRenderer.invoke('printer:openCashDrawer'),
     testPrint: () => ipcRenderer.invoke('printer:testPrint'),
     listPrinters: () => ipcRenderer.invoke('printer:listPrinters'),
@@ -55,6 +57,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('auth:login', serverUrl, username, password),
     me: (serverUrl: string, token: string) =>
       ipcRenderer.invoke('auth:me', serverUrl, token),
+  },
+  shift: {
+    start: (badgeCode: string) => ipcRenderer.invoke('shift:start', badgeCode),
+    heartbeat: (shiftId: number) => ipcRenderer.invoke('shift:heartbeat', shiftId),
+    end: (shiftId: number) => ipcRenderer.invoke('shift:end', shiftId),
   },
   window: {
     openCustomerDisplay: () => ipcRenderer.invoke('window:openCustomerDisplay'),

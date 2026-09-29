@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useSessionStore, LocalPosSession } from '../../store/session.store'
 import { useAuthStore } from '../../store/auth.store'
+import { endShiftAndSignOut } from '../../store/shift.store'
 import { NumPad } from '../../components/pos/NumPad'
 import { LogOut, Store } from 'lucide-react'
 
@@ -10,7 +11,7 @@ export default function OpenSessionScreen() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { setSession } = useSessionStore()
-  const { store, user, logout } = useAuthStore()
+  const { store, user } = useAuthStore()
   const [openingBalance, setOpeningBalance] = useState('0')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -68,7 +69,7 @@ export default function OpenSessionScreen() {
 
         <button
           type="button"
-          onClick={logout}
+          onClick={() => { endShiftAndSignOut() }}
           className="flex items-center gap-2 text-gray-500 hover:text-white text-sm transition-colors"
         >
           <LogOut size={15} />

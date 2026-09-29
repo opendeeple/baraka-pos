@@ -13,6 +13,7 @@ export const MOCK_ELECTRON_API = () => {
     db: mockDb,
     printer: {
       print: async () => {},
+      receiptHtml: async () => ({ html: '<html><body></body></html>', paperWidthMm: 75 }),
       openCashDrawer: async () => {},
       listPrinters: async () => ['USB001'],
       testPrint: async () => {},

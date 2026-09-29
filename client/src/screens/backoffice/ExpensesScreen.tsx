@@ -80,11 +80,14 @@ export default function ExpensesScreen() {
       )
       await window.electronAPI.sync.enqueue('expenses', syncId, 'upsert')
       if (form.payment_method === 'Cash') {
+        // The cash leaving the drawer is its own synced fact (pushed as a cash_out).
+        const cashLogSyncId = uuidv4()
         await window.electronAPI.db.exec(
-          `INSERT INTO cash_logs (store_id, transaction_type, amount, source, description, created_by, created_at)
-           VALUES (?, 'expense', ?, 'expense', ?, ?, ?)`,
-          [store?.id ?? 1, Number(form.amount) * -1, form.description || form.category, user?.id ?? 1, now]
+          `INSERT INTO cash_logs (sync_id, store_id, transaction_type, amount, source, description, created_by, created_at, updated_at)
+           VALUES (?, ?, 'expense', ?, 'expense', ?, ?, ?, ?)`,
+          [cashLogSyncId, store?.id ?? 1, Number(form.amount) * -1, form.description || form.category, user?.id ?? 1, now, now]
         )
+        await window.electronAPI.sync.enqueue('cash_logs', cashLogSyncId, 'upsert')
       }
       window.electronAPI.sync.pushPending().catch(() => {})
       setShowForm(false)

@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Settings, RefreshCw } from 'lucide-react'
+import { Settings, RefreshCw, LogOut, WifiOff } from 'lucide-react'
 import { useAuthStore } from '../../store/auth.store'
 import { useSessionStore } from '../../store/session.store'
+import { useShiftStore, endShiftAndSignOut } from '../../store/shift.store'
+import { Modal, Button } from '../ui'
 import { SyncStatusBadge } from './SyncStatusBadge'
 
 interface Props {
@@ -16,7 +18,21 @@ export default function TopBar({ onRefresh }: Props) {
   const { t } = useTranslation()
   const { user, store } = useAuthStore()
   const { session } = useSessionStore()
+  const shift = useShiftStore((s) => s.shift)
+  const shiftOffline = useShiftStore((s) => s.offline)
   const [refreshing, setRefreshing] = useState(false)
+  const [confirmEndShift, setConfirmEndShift] = useState(false)
+  const [endingShift, setEndingShift] = useState(false)
+
+  async function handleEndShift() {
+    setEndingShift(true)
+    try {
+      await endShiftAndSignOut()
+      navigate('/login', { replace: true })
+    } finally {
+      setEndingShift(false)
+    }
+  }
 
   async function handleRefreshClick() {
     if (!onRefresh || refreshing) return
@@ -82,6 +98,50 @@ export default function TopBar({ onRefresh }: Props) {
         </div>
         <span className="text-sm text-gray-300 whitespace-nowrap font-medium">{user?.name}</span>
       </div>
+
+      {/* Badge shift: when it started + hand the terminal over */}
+      {shift && (
+        <>
+          <div className="text-xs text-gray-500 whitespace-nowrap shrink-0 flex items-center gap-1.5">
+            {t('shift.since', {
+              time: new Date(shift.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            })}
+            {shiftOffline && (
+              <span title={t('shift.offlineHint')} className="flex items-center gap-1 text-amber-400">
+                <WifiOff size={12} />
+                {t('shift.offline')}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => setConfirmEndShift(true)}
+            title={t('shift.end')}
+            className="h-9 px-3 flex items-center gap-1.5 text-sm text-gray-400 hover:text-white hover:bg-dark-card border border-dark-border rounded-xl transition-colors shrink-0"
+          >
+            <LogOut size={15} />
+            {t('shift.end')}
+          </button>
+        </>
+      )}
+
+      <Modal
+        open={confirmEndShift}
+        onClose={() => setConfirmEndShift(false)}
+        title={t('shift.endConfirmTitle')}
+        maxWidth="max-w-sm"
+        footer={
+          <>
+            <Button variant="secondary" className="flex-1" onClick={() => setConfirmEndShift(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button className="flex-1" icon={LogOut} loading={endingShift} onClick={handleEndShift}>
+              {t('shift.end')}
+            </Button>
+          </>
+        }
+      >
+        <p className="p-5 text-sm text-gray-400">{t('shift.endConfirmBody', { name: user?.name ?? '' })}</p>
+      </Modal>
     </div>
   )
 }

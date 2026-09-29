@@ -6,6 +6,7 @@ import { TrainingBanner } from './components/layout/TrainingBanner'
 import { UpdateBanner } from './components/layout/UpdateBanner'
 import { AppToaster } from './components/ui/AppToaster'
 import { AppModeProvider } from './contexts/AppModeContext'
+import { ShiftHeartbeat } from './components/layout/ShiftHeartbeat'
 import LoginScreen from './screens/auth/LoginScreen'
 import OpenSessionScreen from './screens/session/OpenSessionScreen'
 import CloseSessionScreen from './screens/session/CloseSessionScreen'
@@ -35,6 +36,7 @@ export default function App() {
           <UpdateBanner />
           <div className="flex-1 overflow-hidden">
             <HashRouter>
+              <ShiftHeartbeat />
               <Routes>
                 <Route path="/login" element={<LoginScreen />} />
                 <Route path="/customer-display" element={<CustomerDisplay />} />

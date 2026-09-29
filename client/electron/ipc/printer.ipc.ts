@@ -9,7 +9,6 @@ interface EscposPrinter {
   text: (t: string) => EscposPrinter
   drawLine: () => EscposPrinter
   tableCustom: (cols: unknown[]) => EscposPrinter
-  barcode: (data: string, type: string) => EscposPrinter
   cut: () => EscposPrinter
   close: () => void
   cashdraw: (pin: number) => EscposPrinter
@@ -40,7 +39,7 @@ type PrinterConfig = {
 // computation involved.
 export type ReceiptElementKey =
   | 'storeName' | 'storeInfo' | 'invoiceInfo' | 'items' | 'itemQty'
-  | 'totals' | 'totalRow' | 'footer' | 'barcode'
+  | 'totals' | 'totalRow' | 'footer' | 'saleNumber'
 
 interface ElementStyle { fontPx: number; shiftPx: number }
 
@@ -73,7 +72,7 @@ const DEFAULT_RECEIPT_LAYOUT: ReceiptLayoutConfig = {
     totals: { fontPx: 11, shiftPx: 0 },
     totalRow: { fontPx: 11, shiftPx: 0 },
     footer: { fontPx: 13, shiftPx: 0 },
-    barcode: { fontPx: 11, shiftPx: 0 },
+    saleNumber: { fontPx: 13, shiftPx: 0 },
   },
 }
 
@@ -178,64 +177,9 @@ function centerPad(s: string, width: number, fontScale = 1): string {
   return ' '.repeat(pad) + s
 }
 
-// Standard Code 39 bar/space widths (N=narrow, W=wide), 5 bars + 4 spaces per
-// character, ANSI MH10.8M-1983. Only the subset invoice numbers actually use
-// (0-9, A-Z, '-') is included — narrower than the full table on purpose, so
-// there's no character here that hasn't been checked against the published
-// reference.
-const CODE39_PATTERNS: Record<string, string> = {
-  '0': 'NNNWWNWNN', '1': 'WNNWNNNNW', '2': 'NNWWNNNNW', '3': 'WNWWNNNNN',
-  '4': 'NNNWWNNNW', '5': 'WNNWWNNNN', '6': 'NNWWWNNNN', '7': 'NNNWNNWNW',
-  '8': 'WNNWNNWNN', '9': 'NNWWNNWNN',
-  A: 'WNNNNWNNW', B: 'NNWNNWNNW', C: 'WNWNNWNNN', D: 'NNNNWWNNW',
-  E: 'WNNNWWNNN', F: 'NNWNWWNNN', G: 'NNNNNWWNW', H: 'WNNNNWWNN',
-  I: 'NNWNNWWNN', J: 'NNNNWWWNN', K: 'WNNNNNNWW', L: 'NNWNNNNWW',
-  M: 'WNWNNNNWN', N: 'NNNNWNNWW', O: 'WNNNWNNWN', P: 'NNWNWNNWN',
-  Q: 'NNNNNNWWW', R: 'WNNNNNWWN', S: 'NNWNNNWWN', T: 'NNNNWNWWN',
-  U: 'WWNNNNNNW', V: 'NWWNNNNNW', W: 'WWWNNNNNN', X: 'NWNNWNNNW',
-  Y: 'WWNNWNNNN', Z: 'NWWNWNNNN', '-': 'NWNNNNWNW',
-  '*': 'NWNNWNWNN', // start/stop
-}
-
-// A real, scannable Code 39 barcode as inline SVG rects — sized by SVG
-// viewBox/attribute geometry, not CSS width/flex (the primitives already
-// proven to blank the page on this printer). Renders through the same
-// Chromium print path as the rest of the receipt, so it's still subject to
-// whatever that path does with SVG specifically — unlike every other element
-// on this receipt, that hasn't been print-tested on real hardware yet.
-function code39Svg(invoiceNumber: string, maxWidthPx: number, heightPx: number): { svg: string; width: number } {
-  const clean = invoiceNumber.toUpperCase().replace(/[^0-9A-Z-]/g, '-')
-  const chars = `*${clean}*`.split('')
-  // Each char is 3 wide + 6 narrow elements (the "3 of 9" in Code 39) plus a
-  // 1-unit inter-character gap — sum that in narrow-units first, then derive
-  // the pixel size of one narrow unit from the paper's actual available
-  // width so long invoice numbers shrink to fit instead of overflowing.
-  const unitsPerChar = 3 * 2.5 + 6 * 1 + 1
-  const totalUnits = chars.length * unitsPerChar - 1 // no trailing gap after the last char
-  const unitPx = Math.min(1.3, maxWidthPx / totalUnits)
-  const narrow = unitPx
-  const wide = unitPx * 2.5
-  const gap = unitPx
-  let x = 0
-  const rects: string[] = []
-  for (const ch of chars) {
-    const pattern = CODE39_PATTERNS[ch] ?? CODE39_PATTERNS['-']
-    for (let i = 0; i < pattern.length; i++) {
-      const w = pattern[i] === 'W' ? wide : narrow
-      const isBar = i % 2 === 0 // pattern alternates bar, space, bar, ... starting with a bar
-      if (isBar) rects.push(`<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${heightPx}" fill="#000"/>`)
-      x += w
-    }
-    x += gap
-  }
-  const totalWidth = x - gap
-  return {
-    svg: `<svg width="${totalWidth.toFixed(2)}" height="${heightPx}" viewBox="0 0 ${totalWidth.toFixed(2)} ${heightPx}" xmlns="http://www.w3.org/2000/svg">${rects.join('')}</svg>`,
-    width: totalWidth,
-  }
-}
-
-function receiptHtml(doc: ReceiptDoc, layout: ReceiptLayoutConfig): string {
+// Also rendered on screen by ReceiptModal (via 'printer:receiptHtml'), so
+// the preview is this exact markup rather than a separate look-alike.
+export function receiptHtml(doc: ReceiptDoc, layout: ReceiptLayoutConfig): string {
   // Every <div> below is a plain block: no width/margin:auto/flex/inline-
   // block (blanked the whole page) and no text-align:center (silently
   // dropped just those lines) — both diagnosed on real hardware. All
@@ -283,16 +227,8 @@ function receiptHtml(doc: ReceiptDoc, layout: ReceiptLayoutConfig): string {
   if (doc.change > 0) lines.push(div('totals', padRow('CHANGE:', doc.change.toLocaleString(), W)))
   lines.push(`<div class="divider"></div>`)
   if (doc.footer) lines.push(div('footer', centerPad(doc.footer, W, scaleOf('footer')), 'font-weight:700;letter-spacing:0.5px;'))
-  // Real, scannable Code 39 barcode encoding the invoice number — sized to
-  // the printable width via SVG viewBox/width *attributes* (not the CSS
-  // `width` property already proven to blank the page) and centered the same
-  // way as everything else's per-element shift: plain margin-left, just
-  // computed instead of a fixed constant. This is the one element on the
-  // receipt that hasn't been print-tested on real hardware yet.
-  const contentWidthPx = (layout.paperWidthMm - 2 * layout.marginMm) * (96 / 25.4)
-  const barcode = code39Svg(doc.invoiceNumber, contentWidthPx, 30)
-  const barcodeMarginLeft = Math.max(0, (contentWidthPx - barcode.width) / 2)
-  lines.push(`<div style="margin-top:4px;margin-left:${barcodeMarginLeft.toFixed(2)}px;">${barcode.svg}</div>`)
+  // Sale number as plain text where the Code 39 barcode used to be.
+  lines.push(div('saleNumber', centerPad(`№ ${doc.invoiceNumber}`, W, scaleOf('saleNumber')), 'font-weight:700;letter-spacing:0.5px;margin-top:4px;'))
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
     @page { size: ${layout.paperWidthMm}mm auto; margin: 0; }
@@ -466,7 +402,9 @@ export function registerPrinterIpc() {
         .drawLine()
         .align('ct')
         .text('Thank you for shopping with us!')
-        .barcode(d.invoiceNumber, 'CODE39')
+        .style('b')
+        .text(d.invoiceNumber)
+        .style('normal')
         .cut()
         .close()
 
@@ -474,6 +412,32 @@ export function registerPrinterIpc() {
     } catch (err: unknown) {
       return { success: false, error: err instanceof Error ? err.message : 'Print failed' }
     }
+  })
+
+  // Employee badges (Back office > Employees) go through the normal print
+  // dialog rather than the till's receipt printer: they're printed rarely and
+  // usually on an office/card printer the user picks each time. The window is
+  // shown (not parked off-screen like receipts) because the system dialog
+  // opens over it.
+  ipcMain.handle('printer:printBadge', (event, html: string) => new Promise<{ success: boolean; error?: string }>((resolve) => {
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined
+    const win = new BrowserWindow({ parent, modal: !!parent, width: 420, height: 300, show: false, autoHideMenuBar: true })
+    win.webContents.once('did-finish-load', () => {
+      win.show()
+      setTimeout(() => {
+        win.webContents.print({ silent: false, printBackground: true, margins: { marginType: 'none' } }, (success, errorType) => {
+          win.destroy()
+          // The user closing the dialog isn't a failure worth reporting.
+          resolve(success || errorType === 'cancelled' ? { success } : { success: false, error: errorType || 'Print failed' })
+        })
+      }, 300)
+    })
+    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+  }))
+
+  ipcMain.handle('printer:receiptHtml', (_event, receiptData: unknown) => {
+    const layout = getReceiptLayoutConfig()
+    return { html: receiptHtml(receiptData as ReceiptDoc, layout), paperWidthMm: layout.paperWidthMm }
   })
 
   ipcMain.handle('printer:openCashDrawer', async () => {

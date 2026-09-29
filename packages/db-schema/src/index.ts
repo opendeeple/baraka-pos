@@ -512,14 +512,21 @@ function migrateToV8(db: SchemaDb): void {
   }
 }
 
-// Schema v9 — per-contact debt-reminder interval override. Local-only, like
+// Schema v9 — employee badges: the code printed on an employee's badge,
+// scanned at a terminal to start their shift. Travels with the users row in
+// both directions (pulled as badgeCode, pushed by the users CHANGE_BUILDER).
+function migrateToV9(db: SchemaDb): void {
+  addColumnIfMissing(db, 'users', 'badge_code', 'TEXT')
+}
+
+// Schema v10 — per-contact debt-reminder interval override. Local-only, like
 // contacts.telegram_chat_id: a contact-specific "remind every N days" that
 // overrides the global Settings interval when set, NULL meaning "use the
 // global default". Kept local-only (not added to CONTACT_FIELDS server-side)
 // on purpose, matching telegram_chat_id's pattern — see the contacts
 // PULL_CONFIG `map` in syncV2.service.ts that strips fields not meant to be
 // clobbered by a pull.
-function migrateToV9(db: SchemaDb): void {
+function migrateToV10(db: SchemaDb): void {
   addColumnIfMissing(db, 'contacts', 'reminder_interval_days', 'INTEGER')
 }
 
@@ -532,6 +539,7 @@ export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb
   { version: 7, apply: migrateToV7 },
   { version: 8, apply: migrateToV8 },
   { version: 9, apply: migrateToV9 },
+  { version: 10, apply: migrateToV10 },
 ]
 
 export const CURRENT_SCHEMA_VERSION = VERSIONED_MIGRATIONS[VERSIONED_MIGRATIONS.length - 1].version

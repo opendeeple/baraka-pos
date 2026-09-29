@@ -52,7 +52,7 @@ const RESERVED_SETTINGS = new Set([
   'server_url', 'sync_api_key', 'store_id', 'terminal_id', 'cached_user',
   'cached_store', 'printer_config', 'device_id', 'device_key',
   'invoice_prefix', 'invoice_range_start', 'invoice_range_end', 'invoice_range_next',
-  'v2_backfill_done',
+  'v2_backfill_done', 'active_shift', 'pending_shift_ends',
 ])
 const RESERVED_SETTINGS_PREFIXES = ['last_sync_', 'sync_cursor_']
 
@@ -89,7 +89,7 @@ const SWEEP_TABLES = new Set(['products', 'product_batches', 'product_stocks', '
 // products) exist server-side by the time their sales arrive. Collections
 // flush first — products reference them via categorySyncId/brandSyncId.
 const FLUSH_PRIORITY: Record<string, number> = {
-  collections: 0, contacts: 1, products: 2, product_batches: 3, pos_sessions: 4,
+  collections: 0, contacts: 1, users: 1, products: 2, product_batches: 3, pos_sessions: 4,
   quantity_adjustments: 5, expenses: 6, purchases: 7, cash_logs: 8, sales: 99,
 }
 
@@ -111,6 +111,13 @@ const CASCADE_ON_DELETE: Record<string, Array<{ table: string; column: string }>
 }
 
 class NetworkError extends Error {}
+
+// Render answers 502/503 while it deploys or restarts, and 5xx/429 generally
+// say nothing about the row itself — retried like an outage, never counted
+// toward the dead-letter limit.
+function isTransientStatus(status: number): boolean {
+  return status >= 500 || status === 429
+}
 
 function camelToSnake(str: string): string {
   return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
@@ -592,6 +599,17 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     ).changes
   }
 
+  /**
+   * App start: every unsent row gets another chance right away. Dead letters
+   * included — nothing surfaces them in the UI, and their cause (an old server
+   * build, a server-side bug since fixed) has often gone away by the next
+   * start; a row that is truly bad just dead-letters again.
+   */
+  function requeueOnStartup(): number {
+    retryDeadLetters()
+    return db.run(`UPDATE sync_queue_local SET next_retry_at=NULL WHERE status='pending'`).changes
+  }
+
   // --- payload builders (flush-time: always reflect current DB state) ------
 
   function userSyncIdForLocalRef(userId: unknown): string | undefined {
@@ -666,6 +684,19 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         isFeatured: Boolean(b.is_featured), _updatedAt: b.updated_at,
       }
     },
+    users: ({ sync_id }) => {
+      const u = db.get<any>(`SELECT * FROM users WHERE sync_id=?`, [sync_id])
+      if (!u) return null
+      return {
+        name: u.name, email: u.email, role: u.role ?? 'cashier',
+        // Omitted rather than null when unset: the desktop edit form doesn't
+        // round-trip the PIN, so null here would wipe a server-side PIN.
+        pinCode: u.pin_code ?? undefined,
+        badgeCode: u.badge_code ?? undefined,
+        isActive: Boolean(u.is_active),
+        _updatedAt: u.updated_at,
+      }
+    },
     pos_sessions: ({ sync_id }) => {
       const s = db.get<any>(`SELECT * FROM pos_sessions WHERE sync_id=?`, [sync_id])
       if (!s) return null
@@ -728,7 +759,9 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       return {
         sessionSyncId,
         contactSyncId: syncIdForLocalId('contacts', c.contact_id),
-        transactionType: c.transaction_type,
+        // The server only knows cash_in / cash_out; local rows also use e.g.
+        // 'expense' (stored as a negative amount), which must go out as cash_out.
+        transactionType: c.transaction_type === 'cash_out' || Number(c.amount) < 0 ? 'cash_out' : 'cash_in',
         amount: Math.abs(Number(c.amount) || 0),
         source: c.source,
         description: c.description,
@@ -891,6 +924,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
             headers: deviceHeaders(),
             body: { changes: changes.map((c) => c.change) },
           })
+          if (isTransientStatus(status)) throw new NetworkError(`push HTTP ${status}`)
           if (status !== 200) throw new Error(data?.error ?? `push HTTP ${status}`)
           const bySyncId = new Map<string, { status: string; serverId?: number; error?: string }>(
             (data.results as any[]).map((r) => [r.syncId, r])
@@ -939,6 +973,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
             headers: deviceHeaders(),
             body: { sales: payloads.map((p) => p.sale) },
           })
+          if (isTransientStatus(status)) throw new NetworkError(`sales push HTTP ${status}`)
           if (status !== 200) throw new Error(data?.error ?? `sales push HTTP ${status}`)
           const okBySyncId = new Map<string, { serverId: number; invoiceNumber: string }>(
             (data.synced as any[]).map((s) => [s.syncId, s])
@@ -1008,6 +1043,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
   }
 
   return {
+    getServerUrl,
     ensureDeviceRegistered,
     ensureInvoiceRange,
     nextInvoiceNumber,
@@ -1016,6 +1052,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     enqueueOutbox,
     flushOutbox,
     retryDeadLetters,
+    requeueOnStartup,
     backfillOutboxOnce,
     getSyncStatus,
   }

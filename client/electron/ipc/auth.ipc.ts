@@ -3,7 +3,13 @@ import { saveToken, getToken, clearToken } from '../services/auth.service'
 import http from 'http'
 import https from 'https'
 
-function httpRequest(url: string, options: http.RequestOptions, body?: string): Promise<{ status: number; data: unknown }> {
+export function httpRequest(
+  url: string,
+  options: http.RequestOptions,
+  body?: string,
+  /** Rejects once the connection has been silent this long; without it a stalled connection never settles. */
+  timeoutMs?: number
+): Promise<{ status: number; data: unknown }> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url)
     const lib = parsed.protocol === 'https:' ? https : http
@@ -16,6 +22,7 @@ function httpRequest(url: string, options: http.RequestOptions, body?: string): 
       })
     })
     req.on('error', reject)
+    if (timeoutMs) req.setTimeout(timeoutMs, () => req.destroy(new Error(`timed out after ${timeoutMs}ms`)))
     if (body) req.write(body)
     req.end()
   })
