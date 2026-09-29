@@ -241,9 +241,7 @@ export default function SettingsScreen() {
   async function syncNow() {
     setSyncing(true)
     try {
-      // 'users' has no server-side sync support (not a valid SyncEntityType) — employee
-      // records are local-only for now.
-      const tables = ['products', 'product_batches', 'product_stocks', 'collections', 'contacts', 'charges', 'settings']
+      const tables = ['products', 'product_batches', 'product_stocks', 'collections', 'contacts', 'charges', 'settings', 'users']
       const results = await Promise.allSettled(tables.map((t) => window.electronAPI.sync.pullLatest(t)))
       const failed = results.filter((r) => r.status === 'rejected').length
       if (failed === 0) toast.success('Sync complete')

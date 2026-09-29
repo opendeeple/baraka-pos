@@ -530,6 +530,20 @@ function migrateToV10(db: SchemaDb): void {
   addColumnIfMissing(db, 'contacts', 'reminder_interval_days', 'INTEGER')
 }
 
+// Schema v11 — safety net, not a new column. Two branches each independently
+// claimed "v9" (this file's history has the details) before being merged;
+// any machine that had already run the pre-merge local build advanced its
+// user_version to 9 under a DIFFERENT v9 (reminder_interval_days) than what
+// v9 means now (badge_code) — so runMigrations()'s `version <= baseline`
+// check silently skipped badge_code on exactly those machines, since their
+// stored version number said "9 already done" using the old meaning. Redoing
+// the same addColumnIfMissing under a version number nothing has ever
+// claimed fixes every machine regardless of which v9 it ran, since the call
+// is a no-op wherever the column already exists.
+function migrateToV11(db: SchemaDb): void {
+  addColumnIfMissing(db, 'users', 'badge_code', 'TEXT')
+}
+
 export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb) => void }> = [
   { version: 2, apply: migrateToV2 },
   { version: 3, apply: migrateToV3 },
@@ -540,6 +554,7 @@ export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb
   { version: 8, apply: migrateToV8 },
   { version: 9, apply: migrateToV9 },
   { version: 10, apply: migrateToV10 },
+  { version: 11, apply: migrateToV11 },
 ]
 
 export const CURRENT_SCHEMA_VERSION = VERSIONED_MIGRATIONS[VERSIONED_MIGRATIONS.length - 1].version
