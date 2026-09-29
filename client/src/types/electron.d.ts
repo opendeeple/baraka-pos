@@ -81,6 +81,10 @@ export interface ElectronAPI {
     status: () => Promise<boolean>
     runAutoReminders: () => Promise<{ sent: number; skipped: number; failed: number }>
   }
+  sms: {
+    send: (phoneNumber: string, text: string) => Promise<{ success: boolean; error?: string }>
+    status: () => Promise<boolean>
+  }
   app: {
     isTraining: () => Promise<boolean>
     getVersion: () => Promise<string>

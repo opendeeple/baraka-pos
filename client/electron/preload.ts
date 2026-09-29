@@ -82,6 +82,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     status: () => ipcRenderer.invoke('telegram:status') as Promise<boolean>,
     runAutoReminders: () => ipcRenderer.invoke('telegram:runAutoReminders') as Promise<{ sent: number; skipped: number; failed: number }>,
   },
+  sms: {
+    send: (phoneNumber: string, text: string) => ipcRenderer.invoke('sms:send', phoneNumber, text) as Promise<{ success: boolean; error?: string }>,
+    status: () => ipcRenderer.invoke('sms:status') as Promise<boolean>,
+  },
   app: {
     isTraining: () => ipcRenderer.invoke('app:isTraining'),
     getVersion: () => ipcRenderer.invoke('app:getVersion'),

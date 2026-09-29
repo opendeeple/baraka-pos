@@ -37,6 +37,8 @@ export function SendMessageModal({ contactId, contactName, hasDebt, onClose }: P
   const [deepLink, setDeepLink] = useState<string | null>(null)
   const [telegramConnected, setTelegramConnected] = useState(false)
   const [telegramConfigured, setTelegramConfigured] = useState(true)
+  const [smsConfigured, setSmsConfigured] = useState(true)
+  const [phone, setPhone] = useState<string | null>(null)
   // Starts true so the first render doesn't flash "not connected" (the
   // false/true defaults above) before the real DB state has loaded.
   const [connectionLoading, setConnectionLoading] = useState(true)
@@ -53,14 +55,16 @@ export function SendMessageModal({ contactId, contactName, hasDebt, onClose }: P
   async function loadConnectionInfo() {
     try {
       const rows = await window.electronAPI.db.query(
-        `SELECT sync_id, telegram_chat_id FROM contacts WHERE id=?`, [contactId]
-      ) as Array<{ sync_id: string; telegram_chat_id: string | null }>
+        `SELECT sync_id, telegram_chat_id, phone FROM contacts WHERE id=?`, [contactId]
+      ) as Array<{ sync_id: string; telegram_chat_id: string | null; phone: string | null }>
       const row = rows[0]
       if (!row) return
       setTelegramConnected(Boolean(row.telegram_chat_id))
+      setPhone(row.phone)
       const configured = await window.electronAPI.telegram.status()
       setTelegramConfigured(configured)
       if (configured) setDeepLink(await window.electronAPI.telegram.getDeepLink(row.sync_id))
+      setSmsConfigured(await window.electronAPI.sms.status())
     } finally {
       setConnectionLoading(false)
     }
@@ -144,7 +148,15 @@ export function SendMessageModal({ contactId, contactName, hasDebt, onClose }: P
           toast.error(result.error || t('notifications.sendFailed'))
         }
       } else {
-        toast.error(t('notifications.smsNotReady'))
+        if (!phone) { toast.error(t('notifications.noPhoneNumber')); return }
+        const result = await window.electronAPI.sms.send(phone, preview)
+        await logMessage(result.success ? 'sent' : 'failed', result.error)
+        if (result.success) {
+          toast.success(t('notifications.sent'))
+          onClose()
+        } else {
+          toast.error(result.error || t('notifications.sendFailed'))
+        }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('notifications.sendFailed'))
@@ -166,7 +178,11 @@ export function SendMessageModal({ contactId, contactName, hasDebt, onClose }: P
       footer={
         <>
           <Button variant="secondary" className="flex-1" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button className="flex-1" icon={Send} onClick={send} loading={sending} disabled={channel === 'telegram' && (connectionLoading || !telegramConnected)}>
+          <Button className="flex-1" icon={Send} onClick={send} loading={sending} disabled={
+            connectionLoading ||
+            (channel === 'telegram' && !telegramConnected) ||
+            (channel === 'sms' && (!smsConfigured || !phone))
+          }>
             {t('notifications.send')}
           </Button>
         </>
@@ -201,9 +217,22 @@ export function SendMessageModal({ contactId, contactName, hasDebt, onClose }: P
             <CheckCircle2 size={12} /> {t('notifications.telegramConnected')}
           </div>
         )}
-        {channel === 'sms' && (
+        {channel === 'sms' && connectionLoading && (
+          <div className="text-xs text-gray-500">{t('common.loading')}</div>
+        )}
+        {channel === 'sms' && !connectionLoading && !smsConfigured && (
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
             <p className="text-xs text-yellow-200">{t('notifications.smsNotReady')}</p>
+          </div>
+        )}
+        {channel === 'sms' && !connectionLoading && smsConfigured && !phone && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+            <p className="text-xs text-yellow-200">{t('notifications.noPhoneNumber')}</p>
+          </div>
+        )}
+        {channel === 'sms' && !connectionLoading && smsConfigured && phone && (
+          <div className="flex items-center gap-1.5 text-xs text-green-400">
+            <CheckCircle2 size={12} /> {phone}
           </div>
         )}
 
