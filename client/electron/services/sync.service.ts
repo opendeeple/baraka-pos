@@ -26,6 +26,7 @@ function getEngine(): SyncEngine {
   return engine
 }
 
+export const getServerUrl: SyncEngine['getServerUrl'] = () => getEngine().getServerUrl()
 export const ensureDeviceRegistered: SyncEngine['ensureDeviceRegistered'] = (...args) =>
   getEngine().ensureDeviceRegistered(...args)
 export const ensureInvoiceRange: SyncEngine['ensureInvoiceRange'] = () =>

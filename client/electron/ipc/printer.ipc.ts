@@ -414,6 +414,27 @@ export function registerPrinterIpc() {
     }
   })
 
+  // Employee badges (Back office > Employees) go through the normal print
+  // dialog rather than the till's receipt printer: they're printed rarely and
+  // usually on an office/card printer the user picks each time. The window is
+  // shown (not parked off-screen like receipts) because the system dialog
+  // opens over it.
+  ipcMain.handle('printer:printBadge', (event, html: string) => new Promise<{ success: boolean; error?: string }>((resolve) => {
+    const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined
+    const win = new BrowserWindow({ parent, modal: !!parent, width: 420, height: 300, show: false, autoHideMenuBar: true })
+    win.webContents.once('did-finish-load', () => {
+      win.show()
+      setTimeout(() => {
+        win.webContents.print({ silent: false, printBackground: true, margins: { marginType: 'none' } }, (success, errorType) => {
+          win.destroy()
+          // The user closing the dialog isn't a failure worth reporting.
+          resolve(success || errorType === 'cancelled' ? { success } : { success: false, error: errorType || 'Print failed' })
+        })
+      }, 300)
+    })
+    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+  }))
+
   ipcMain.handle('printer:receiptHtml', (_event, receiptData: unknown) => {
     const layout = getReceiptLayoutConfig()
     return { html: receiptHtml(receiptData as ReceiptDoc, layout), paperWidthMm: layout.paperWidthMm }

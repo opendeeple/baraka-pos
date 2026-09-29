@@ -52,7 +52,7 @@ const RESERVED_SETTINGS = new Set([
   'server_url', 'sync_api_key', 'store_id', 'terminal_id', 'cached_user',
   'cached_store', 'printer_config', 'device_id', 'device_key',
   'invoice_prefix', 'invoice_range_start', 'invoice_range_end', 'invoice_range_next',
-  'v2_backfill_done',
+  'v2_backfill_done', 'active_shift', 'pending_shift_ends',
 ])
 const RESERVED_SETTINGS_PREFIXES = ['last_sync_', 'sync_cursor_']
 
@@ -89,7 +89,7 @@ const SWEEP_TABLES = new Set(['products', 'product_batches', 'product_stocks', '
 // products) exist server-side by the time their sales arrive. Collections
 // flush first — products reference them via categorySyncId/brandSyncId.
 const FLUSH_PRIORITY: Record<string, number> = {
-  collections: 0, contacts: 1, products: 2, product_batches: 3, pos_sessions: 4,
+  collections: 0, contacts: 1, users: 1, products: 2, product_batches: 3, pos_sessions: 4,
   quantity_adjustments: 5, expenses: 6, purchases: 7, cash_logs: 8, sales: 99,
 }
 
@@ -666,6 +666,19 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         isFeatured: Boolean(b.is_featured), _updatedAt: b.updated_at,
       }
     },
+    users: ({ sync_id }) => {
+      const u = db.get<any>(`SELECT * FROM users WHERE sync_id=?`, [sync_id])
+      if (!u) return null
+      return {
+        name: u.name, email: u.email, role: u.role ?? 'cashier',
+        // Omitted rather than null when unset: the desktop edit form doesn't
+        // round-trip the PIN, so null here would wipe a server-side PIN.
+        pinCode: u.pin_code ?? undefined,
+        badgeCode: u.badge_code ?? undefined,
+        isActive: Boolean(u.is_active),
+        _updatedAt: u.updated_at,
+      }
+    },
     pos_sessions: ({ sync_id }) => {
       const s = db.get<any>(`SELECT * FROM pos_sessions WHERE sync_id=?`, [sync_id])
       if (!s) return null
@@ -1008,6 +1021,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
   }
 
   return {
+    getServerUrl,
     ensureDeviceRegistered,
     ensureInvoiceRange,
     nextInvoiceNumber,

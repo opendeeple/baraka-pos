@@ -512,6 +512,13 @@ function migrateToV8(db: SchemaDb): void {
   }
 }
 
+// Schema v9 — employee badges: the code printed on an employee's badge,
+// scanned at a terminal to start their shift. Travels with the users row in
+// both directions (pulled as badgeCode, pushed by the users CHANGE_BUILDER).
+function migrateToV9(db: SchemaDb): void {
+  addColumnIfMissing(db, 'users', 'badge_code', 'TEXT')
+}
+
 export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb) => void }> = [
   { version: 2, apply: migrateToV2 },
   { version: 3, apply: migrateToV3 },
@@ -520,6 +527,7 @@ export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb
   { version: 6, apply: migrateToV6 },
   { version: 7, apply: migrateToV7 },
   { version: 8, apply: migrateToV8 },
+  { version: 9, apply: migrateToV9 },
 ]
 
 export const CURRENT_SCHEMA_VERSION = VERSIONED_MIGRATIONS[VERSIONED_MIGRATIONS.length - 1].version

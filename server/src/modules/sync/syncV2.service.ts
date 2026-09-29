@@ -196,6 +196,7 @@ const PULL_CONFIG: Record<SyncV2PullTable, PullConfig> = {
           username: true,
           role: true,
           pinCode: true,
+          badgeCode: true,
           isActive: true,
           createdAt: true,
           updatedAt: true,
@@ -398,7 +399,7 @@ const PRODUCT_FIELDS = ['name', 'description', 'sku', 'barcode', 'imageUrl', 'un
 const BATCH_FIELDS = ['batchNumber', 'expiryDate', 'cost', 'price', 'discount', 'isActive', 'isFeatured']
 const EXPENSE_FIELDS = ['description', 'amount', 'expenseDate', 'source', 'createdBy']
 const SESSION_FIELDS = ['terminalId', 'state', 'openingBalance', 'closingBalanceTheoretical', 'closingBalanceActual', 'variance', 'openedAt', 'closedAt']
-const USER_FIELDS = ['name', 'email', 'username', 'role', 'pinCode', 'isActive']
+const USER_FIELDS = ['name', 'email', 'username', 'role', 'pinCode', 'badgeCode', 'isActive']
 const PURCHASE_FIELDS = ['purchaseDate', 'referenceNo', 'totalAmount', 'discount', 'amountPaid', 'paymentStatus', 'status', 'note', 'createdBy']
 
 const PUSH_HANDLERS: Record<string, PushHandler> = {
@@ -622,6 +623,9 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
         // never match bcrypt.compare, so the account is PIN/offline-only until
         // an admin sets a real password server-side.
         passwordHash: (data.passwordHash as string) ?? '',
+        // Back-office employees have no login name (they sign in with their
+        // badge); username is required + unique, so derive one from syncId.
+        username: `emp-${syncId.slice(0, 8)}`,
         ...(pick(data, USER_FIELDS) as object),
       } as never,
     })

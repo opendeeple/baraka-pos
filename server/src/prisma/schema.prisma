@@ -34,6 +34,7 @@ model Store {
   charges       Charge[]
   settings      Setting[]
   devices       Device[]
+  shifts        Shift[]
 
   @@map("stores")
 }
@@ -48,6 +49,8 @@ model User {
   passwordHash String
   role         UserRole  @default(cashier)
   pinCode      String?
+  /// Printed on the employee's badge; scanning it at a terminal starts their shift.
+  badgeCode    String?   @unique
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -56,6 +59,7 @@ model User {
   store    Store      @relation(fields: [storeId], references: [id])
   sessions PosSession[]
   sales    Sale[]
+  shifts   Shift[]
 
   @@index([storeId, updatedAt])
   @@map("users")
@@ -741,8 +745,39 @@ model Device {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  store Store  @relation(fields: [storeId], references: [id])
-  sales Sale[]
+  store  Store   @relation(fields: [storeId], references: [id])
+  sales  Sale[]
+  shifts Shift[]
 
   @@map("devices")
+}
+
+// Employee attendance: one cashier working on one terminal, started by
+// scanning their badge and ended only by an explicit command — "End shift",
+// another cashier taking over the terminal, or an admin. Going offline never
+// ends a shift. Server-managed only — deliberately NOT part of sync v2:
+// the one-open-shift-per-cashier rule spans terminals, so only the server can
+// decide it.
+model Shift {
+  id         Int       @id @default(autoincrement())
+  storeId    Int
+  userId     Int
+  deviceId   Int
+  startedAt  DateTime  @default(now())
+  /// Refreshed by the terminal's heartbeat while the shift is open (informational only).
+  lastSeenAt DateTime  @default(now())
+  endedAt    DateTime?
+  /// logout | replaced | admin
+  endReason  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  store  Store  @relation(fields: [storeId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+  device Device @relation(fields: [deviceId], references: [id])
+
+  @@index([storeId, startedAt])
+  @@index([userId, endedAt])
+  @@index([deviceId, endedAt])
+  @@map("shifts")
 }
