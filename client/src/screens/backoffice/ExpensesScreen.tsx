@@ -279,7 +279,7 @@ function PurchaseEstimateModal({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title={t('expenses.purchaseEstimate')}
-      maxWidth="max-w-lg"
+      maxWidth="max-w-2xl"
       footer={
         <>
           <Button variant="secondary" className="flex-1" onClick={onClose}>{t('common.close')}</Button>
@@ -289,39 +289,50 @@ function PurchaseEstimateModal({ onClose }: { onClose: () => void }) {
         </>
       }
     >
-      <div className="p-5 space-y-3">
-        <p className="text-xs text-gray-500">{t('expenses.purchaseEstimateHint')}</p>
-        <div className="space-y-2 max-h-80 overflow-y-auto">
+      <div className="p-5 space-y-4">
+        <p className="text-sm text-gray-400">{t('expenses.purchaseEstimateHint')}</p>
+        {/* No inner overflow/scroll container here: a Select's open dropdown
+            is only positioned relative to its own wrapper (see Select.tsx),
+            so an ancestor with overflow-y-auto clips it instead of letting
+            it float above later lines. The modal's own backdrop already
+            scrolls (Modal.tsx's overlay is overflow-auto), so a long list
+            just grows the page instead. */}
+        <div className="space-y-3">
           {lines.map((l) => {
             const p = products.find((pr) => String(pr.id) === l.productId)
             return (
-              <div key={l.id} className="flex items-center gap-2">
-                <Select
-                  className="flex-1"
-                  value={l.productId}
-                  onChange={(v) => setLine(l.id, 'productId', v)}
-                  options={[{ value: '', label: '—' }, ...products.map((pr) => ({ value: String(pr.id), label: pr.name }))]}
-                />
-                <Input
-                  type="number" min={0} step="any"
-                  className="w-20 shrink-0"
-                  value={l.qty}
-                  onChange={(e) => setLine(l.id, 'qty', e.target.value)}
-                />
-                <span className="text-xs text-gray-500 w-24 text-right shrink-0">
-                  {p ? `UZS ${fmtUZS((Number(l.qty) || 0) * p.cost)}` : '—'}
-                </span>
-                <button onClick={() => removeLine(l.id)} className="text-gray-500 hover:text-red-400 shrink-0">
-                  <X size={15} />
-                </button>
+              <div key={l.id} className="bg-dark-card border border-dark-border rounded-xl p-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Select
+                    className="flex-1"
+                    value={l.productId}
+                    onChange={(v) => setLine(l.id, 'productId', v)}
+                    options={[{ value: '', label: '—' }, ...products.map((pr) => ({ value: String(pr.id), label: pr.name }))]}
+                  />
+                  <button onClick={() => removeLine(l.id)} className="text-gray-500 hover:text-red-400 shrink-0 p-1.5">
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="flex items-center gap-3">
+                  <label className="text-xs text-gray-400 shrink-0">{t('warehouse.quantity')}</label>
+                  <Input
+                    type="number" min={0} step="any"
+                    className="w-24"
+                    value={l.qty}
+                    onChange={(e) => setLine(l.id, 'qty', e.target.value)}
+                  />
+                  <span className="flex-1 text-right text-sm text-white font-medium">
+                    {p ? `UZS ${fmtUZS((Number(l.qty) || 0) * p.cost)}` : '—'}
+                  </span>
+                </div>
               </div>
             )
           })}
         </div>
         <Button variant="secondary" icon={Plus} onClick={addLine} className="w-full">{t('expenses.addLine')}</Button>
-        <div className="flex items-center justify-between pt-2 border-t border-dark-border">
+        <div className="flex items-center justify-between pt-3 border-t border-dark-border">
           <span className="text-sm text-gray-400">{t('expenses.estimateTotal')}</span>
-          <span className="text-white font-semibold">UZS {fmtUZS(total)}</span>
+          <span className="text-white text-lg font-bold">UZS {fmtUZS(total)}</span>
         </div>
       </div>
     </Modal>
