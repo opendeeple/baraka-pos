@@ -22,7 +22,7 @@ interface StockRow {
 }
 
 interface Category { id: number; name: string }
-interface PickerProduct { id: number; name: string; batch_id: number | null; warehouse_qty: number }
+interface PickerProduct { id: number; name: string; batch_id: number | null; warehouse_qty: number; cost: number }
 
 type Valuation = 'cost' | 'price'
 
@@ -57,7 +57,7 @@ export default function WarehouseScreen() {
   // ones happen to match the current filter.
   async function loadAllProducts() {
     setAllProducts(await window.electronAPI.db.query(`
-      SELECT p.id, p.name, pb.id as batch_id, COALESCE(wh.quantity, 0) as warehouse_qty
+      SELECT p.id, p.name, pb.id as batch_id, COALESCE(pb.cost, 0) as cost, COALESCE(wh.quantity, 0) as warehouse_qty
       FROM products p
       LEFT JOIN product_batches pb ON pb.id = (
         SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
@@ -129,7 +129,7 @@ export default function WarehouseScreen() {
     return rows
   }, [rows, locationFilter])
 
-  async function receive(productId: number, batchId: number, qty: number, reason: string) {
+  async function receive(productId: number, batchId: number, qty: number, reason: string, newCost?: number) {
     const now = new Date().toISOString()
     // ORDER BY id DESC LIMIT 1 matches loadRows()'s display query exactly —
     // without it, a pre-existing duplicate stock row for the same
@@ -159,6 +159,16 @@ export default function WarehouseScreen() {
       [adjSyncId, batchId, stock.id, previous, adjusted, reason || null, now, now]
     )
     await window.electronAPI.sync.enqueue('quantity_adjustments', adjSyncId, 'upsert')
+
+    // Same reasoning as the Purchases receive flow: refresh the stored cost
+    // price to what was actually paid for this batch, so it doesn't go
+    // stale. Past sales are unaffected — their margin was already
+    // snapshotted onto sale_items.unit_cost at sale time.
+    if (newCost !== undefined && newCost >= 0) {
+      await window.electronAPI.db.exec(`UPDATE product_batches SET cost=?,updated_at=? WHERE id=?`, [newCost, now, batchId])
+      const batchRow = (await window.electronAPI.db.query(`SELECT sync_id FROM product_batches WHERE id=?`, [batchId]) as Array<{ sync_id: string | null }>)[0]
+      if (batchRow?.sync_id) await window.electronAPI.sync.enqueue('product_batches', batchRow.sync_id, 'upsert')
+    }
     window.electronAPI.sync.pushPending().catch(() => {})
   }
 
@@ -314,11 +324,11 @@ export default function WarehouseScreen() {
 
       {receiveTarget && (
         <ReceiveModal
-          product={{ id: receiveTarget.id, name: receiveTarget.name, batch_id: receiveTarget.batch_id, warehouse_qty: receiveTarget.warehouse_qty }}
+          product={{ id: receiveTarget.id, name: receiveTarget.name, batch_id: receiveTarget.batch_id, warehouse_qty: receiveTarget.warehouse_qty, cost: receiveTarget.cost }}
           products={allProducts}
           onClose={() => setReceiveTarget(null)}
-          onConfirm={async (productId, batchId, qty, reason) => {
-            await receive(productId, batchId, qty, reason)
+          onConfirm={async (productId, batchId, qty, reason, cost) => {
+            await receive(productId, batchId, qty, reason, cost)
             setReceiveTarget(null)
             loadRows(); loadAllProducts()
           }}
@@ -329,8 +339,8 @@ export default function WarehouseScreen() {
           product={null}
           products={allProducts}
           onClose={() => setShowReceivePicker(false)}
-          onConfirm={async (productId, batchId, qty, reason) => {
-            await receive(productId, batchId, qty, reason)
+          onConfirm={async (productId, batchId, qty, reason, cost) => {
+            await receive(productId, batchId, qty, reason, cost)
             setShowReceivePicker(false)
             loadRows(); loadAllProducts()
           }}
@@ -364,7 +374,7 @@ export default function WarehouseScreen() {
   )
 }
 
-interface ModalProduct { id: number; name: string; batch_id: number | null; warehouse_qty: number }
+interface ModalProduct { id: number; name: string; batch_id: number | null; warehouse_qty: number; cost?: number }
 
 // `product` pre-selected (opened from a row's own button) or null (opened
 // from the general header button — the picker below lets you choose any
@@ -374,22 +384,31 @@ function ReceiveModal({ product, products, onClose, onConfirm }: {
   product: ModalProduct | null
   products: PickerProduct[]
   onClose: () => void
-  onConfirm: (productId: number, batchId: number, qty: number, reason: string) => Promise<void>
+  onConfirm: (productId: number, batchId: number, qty: number, reason: string, cost?: number) => Promise<void>
 }) {
   const { t } = useTranslation()
   const [pickedId, setPickedId] = useState(product ? String(product.id) : '')
   const [qty, setQty] = useState('')
   const [reason, setReason] = useState('')
+  const [cost, setCost] = useState(product ? String(product.cost ?? '') : '')
   const [saving, setSaving] = useState(false)
 
   const picked = product ?? products.find((p) => String(p.id) === pickedId) ?? null
+
+  // Picking from the dropdown (no pre-selected product): prefill the cost
+  // field with that product's current stored cost once chosen, so it reads
+  // as "confirm or update" rather than starting blank.
+  useEffect(() => {
+    if (!product && picked) setCost(String(picked.cost))
+  }, [picked?.id])
 
   async function confirm() {
     const n = Number(qty)
     if (!n || n <= 0 || !picked?.batch_id) return
     setSaving(true)
     try {
-      await onConfirm(picked.id, picked.batch_id, n, reason)
+      const costNum = cost.trim() === '' ? undefined : Number(cost)
+      await onConfirm(picked.id, picked.batch_id, n, reason, costNum)
       toast.success(t('warehouse.received'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
@@ -423,6 +442,10 @@ function ReceiveModal({ product, products, onClose, onConfirm }: {
         <div>
           <label className="text-xs text-gray-400 mb-1 block">{t('warehouse.quantity')}</label>
           <Input type="number" min={0} step="any" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus={Boolean(product)} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block">{t('warehouse.unitCost')}</label>
+          <Input type="number" min={0} step="any" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={t('warehouse.unitCostHint')} />
         </div>
         <div>
           <label className="text-xs text-gray-400 mb-1 block">{t('warehouse.reasonOptional')}</label>

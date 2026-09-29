@@ -28,6 +28,8 @@ export interface ElectronAPI {
     receiptHtml: (receiptData: unknown) => Promise<{ html: string; paperWidthMm: number }>
     /** Prints an employee badge page through the system print dialog. */
     printBadge: (html: string) => Promise<{ success: boolean; error?: string }>
+    /** Prints a restock shopping list (name/needed qty/cost) on the receipt printer. Nothing here is saved — built fresh from the caller's numbers each print. */
+    printShoppingList: (items: Array<{ name: string; qty: number; cost: number }>) => Promise<{ success: boolean; error?: string }>
     openCashDrawer: () => Promise<{ success: boolean; error?: string }>
     testPrint: () => Promise<{ success: boolean; message?: string }>
     listPrinters: () => Promise<unknown[]>

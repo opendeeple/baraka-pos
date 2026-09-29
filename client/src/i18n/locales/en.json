@@ -314,6 +314,8 @@
     "received": "Received",
     "transferred": "Transferred to shop",
     "quantity": "Quantity",
+    "unitCost": "Cost price (per unit)",
+    "unitCostHint": "Leave blank to keep the current cost",
     "reasonOptional": "Reason (optional)",
     "availableInWarehouse": "Available in warehouse: {{qty}}"
   },
@@ -399,7 +401,11 @@
     "allStockedUp": "All stocked up!",
     "topProducts7Days": "Top Products (7 days)",
     "noSalesYet": "No sales yet",
-    "recentSales": "Recent Sales"
+    "recentSales": "Recent Sales",
+    "printShoppingList": "Print shopping list",
+    "shoppingListEmpty": "Nothing needed right now",
+    "shoppingListPrinted": "Shopping list printed",
+    "shoppingListFailed": "Print failed"
   },
   "sales": {
     "fullyPaid": "Fully Paid",

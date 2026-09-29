@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { TrendingUp, ShoppingBag, Users, Package, AlertTriangle, RefreshCw } from 'lucide-react'
+import { TrendingUp, ShoppingBag, Users, Package, AlertTriangle, RefreshCw, Printer } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 
@@ -54,10 +55,54 @@ export default function DashboardScreen() {
   })
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<'today' | '7d' | '30d'>('7d')
+  const [printingList, setPrintingList] = useState(false)
 
   useEffect(() => {
     loadStats()
   }, [period])
+
+  // Restock shopping list: which shop-floor products are below their own
+  // configured reorder point (alert_quantity), how much is needed to reach
+  // it, and a rough cost estimate from the stored cost price (tannarx).
+  // Computed fresh at print time only — nothing here is saved, since the
+  // real buying price on the day can differ from what's stored.
+  async function printShoppingList() {
+    setPrintingList(true)
+    try {
+      const rows = await window.electronAPI.db.query(
+        `SELECT p.name, p.alert_quantity, COALESCE(ps.quantity, 0) as stock, COALESCE(pb.cost, 0) as cost
+         FROM products p
+         LEFT JOIN product_batches pb ON pb.id = (
+           SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
+         )
+         LEFT JOIN product_stocks ps ON ps.id = (
+           SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id AND location = 'shop' ORDER BY id DESC LIMIT 1
+         )
+         WHERE p.is_stock_managed = 1 AND p.deleted_at IS NULL AND COALESCE(ps.quantity, 0) < p.alert_quantity
+         ORDER BY p.name`,
+        []
+      ) as Array<{ name: string; alert_quantity: number; stock: number; cost: number }>
+
+      const items = rows
+        .map((r) => ({
+          name: r.name,
+          qty: Math.round((Number(r.alert_quantity) - Number(r.stock)) * 100) / 100,
+          cost: Number(r.cost),
+        }))
+        .filter((it) => it.qty > 0)
+
+      if (!items.length) {
+        toast.info(t('dashboard.shoppingListEmpty'))
+        return
+      }
+
+      const res = await window.electronAPI.printer.printShoppingList(items)
+      if (res.success) toast.success(t('dashboard.shoppingListPrinted'))
+      else toast.error(res.error || t('dashboard.shoppingListFailed'))
+    } finally {
+      setPrintingList(false)
+    }
+  }
 
   async function loadStats() {
     setLoading(true)
@@ -198,10 +243,19 @@ export default function DashboardScreen() {
 
           {/* Low Stock Alerts */}
           <div className="bg-dark-surface border border-dark-border rounded-2xl p-5">
-            <h3 className="text-white font-semibold mb-4 text-sm flex items-center gap-2">
-              <AlertTriangle size={14} className="text-red-400" />
-              {t('dashboard.lowStock')}
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold text-sm flex items-center gap-2">
+                <AlertTriangle size={14} className="text-red-400" />
+                {t('dashboard.lowStock')}
+              </h3>
+              <button
+                onClick={printShoppingList}
+                disabled={printingList}
+                className="flex items-center gap-1.5 text-xs text-primary hover:underline disabled:opacity-50"
+              >
+                <Printer size={13} /> {t('dashboard.printShoppingList')}
+              </button>
+            </div>
             {stats.lowStockItems.length === 0 ? (
               <div className="text-gray-600 text-sm text-center py-8">{t('dashboard.allStockedUp')}</div>
             ) : (

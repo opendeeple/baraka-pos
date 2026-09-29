@@ -322,6 +322,8 @@
     "received": "Принято",
     "transferred": "Передано в магазин",
     "quantity": "Количество",
+    "unitCost": "Себестоимость (за единицу)",
+    "unitCostHint": "Оставьте пустым, чтобы сохранить текущую",
     "reasonOptional": "Причина (необязательно)",
     "availableInWarehouse": "Доступно на складе: {{qty}}"
   },
@@ -409,7 +411,11 @@
     "allStockedUp": "Всё в достатке!",
     "topProducts7Days": "Топ товаров (7 дней)",
     "noSalesYet": "Пока нет продаж",
-    "recentSales": "Последние продажи"
+    "recentSales": "Последние продажи",
+    "printShoppingList": "Распечатать список закупок",
+    "shoppingListEmpty": "Сейчас ничего не требуется",
+    "shoppingListPrinted": "Список закупок распечатан",
+    "shoppingListFailed": "Ошибка печати"
   },
   "sales": {
     "fullyPaid": "Оплачено полностью",

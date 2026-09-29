@@ -245,7 +245,11 @@ export function receiptHtml(doc: ReceiptDoc, layout: ReceiptLayoutConfig): strin
   </style></head><body>${lines.join('')}</body></html>`
 }
 
-function printOnWindowsPrinter(deviceName: string, doc: ReceiptDoc, layout: ReceiptLayoutConfig): Promise<{ success: boolean; error?: string }> {
+// Extracted from the original single-purpose printOnWindowsPrinter so the
+// shopping-list document (a plain HTML string, not a ReceiptDoc) can go
+// through the exact same silent/sized print path instead of a second,
+// slightly-different copy of this logic.
+function silentPrintHtml(deviceName: string, html: string, paperWidthMm: number): Promise<{ success: boolean; error?: string }> {
   return new Promise((resolve) => {
     // show:false windows are often never actually painted by the GPU
     // process on Windows (Chromium deprioritizes hidden surfaces) — silent
@@ -288,7 +292,7 @@ function printOnWindowsPrinter(deviceName: string, doc: ReceiptDoc, layout: Rece
           const scrollHeightPx = await win.webContents.executeJavaScript('document.body.scrollHeight') as number
           const MICRONS_PER_CSS_PX = 25400 / 96
           const heightMicrons = Math.ceil(scrollHeightPx * MICRONS_PER_CSS_PX) + 2000 // +2mm safety buffer
-          const widthMicrons = layout.paperWidthMm * 1000
+          const widthMicrons = paperWidthMm * 1000
           if (settled) return
           win.webContents.print(
             {
@@ -309,8 +313,65 @@ function printOnWindowsPrinter(deviceName: string, doc: ReceiptDoc, layout: Rece
     // Safety net: never leave the IPC call (and the cashier) hanging if the
     // print dialog/driver stalls.
     setTimeout(() => finish({ success: false, error: 'Print timed out' }), 15_000)
-    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(receiptHtml(doc, layout)))
+    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
   })
+}
+
+function printOnWindowsPrinter(deviceName: string, doc: ReceiptDoc, layout: ReceiptLayoutConfig): Promise<{ success: boolean; error?: string }> {
+  return silentPrintHtml(deviceName, receiptHtml(doc, layout), layout.paperWidthMm)
+}
+
+export interface ShoppingListItem { name: string; qty: number; cost: number }
+
+// A restock shopping list: which low-stock products need buying and a rough
+// estimate of what it'll cost, based on the product's stored cost price
+// (tannarx). Nothing here is persisted anywhere — it exists only for this
+// one print, built fresh from the caller's numbers each time, since the
+// real market price on the day of buying can differ from the stored cost.
+// Reuses the exact same monospace/table primitives as receiptHtml (no CSS
+// text-align/width/flex — see the notes on those above) so it prints
+// correctly on the same hardware without a second round of trial and error.
+function shoppingListHtml(items: ShoppingListItem[], layout: ReceiptLayoutConfig): string {
+  const W = layout.charWidth
+  const esc = escapeHtml
+  const els = layout.elements
+  const scaleOf = (k: ReceiptElementKey) => els[k].fontPx / REFERENCE_FONT_PX
+  const styleOf = (k: ReceiptElementKey, extra = '') =>
+    `font-size:${els[k].fontPx}px;margin-left:${els[k].shiftPx}px;${extra}`
+  const div = (k: ReceiptElementKey, text: string, extraCss = '') =>
+    `<div style="${styleOf(k, extraCss)}">${esc(text)}</div>`
+
+  const total = items.reduce((s, it) => s + it.qty * it.cost, 0)
+  const lines: string[] = []
+  lines.push(div('storeName', centerPad("XARID RO'YXATI", W, scaleOf('storeName')), 'font-weight:700;letter-spacing:0.5px;'))
+  lines.push(div('storeInfo', centerPad('(taxminiy, tannarx boyicha)', W, scaleOf('storeInfo')), 'font-weight:700;'))
+  lines.push(`<div class="divider"></div>`)
+  lines.push(div('invoiceInfo', new Date().toLocaleString().slice(0, 19)))
+  lines.push(`<div class="divider"></div>`)
+  lines.push(div('items', tableBorder(W)))
+  lines.push(div('items', tableRow('№', 'Nomi', 'Kerak', 'Summa', W), 'font-weight:700;'))
+  lines.push(div('items', tableBorder(W)))
+  items.forEach((it, i) => {
+    lines.push(div('items', tableRow(String(i + 1), it.name, String(it.qty), (it.qty * it.cost).toLocaleString(), W)))
+  })
+  lines.push(div('items', tableBorder(W)))
+  lines.push(div('totalRow', padRow('JAMI (taxminiy):', total.toLocaleString(), W), 'font-weight:700;'))
+  lines.push(`<div class="divider"></div>`)
+  lines.push(div('footer', centerPad('Narxlar bozorda farq qilishi mumkin', W, scaleOf('footer'))))
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    @page { size: ${layout.paperWidthMm}mm auto; margin: 0; }
+    body {
+      margin: 0;
+      padding: 2.5mm ${layout.marginMm}mm;
+      font-family: Consolas, 'Courier New', monospace;
+      font-size: ${REFERENCE_FONT_PX}px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .divider { border-top: 1px dashed #000; margin: 4px 0; }
+  </style></head><body>${lines.join('')}</body></html>`
 }
 
 export function registerPrinterIpc() {
@@ -405,6 +466,69 @@ export function registerPrinterIpc() {
         .style('b')
         .text(d.invoiceNumber)
         .style('normal')
+        .cut()
+        .close()
+
+      return { success: true }
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : 'Print failed' }
+    }
+  })
+
+  // Restock shopping list (Back office > Dashboard > Low stock) — same
+  // receipt printer as sales, so it prints on the same paper the owner
+  // already carries around, but built from ShoppingListItem[] the caller
+  // computes fresh each time, not a stored ReceiptDoc.
+  ipcMain.handle('printer:printShoppingList', async (_event, items: unknown) => {
+    try {
+      const config = getPrinterConfig()
+      const reason = unconfiguredReason(config)
+      if (reason) return { success: false, error: reason }
+      const list = items as ShoppingListItem[]
+      const layout = getReceiptLayoutConfig()
+
+      if (config.type === 'windows') {
+        return await silentPrintHtml(config.name, shoppingListHtml(list, layout), layout.paperWidthMm)
+      }
+
+      const { Printer, USB, Network } = await import('escpos' as never) as never as EscposModule
+      const device =
+        config.type === 'usb'
+          ? new USB(config.vendorId, config.productId)
+          : new Network(config.host, Number(config.port) || 9100)
+      const printer = new Printer(device)
+      const fmt = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+      const total = list.reduce((s, it) => s + it.qty * it.cost, 0)
+
+      printer
+        .font('a')
+        .align('ct')
+        .style('b')
+        .text("XARID RO'YXATI (taxminiy)")
+        .style('normal')
+        .drawLine()
+        .align('lt')
+        .tableCustom([
+          { text: '#', width: 0.06 },
+          { text: 'Nomi', width: 0.5 },
+          { text: 'Kerak', width: 0.14 },
+          { text: 'Summa', width: 0.3, align: 'RIGHT' },
+        ])
+      list.forEach((it, i) => {
+        printer.tableCustom([
+          { text: String(i + 1), width: 0.06 },
+          { text: it.name.slice(0, 28), width: 0.5 },
+          { text: String(it.qty), width: 0.14 },
+          { text: fmt(it.qty * it.cost), width: 0.3, align: 'RIGHT' },
+        ])
+      })
+      printer
+        .drawLine()
+        .tableCustom([
+          { text: 'JAMI (taxminiy)', width: 0.7, style: 'b' },
+          { text: fmt(total), width: 0.3, style: 'b', align: 'RIGHT' },
+        ])
+        .drawLine()
         .cut()
         .close()
 

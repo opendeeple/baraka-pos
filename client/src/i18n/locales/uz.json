@@ -310,6 +310,8 @@
     "received": "Qabul qilindi",
     "transferred": "Do'konga chiqarildi",
     "quantity": "Miqdor",
+    "unitCost": "Tannarx (1 dona/kg uchun)",
+    "unitCostHint": "Bo'sh qoldirsangiz, eski tannarx saqlanadi",
     "reasonOptional": "Sabab (ixtiyoriy)",
     "availableInWarehouse": "Omborxonada mavjud: {{qty}}"
   },
@@ -394,7 +396,11 @@
     "allStockedUp": "Hammasi yetarli!",
     "topProducts7Days": "Top mahsulotlar (7 kun)",
     "noSalesYet": "Hali sotuv yo'q",
-    "recentSales": "Oxirgi sotuvlar"
+    "recentSales": "Oxirgi sotuvlar",
+    "printShoppingList": "Xarid ro'yxatini chop etish",
+    "shoppingListEmpty": "Hozircha kerakli mahsulot yo'q",
+    "shoppingListPrinted": "Xarid ro'yxati chop etildi",
+    "shoppingListFailed": "Chop etishda xatolik"
   },
   "sales": {
     "fullyPaid": "To'liq to'langan",

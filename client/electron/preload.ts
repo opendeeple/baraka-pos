@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     print: (receiptData: unknown) => ipcRenderer.invoke('printer:print', receiptData),
     receiptHtml: (receiptData: unknown) => ipcRenderer.invoke('printer:receiptHtml', receiptData),
     printBadge: (html: string) => ipcRenderer.invoke('printer:printBadge', html),
+    printShoppingList: (items: Array<{ name: string; qty: number; cost: number }>) =>
+      ipcRenderer.invoke('printer:printShoppingList', items),
     openCashDrawer: () => ipcRenderer.invoke('printer:openCashDrawer'),
     testPrint: () => ipcRenderer.invoke('printer:testPrint'),
     listPrinters: () => ipcRenderer.invoke('printer:listPrinters'),

@@ -111,8 +111,8 @@ export default function PurchasesScreen() {
     const now = new Date().toISOString()
     try {
       const items = await window.electronAPI.db.query(
-        `SELECT product_id, batch_id, quantity FROM purchase_items WHERE purchase_id=?`, [purchase.id]
-      ) as Array<{product_id:number; batch_id:number | null; quantity:number}>
+        `SELECT product_id, batch_id, quantity, unit_cost FROM purchase_items WHERE purchase_id=?`, [purchase.id]
+      ) as Array<{product_id:number; batch_id:number | null; quantity:number; unit_cost:number}>
       // Received goods go into shop stock — the only location before the
       // warehouse module, and the one sales draw from. Stock reaches the
       // server only as quantity_adjustments deltas (a purchase push never
@@ -120,8 +120,13 @@ export default function PurchasesScreen() {
       // never saw the goods and the next stock pull wiped them locally.
       for (const item of items) {
         if (!item.batch_id) continue
+        // ORDER BY id DESC matches every other stock lookup in the app
+        // (Warehouse, Products) — this DB has pre-existing duplicate
+        // product_stocks rows per product+batch+location from historical
+        // sync activity, and without this a lookup can silently hit a
+        // stale duplicate instead of the one actually shown/used elsewhere.
         const stock = (await window.electronAPI.db.query(
-          `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' LIMIT 1`,
+          `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' ORDER BY id DESC LIMIT 1`,
           [item.product_id, item.batch_id]
         ) as Array<{ id: number; quantity: number }>)[0]
         const previous = Number(stock?.quantity ?? 0)
@@ -135,7 +140,7 @@ export default function PurchasesScreen() {
           )
         }
         const stockId = stock?.id ?? (await window.electronAPI.db.query(
-          `SELECT id FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' LIMIT 1`,
+          `SELECT id FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' ORDER BY id DESC LIMIT 1`,
           [item.product_id, item.batch_id]
         ) as Array<{ id: number }>)[0]?.id
         const adjSyncId = crypto.randomUUID()
@@ -145,6 +150,18 @@ export default function PurchasesScreen() {
           [adjSyncId, item.batch_id, stockId ?? null, previous, adjusted, `Purchase ${purchase.reference_number} received`, now, now]
         )
         await window.electronAPI.sync.enqueue('quantity_adjustments', adjSyncId, 'upsert')
+
+        // The cost price (tannarx) shown everywhere else (Products, Warehouse,
+        // the next sale's margin, the restock shopping list) comes from
+        // product_batches.cost — refresh it to what was actually paid on
+        // this delivery, so it doesn't go stale after a price change. Past
+        // sales are unaffected: their margin was already snapshotted onto
+        // sale_items.unit_cost at sale time, not recomputed from this.
+        if (item.unit_cost != null) {
+          await window.electronAPI.db.exec(`UPDATE product_batches SET cost=?,updated_at=? WHERE id=?`, [Number(item.unit_cost), now, item.batch_id])
+          const batchRow = (await window.electronAPI.db.query(`SELECT sync_id FROM product_batches WHERE id=?`, [item.batch_id]) as Array<{ sync_id: string | null }>)[0]
+          if (batchRow?.sync_id) await window.electronAPI.sync.enqueue('product_batches', batchRow.sync_id, 'upsert')
+        }
       }
       await window.electronAPI.db.exec(`UPDATE purchases SET status='received',updated_at=? WHERE id=?`, [now, purchase.id])
       const po = (await window.electronAPI.db.query(`SELECT sync_id FROM purchases WHERE id=?`, [purchase.id]) as Array<{ sync_id: string | null }>)[0]
