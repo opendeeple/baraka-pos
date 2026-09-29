@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   printer: {
     print: (receiptData: unknown) => ipcRenderer.invoke('printer:print', receiptData),
+    receiptHtml: (receiptData: unknown) => ipcRenderer.invoke('printer:receiptHtml', receiptData),
     openCashDrawer: () => ipcRenderer.invoke('printer:openCashDrawer'),
     testPrint: () => ipcRenderer.invoke('printer:testPrint'),
     listPrinters: () => ipcRenderer.invoke('printer:listPrinters'),

@@ -24,6 +24,8 @@ export interface ElectronAPI {
   }
   printer: {
     print: (receiptData: unknown) => Promise<{ success: boolean; error?: string }>
+    /** The exact HTML the Windows-printer path prints, for on-screen preview. */
+    receiptHtml: (receiptData: unknown) => Promise<{ html: string; paperWidthMm: number }>
     openCashDrawer: () => Promise<{ success: boolean; error?: string }>
     testPrint: () => Promise<{ success: boolean; message?: string }>
     listPrinters: () => Promise<unknown[]>
