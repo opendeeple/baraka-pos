@@ -249,6 +249,8 @@ export function receiptHtml(doc: ReceiptDoc, layout: ReceiptLayoutConfig): strin
 // shopping-list document (a plain HTML string, not a ReceiptDoc) can go
 // through the exact same silent/sized print path instead of a second,
 // slightly-different copy of this logic.
+const MICRONS_PER_CSS_PX = 25400 / 96
+
 function silentPrintHtml(deviceName: string, html: string, paperWidthMm: number): Promise<{ success: boolean; error?: string }> {
   return new Promise((resolve) => {
     // show:false windows are often never actually painted by the GPU
@@ -256,11 +258,26 @@ function silentPrintHtml(deviceName: string, html: string, paperWidthMm: number)
     // print then captures nothing, which is exactly the blank-page symptom.
     // Parked off-screen instead: "shown" so it paints normally, but never
     // visible to the user.
+    //
+    // The window's CSS width is set to match the real paper width (not a
+    // fixed guess) because document.body.scrollHeight below is measured
+    // against THIS on-screen viewport — @page (further down) has zero
+    // effect on normal layout, only on the actual print pagination. A
+    // mismatched viewport means a line can wrap differently at measurement
+    // time than it does when actually printed, so the measured height (and
+    // the pageSize sent to the driver) comes out wrong for that content —
+    // this stayed invisible for sale receipts, whose lines are all either
+    // short or padded to exactly fit the paper width already, but a longer
+    // free-text line (e.g. the shopping list's disclaimer) can cross the
+    // gap between the two widths and wrap onto an extra line only at print
+    // time, which is where a mismatched pageSize turns into the driver
+    // padding/repositioning content with blank paper.
+    const cssWidthPx = Math.round((paperWidthMm * 1000) / MICRONS_PER_CSS_PX)
     const win = new BrowserWindow({
       show: true,
       x: -3000,
       y: -3000,
-      width: 320,
+      width: cssWidthPx,
       height: 700,
       frame: false,
       skipTaskbar: true,
@@ -290,7 +307,6 @@ function silentPrintHtml(deviceName: string, html: string, paperWidthMm: number)
           // overrides the driver default so the physical feed matches the
           // content instead.
           const scrollHeightPx = await win.webContents.executeJavaScript('document.body.scrollHeight') as number
-          const MICRONS_PER_CSS_PX = 25400 / 96
           const heightMicrons = Math.ceil(scrollHeightPx * MICRONS_PER_CSS_PX) + 2000 // +2mm safety buffer
           const widthMicrons = paperWidthMm * 1000
           if (settled) return
