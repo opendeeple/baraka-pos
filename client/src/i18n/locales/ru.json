@@ -245,6 +245,13 @@
   },
   "expenses": {
     "addExpense": "Добавить расход",
+    "purchaseEstimate": "Черновой чек",
+    "purchaseEstimateHint": "Добавьте любые товары — примерная сумма рассчитывается по себестоимости. Ничего не сохраняется, это только для печати.",
+    "printEstimate": "Распечатать",
+    "addLine": "Добавить товар",
+    "estimateTotal": "Итого (примерно)",
+    "estimatePrinted": "Распечатано",
+    "estimateFailed": "Ошибка печати",
     "from": "С",
     "to": "по",
     "payment": "Способ оплаты",
@@ -411,11 +418,7 @@
     "allStockedUp": "Всё в достатке!",
     "topProducts7Days": "Топ товаров (7 дней)",
     "noSalesYet": "Пока нет продаж",
-    "recentSales": "Последние продажи",
-    "printShoppingList": "Распечатать список закупок",
-    "shoppingListEmpty": "Сейчас ничего не требуется",
-    "shoppingListPrinted": "Список закупок распечатан",
-    "shoppingListFailed": "Ошибка печати"
+    "recentSales": "Последние продажи"
   },
   "sales": {
     "fullyPaid": "Оплачено полностью",

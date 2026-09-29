@@ -237,6 +237,13 @@
   },
   "expenses": {
     "addExpense": "Add Expense",
+    "purchaseEstimate": "Draft receipt",
+    "purchaseEstimateHint": "Add any products you like — a rough total is calculated from cost price. Nothing is saved anywhere, this is just for printing.",
+    "printEstimate": "Print",
+    "addLine": "Add product",
+    "estimateTotal": "Total (estimate)",
+    "estimatePrinted": "Printed",
+    "estimateFailed": "Print failed",
     "from": "From",
     "to": "to",
     "payment": "Payment Method",
@@ -401,11 +408,7 @@
     "allStockedUp": "All stocked up!",
     "topProducts7Days": "Top Products (7 days)",
     "noSalesYet": "No sales yet",
-    "recentSales": "Recent Sales",
-    "printShoppingList": "Print shopping list",
-    "shoppingListEmpty": "Nothing needed right now",
-    "shoppingListPrinted": "Shopping list printed",
-    "shoppingListFailed": "Print failed"
+    "recentSales": "Recent Sales"
   },
   "sales": {
     "fullyPaid": "Fully Paid",

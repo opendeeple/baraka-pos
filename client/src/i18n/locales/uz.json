@@ -233,6 +233,13 @@
   },
   "expenses": {
     "addExpense": "Xarajat qo'shish",
+    "purchaseEstimate": "Xom chek",
+    "purchaseEstimateHint": "Xohlagan mahsulotni qo'shing — tannarx bo'yicha taxminiy summa hisoblanadi. Hech qayerga saqlanmaydi, faqat chop etish uchun.",
+    "printEstimate": "Chop etish",
+    "addLine": "Mahsulot qo'shish",
+    "estimateTotal": "Jami (taxminiy)",
+    "estimatePrinted": "Chop etildi",
+    "estimateFailed": "Chop etishda xatolik",
     "from": "Dan",
     "to": "gacha",
     "payment": "To'lov usuli",
@@ -396,11 +403,7 @@
     "allStockedUp": "Hammasi yetarli!",
     "topProducts7Days": "Top mahsulotlar (7 kun)",
     "noSalesYet": "Hali sotuv yo'q",
-    "recentSales": "Oxirgi sotuvlar",
-    "printShoppingList": "Xarid ro'yxatini chop etish",
-    "shoppingListEmpty": "Hozircha kerakli mahsulot yo'q",
-    "shoppingListPrinted": "Xarid ro'yxati chop etildi",
-    "shoppingListFailed": "Chop etishda xatolik"
+    "recentSales": "Oxirgi sotuvlar"
   },
   "sales": {
     "fullyPaid": "To'liq to'langan",
