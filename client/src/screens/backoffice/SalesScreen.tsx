@@ -116,6 +116,12 @@ export default function SalesScreen() {
     setVoiding(true)
     const now = new Date().toISOString()
     await window.electronAPI.db.exec(`UPDATE sales SET status='cancelled',updated_at=? WHERE id=?`, [now, id])
+    // Without this the void never left this PC: the server kept counting the sale.
+    const row = (await window.electronAPI.db.query(`SELECT sync_id FROM sales WHERE id=?`, [id]) as Array<{ sync_id: string | null }>)[0]
+    if (row?.sync_id) {
+      await window.electronAPI.sync.enqueue('sales', row.sync_id, 'upsert')
+      window.electronAPI.sync.pushPending().catch(() => {})
+    }
     setVoiding(false); setConfirmVoid(false); setDetail(null); loadSales()
   }
 

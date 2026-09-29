@@ -9,9 +9,12 @@ import {
   backfillOutboxOnce,
   retryDeadLetters,
   enqueueOutbox,
+  startOutboxLoop,
 } from '../services/sync.service'
 
 export function registerSyncIpc(platform: 'electron-pos' | 'electron-office' = 'electron-pos') {
+  startOutboxLoop()
+
   ipcMain.handle('sync:pushPending', async () => {
     return flushOutbox()
   })
