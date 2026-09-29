@@ -24,8 +24,7 @@ interface TelegramConfig {
 
 interface SmsConfig {
   host: string
-  username: string
-  password: string
+  token: string
 }
 
 interface AutoReminderConfig {
@@ -99,7 +98,7 @@ export default function SettingsScreen() {
   })
   const [layout, setLayout] = useState<ReceiptLayout>(DEFAULT_LAYOUT)
   const [telegram, setTelegram] = useState<TelegramConfig>({ botToken: '', botUsername: '' })
-  const [sms, setSms] = useState<SmsConfig>({ host: '', username: '', password: '' })
+  const [sms, setSms] = useState<SmsConfig>({ host: '', token: '' })
   const [autoReminder, setAutoReminder] = useState<AutoReminderConfig>({ enabled: false, intervalDays: 3 })
   const [runningReminders, setRunningReminders] = useState(false)
   const [charges, setCharges] = useState<ChargeRow[]>([])
@@ -165,7 +164,7 @@ export default function SettingsScreen() {
       try { setTelegram({ botToken: '', botUsername: '', ...JSON.parse(map.telegram_config) }) } catch {}
     }
     if (map.sms_config) {
-      try { setSms({ host: '', username: '', password: '', ...JSON.parse(map.sms_config) }) } catch {}
+      try { setSms({ host: '', token: '', ...JSON.parse(map.sms_config) }) } catch {}
     }
     if (map.auto_reminder_config) {
       try { setAutoReminder({ enabled: false, intervalDays: 3, ...JSON.parse(map.auto_reminder_config) }) } catch {}
@@ -390,36 +389,28 @@ export default function SettingsScreen() {
           </div>
         </div>
 
-        {/* SMS via a dedicated Android phone running "SMS Gateway for
-            Android" (sms-gate.app) — the phone exposes a local HTTP API
-            over the same Wi-Fi network; see sms.service.ts. */}
+        {/* SMS via a dedicated Android phone running "Traccar SMS Gateway"
+            (Local Service) — the phone exposes a token-authenticated HTTP
+            endpoint over the same Wi-Fi network; see sms.service.ts. */}
         <div className={SECTION_CLS}>
           <h2 className="text-white font-semibold text-sm flex items-center gap-2"><Send size={15} /> {t('settings.smsGateway')}</h2>
           <p className="text-xs text-gray-500">{t('settings.smsGatewayHint')}</p>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={LABEL_CLS}>{t('settings.smsGatewayHost')}</label>
               <input
                 value={sms.host}
                 onChange={(e) => setSms((p) => ({ ...p, host: e.target.value }))}
-                placeholder="192.168.1.50:8080"
+                placeholder="192.168.1.50:8082"
                 className={INPUT_CLS}
               />
             </div>
             <div>
-              <label className={LABEL_CLS}>{t('settings.smsGatewayUsername')}</label>
-              <input
-                value={sms.username}
-                onChange={(e) => setSms((p) => ({ ...p, username: e.target.value }))}
-                className={INPUT_CLS}
-              />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>{t('settings.smsGatewayPassword')}</label>
+              <label className={LABEL_CLS}>{t('settings.smsGatewayToken')}</label>
               <input
                 type="password"
-                value={sms.password}
-                onChange={(e) => setSms((p) => ({ ...p, password: e.target.value }))}
+                value={sms.token}
+                onChange={(e) => setSms((p) => ({ ...p, token: e.target.value }))}
                 className={INPUT_CLS}
               />
             </div>
