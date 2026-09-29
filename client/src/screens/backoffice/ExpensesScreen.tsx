@@ -280,24 +280,33 @@ function PurchaseEstimateModal({ onClose }: { onClose: () => void }) {
       onClose={onClose}
       title={t('expenses.purchaseEstimate')}
       maxWidth="max-w-2xl"
+      // The total and action buttons live in this footer slot (pinned below
+      // children, outside the scrollable list — see Modal.tsx) rather than
+      // scrolling with the line list: on the touchscreen till this is used
+      // from, "Chop etish" has to stay reachable without hunting for it
+      // after adding several products.
       footer={
-        <>
-          <Button variant="secondary" className="flex-1" onClick={onClose}>{t('common.close')}</Button>
-          <Button className="flex-1" onClick={print} loading={printing} disabled={!resolved.length}>
-            {t('expenses.printEstimate')}
-          </Button>
-        </>
+        <div className="w-full space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-400">{t('expenses.estimateTotal')}</span>
+            <span className="text-white text-lg font-bold">UZS {fmtUZS(total)}</span>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="secondary" className="flex-1" onClick={onClose}>{t('common.close')}</Button>
+            <Button className="flex-1" onClick={print} loading={printing} disabled={!resolved.length}>
+              {t('expenses.printEstimate')}
+            </Button>
+          </div>
+        </div>
       }
     >
       <div className="p-5 space-y-4">
         <p className="text-sm text-gray-400">{t('expenses.purchaseEstimateHint')}</p>
-        {/* No inner overflow/scroll container here: a Select's open dropdown
-            is only positioned relative to its own wrapper (see Select.tsx),
-            so an ancestor with overflow-y-auto clips it instead of letting
-            it float above later lines. The modal's own backdrop already
-            scrolls (Modal.tsx's overlay is overflow-auto), so a long list
-            just grows the page instead. */}
-        <div className="space-y-3">
+        {/* Bounded + scrollable so the title/total/buttons around it stay
+            reachable on a touchscreen no matter how many lines are added.
+            Select's own dropdown is portaled to <body> (see Select.tsx)
+            specifically so this scroll container doesn't clip it. */}
+        <div className="space-y-3 max-h-[42vh] overflow-y-auto pr-1">
           {lines.map((l) => {
             const p = products.find((pr) => String(pr.id) === l.productId)
             return (
@@ -330,10 +339,6 @@ function PurchaseEstimateModal({ onClose }: { onClose: () => void }) {
           })}
         </div>
         <Button variant="secondary" icon={Plus} onClick={addLine} className="w-full">{t('expenses.addLine')}</Button>
-        <div className="flex items-center justify-between pt-3 border-t border-dark-border">
-          <span className="text-sm text-gray-400">{t('expenses.estimateTotal')}</span>
-          <span className="text-white text-lg font-bold">UZS {fmtUZS(total)}</span>
-        </div>
       </div>
     </Modal>
   )
