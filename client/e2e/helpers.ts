@@ -121,7 +121,18 @@ export async function loadAuthenticatedBackOffice(page: Page, route: string) {
   await page.addInitScript(() => {
     const api = (window as unknown as { electronAPI: MockApi }).electronAPI
     api.auth.getToken = async () => 'mock-token'
-    api.auth.me = async () => ({ status: 200, data: { id: 1, name: 'Admin', role: 'admin', email: 'admin@example.com', storeId: 1 } })
+    // Matches the server's actual /auth/me shape (see auth.service.ts's
+    // toAuthResponse): { user, store }, not a flat user object — the real
+    // restoreOfficeSession() reads result.data.user.role, which silently
+    // throws (caught, swallowed) against a flat shape, leaving the screen
+    // stuck on #/login forever and timing out every test in this file.
+    api.auth.me = async () => ({
+      status: 200,
+      data: {
+        user: { id: 1, storeId: 1, name: 'Admin', email: 'admin@example.com', username: 'admin', role: 'admin' },
+        store: { id: 1, name: 'Baraka Mini Market', address: '', phone: '', salePrefix: 'BRK' },
+      },
+    })
     api.db.query = async (sql: string) => {
       if (sql.includes('FROM sales')) return [{ id: 1, invoice_number: 'INV-001', total_amount: 1500, status: 'completed', sale_date: '2025-01-01', user_id: 1 }]
       if (sql.includes('FROM products') || sql.includes('FROM product_batches')) return [{ id: 1, name: 'Test Product', price: 100, stock: 10, is_active: 1, category_id: null }]

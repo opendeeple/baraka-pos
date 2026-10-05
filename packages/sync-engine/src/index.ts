@@ -207,6 +207,22 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     )
   }
 
+  // A 401 on a device-authenticated call means the server no longer accepts
+  // this device_id/device_key pair (revoked, or its row is simply gone — a
+  // fresh-start reset truncates the devices table wholesale). Without this,
+  // isDeviceRegistered() keeps reporting "registered" forever for a key the
+  // server will never accept again: every pull/push fails the same way on
+  // every retry, with no path back to a working state short of someone
+  // manually finding and clearing these two settings. Clearing them here as
+  // soon as a 401 is seen makes isDeviceRegistered() correctly report false
+  // again, and logging in once more re-registers the device with a fresh key
+  // (LoginScreen already calls ensureDeviceRegistered on every login).
+  function clearDeviceRegistrationOn401(status: number): void {
+    if (status !== 401) return
+    setSetting('device_id', '')
+    setSetting('device_key', '')
+  }
+
   function getServerUrl(): string {
     return getSetting('server_url', DEFAULT_SERVER_URL)
   }
@@ -258,7 +274,13 @@ export function createSyncEngine(deps: SyncEngineDeps) {
   ): Promise<{ registered: boolean; error?: string }> {
     if (isDeviceRegistered()) {
       await ensureInvoiceRange().catch(() => {})
-      return { registered: true }
+      // ensureInvoiceRange can itself discover the device was revoked (a 401
+      // triggers clearDeviceRegistrationOn401 as a side effect) — re-check
+      // rather than trusting the snapshot from before that call. Without
+      // this, a revoked device reports "registered: true" right after
+      // clearing its own credentials, and the real registration call below
+      // never runs until the next full app restart.
+      if (isDeviceRegistered()) return { registered: true }
     }
     const terminalId = getSetting('terminal_id', 'TERMINAL-001')
     try {
@@ -288,7 +310,10 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       headers: deviceHeaders(),
       body: { count: INVOICE_LEASE_COUNT },
     })
-    if (status !== 200) throw new Error(data?.error ?? `invoice-range HTTP ${status}`)
+    if (status !== 200) {
+      clearDeviceRegistrationOn401(status)
+      throw new Error(data?.error ?? `invoice-range HTTP ${status}`)
+    }
     setSetting('invoice_prefix', data.prefix)
     setSetting('invoice_range_start', String(data.start))
     setSetting('invoice_range_end', String(data.end))
@@ -708,7 +733,10 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       const { status, data } = await httpJson('GET', `/api/sync/v2/pull?${params}`, {
         headers: deviceHeaders(),
       })
-      if (status !== 200) throw new Error(data?.error ?? `Pull ${table}: HTTP ${status}`)
+      if (status !== 200) {
+        clearDeviceRegistrationOn401(status)
+        throw new Error(data?.error ?? `Pull ${table}: HTTP ${status}`)
+      }
 
       const pulled = upsertPulledRecords(table, data.records as Record<string, unknown>[])
       pulled.forEach((s) => allPulled.add(s))
@@ -1224,7 +1252,10 @@ export function createSyncEngine(deps: SyncEngineDeps) {
             body: { changes: changes.map((c) => c.change) },
           })
           if (isTransientStatus(status)) throw new NetworkError(`push HTTP ${status}`)
-          if (status !== 200) throw new Error(data?.error ?? `push HTTP ${status}`)
+          if (status !== 200) {
+            clearDeviceRegistrationOn401(status)
+            throw new Error(data?.error ?? `push HTTP ${status}`)
+          }
           const bySyncId = new Map<string, { status: string; serverId?: number; error?: string }>(
             (data.results as any[]).map((r) => [r.syncId, r])
           )
@@ -1274,7 +1305,10 @@ export function createSyncEngine(deps: SyncEngineDeps) {
             body: { sales: payloads.map((p) => p.sale) },
           })
           if (isTransientStatus(status)) throw new NetworkError(`sales push HTTP ${status}`)
-          if (status !== 200) throw new Error(data?.error ?? `sales push HTTP ${status}`)
+          if (status !== 200) {
+            clearDeviceRegistrationOn401(status)
+            throw new Error(data?.error ?? `sales push HTTP ${status}`)
+          }
           const okBySyncId = new Map<string, { serverId: number; invoiceNumber: string }>(
             (data.synced as any[]).map((s) => [s.syncId, s])
           )

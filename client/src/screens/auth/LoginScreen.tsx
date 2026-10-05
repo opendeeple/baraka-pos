@@ -146,6 +146,18 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
       }
 
       setAuth(user, token, store)
+
+      // A restored session skips handleLogin entirely, which is the only
+      // other place this gets called — if the device was ever cleared (lost
+      // credentials, or a revoked/missing device the sync engine detected
+      // and cleared on its own), a restored session would otherwise never
+      // re-register it, since nothing else ever calls this again. No-op
+      // when already registered.
+      try {
+        const reg = await window.electronAPI.sync.ensureDevice(token)
+        if (!reg.registered && reg.error) console.warn('Device registration pending:', reg.error)
+      } catch { /* offline — sync will surface it once reachable */ }
+
       await checkAndNavigate()
     } catch {
       setRestoring(false)
@@ -162,6 +174,14 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
         const data = result.data as { user: AuthUser; store: { id: number; name: string; address?: string; phone?: string; salePrefix: string } }
         if (!OFFICE_ROLES.has(data.user.role)) { await window.electronAPI.auth.clearToken(); return }
         setAuth(data.user, token, data.store)
+
+        // Same reasoning as restorePosSession: a restored session is the
+        // only path that never re-registers a cleared/revoked device.
+        try {
+          const reg = await window.electronAPI.sync.ensureDevice(token)
+          if (!reg.registered && reg.error) console.warn('Device registration pending:', reg.error)
+        } catch { /* offline — sync will surface it once reachable */ }
+
         navigate('/backoffice', { replace: true })
       }
     } catch { /* Token expired or server offline */ }
