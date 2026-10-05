@@ -910,6 +910,7 @@
     "action_shift_close": "Shift closed",
     "action_settings_change": "Setting changed",
     "action_drawer_open": "Cash drawer opened",
+    "action_discount": "Discount given",
     "action_debt_reminder": "Debt reminder sent"
   },
   "labels": {
@@ -955,5 +956,18 @@
     "stocktakeNet": "Stocktake result ({{count}})",
     "noLosses": "No write-offs in this period",
     "showMore": "Show more ({{count}} left)"
+  },
+  "discount": {
+    "title": "Discount",
+    "checkTitle": "Check discount",
+    "add": "Add",
+    "remove": "Remove",
+    "inMoney": "Amount",
+    "inPercent": "Percent",
+    "amountLabel": "Discount amount (UZS)",
+    "percentLabel": "Discount percent (%)",
+    "before": "Without discount",
+    "after": "With discount",
+    "tooMuch": "Discount exceeds the price"
   }
 }

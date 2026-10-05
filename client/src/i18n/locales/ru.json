@@ -920,6 +920,7 @@
     "action_shift_close": "Смена закрыта",
     "action_settings_change": "Настройка изменена",
     "action_drawer_open": "Денежный ящик открыт",
+    "action_discount": "Предоставлена скидка",
     "action_debt_reminder": "Отправлено напоминание о долге"
   },
   "labels": {
@@ -965,5 +966,18 @@
     "stocktakeNet": "Итог инвентаризаций ({{count}})",
     "noLosses": "За этот период списаний нет",
     "showMore": "Показать ещё (осталось {{count}})"
+  },
+  "discount": {
+    "title": "Скидка",
+    "checkTitle": "Скидка на чек",
+    "add": "Добавить",
+    "remove": "Убрать",
+    "inMoney": "В сумах",
+    "inPercent": "В процентах",
+    "amountLabel": "Сумма скидки (UZS)",
+    "percentLabel": "Процент скидки (%)",
+    "before": "Без скидки",
+    "after": "Со скидкой",
+    "tooMuch": "Скидка больше цены"
   }
 }

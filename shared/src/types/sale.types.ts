@@ -24,7 +24,10 @@ export interface CartItem {
   freeQuantity: number
   unitPrice: number
   unitCost: number
+  /** Line discount in percent. */
   discount: number
+  /** Line discount in money (UZS), off the whole line after `discount`. */
+  flatDiscount?: number
   notes?: string
   isFree: boolean
   maxStock?: number

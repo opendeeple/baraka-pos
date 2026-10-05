@@ -4,7 +4,10 @@ export interface ReceiptLine {
   name: string
   quantity: number
   price: number
+  /** Percent off the line. */
   discount?: number
+  /** Money off the whole line, after `discount`. */
+  flatDiscount?: number
   /** Box products only: pieces per box (quantity and price are per box). */
   unitsPerPackage?: number
 }

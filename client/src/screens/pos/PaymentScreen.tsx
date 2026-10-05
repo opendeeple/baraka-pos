@@ -1,8 +1,10 @@
 import { fmtUZS } from '../../lib/currency'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, Trash2, Search, UserPlus, X, User } from 'lucide-react'
-import { useCartStore } from '../../store/cart.store'
+import { ArrowLeft, Trash2, Search, UserPlus, X, User, Tag } from 'lucide-react'
+import { useCartStore, cartLineTotal } from '../../store/cart.store'
+import { DiscountModal } from '../../components/pos/DiscountModal'
+import { logAudit } from '../../lib/audit'
 import { useAuthStore } from '../../store/auth.store'
 import { useSessionStore } from '../../store/session.store'
 import { PaymentEntry, PaymentMethod } from '@baraka/shared'
@@ -33,7 +35,8 @@ interface Props {
 
 export default function PaymentScreen({ onClose, onComplete }: Props) {
   const { t } = useTranslation()
-  const { items, charges, discount, getFinalTotal, getSubtotal, getTotalChargeAmount, clearCart } = useCartStore()
+  const { items, charges, discount, setDiscount, getFinalTotal, getSubtotal, getTotalChargeAmount, clearCart } = useCartStore()
+  const [showDiscount, setShowDiscount] = useState(false)
   const { user, store } = useAuthStore()
   const { session } = useSessionStore()
 
@@ -213,7 +216,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                SELECT id,?,?,?,?,?,?,?,?,?,?,?,? FROM sales WHERE sync_id=?`,
           params: ['product', item.productId, item.batchId, item.name,
                    item.quantity, item.freeQuantity ?? 0, item.unitPrice, item.unitCost ?? 0,
-                   item.discount, 0, item.isFree ? 1 : 0, now, syncId],
+                   item.discount, item.flatDiscount ?? 0, item.isFree ? 1 : 0, now, syncId],
         })
         ops.push({
           sql: `UPDATE product_stocks SET quantity = quantity - ? WHERE product_id = ? AND batch_id = ? AND location = 'shop'`,
@@ -259,6 +262,17 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
 
       await window.electronAPI.db.transaction(ops)
 
+      // Every discount given at the till goes into the journal.
+      const lineDiscounts = items
+        .filter((i) => i.discount > 0 || (i.flatDiscount ?? 0) > 0)
+        .map((i) => ({ product: i.name, percent: i.discount || 0, amount: i.flatDiscount ?? 0, off: Math.round(i.unitPrice * i.quantity - cartLineTotal(i)) }))
+      if (discount > 0 || lineDiscounts.length) {
+        logAudit('discount', {
+          entity: 'sale', entityId: invoiceNumber,
+          details: { invoice: invoiceNumber, checkDiscount: discount, lines: lineDiscounts, total },
+        })
+      }
+
       // Post-transaction: fire-and-forget side effects
       if (cashPayments.length > 0) {
         window.electronAPI.printer.openCashDrawer().catch(console.error)
@@ -297,8 +311,9 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
         cashierName: template.show_cashier === false ? null : (user?.name ?? 'Cashier'),
         customerName: effectiveHasDebt ? debtContact?.name : null,
         timestamp: now,
-        items: items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.unitPrice, discount: i.discount, unitsPerPackage: i.unitsPerPackage })),
+        items: items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.unitPrice, discount: i.discount, flatDiscount: i.flatDiscount, unitsPerPackage: i.unitsPerPackage })),
         charges: chargeDisplay,
+        discount: discount || undefined,
         total,
         payments: effectivePayments.map((p) => ({ method: p.paymentMethod, amount: p.amount })),
         change: changeAmount,
@@ -338,9 +353,10 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                 <span className="text-gray-300 truncate flex-1 mr-2">
                   {item.quantity}× {item.name}
                   {item.discount > 0 && <span className="text-green-400 ml-1">-{item.discount}%</span>}
+                  {(item.flatDiscount ?? 0) > 0 && <span className="text-green-400 ml-1">-UZS {fmtUZS(item.flatDiscount ?? 0)}</span>}
                 </span>
                 <span className="text-white whitespace-nowrap">
-                  UZS {fmtUZS(item.unitPrice * item.quantity * (1 - item.discount / 100))}
+                  UZS {fmtUZS(cartLineTotal(item))}
                 </span>
               </div>
             ))}
@@ -356,12 +372,33 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                 </div>
               )
             })}
+            {/* Discount off the whole check, in money (e.g. 85 400 → 85 000) */}
+            <button
+              onClick={() => setShowDiscount(true)}
+              className={`w-full flex items-center justify-between min-h-[44px] px-3 rounded-xl border text-sm transition-colors ${
+                discount > 0 ? 'border-green-500/40 bg-green-500/10 text-green-400' : 'border-dark-border text-gray-400 active:text-white'
+              }`}
+            >
+              <span className="flex items-center gap-2"><Tag size={14} /> {t('discount.checkTitle')}</span>
+              <span>{discount > 0 ? `-UZS ${fmtUZS(discount)}` : t('discount.add')}</span>
+            </button>
             <div className="flex justify-between text-xl font-bold text-primary border-t border-dark-border pt-3">
               <span>{t('payment.totalCaps')}</span>
               <span>UZS {fmtUZS(total)}</span>
             </div>
           </div>
         </div>
+
+        {showDiscount && (
+          <DiscountModal
+            title={t('discount.checkTitle')}
+            base={subtotal + chargeAmount}
+            allowPercent={false}
+            initial={{ percent: 0, amount: discount }}
+            onSave={({ amount }) => { setDiscount(amount); setShowDiscount(false) }}
+            onClose={() => setShowDiscount(false)}
+          />
+        )}
 
         {/* Payments applied */}
         {payments.length > 0 && (

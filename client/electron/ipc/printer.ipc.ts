@@ -156,6 +156,16 @@ const OLD_DEFAULT_FOOTER = 'Thank you for shopping with us!'
 const footerText = (footer: string | null | undefined) =>
   footer == null || footer.trim() === OLD_DEFAULT_FOOTER ? THANKS : footer
 
+/** What a receipt line cost: its % discount, then its money discount, off. */
+const itemSum = (item: ReceiptDoc['items'][number]) =>
+  Math.max(0, item.quantity * item.price * (1 - (item.discount ?? 0) / 100) - (item.flatDiscount ?? 0))
+
+/** The line's name, saying how much came off when Summa is under Soni × Narx. */
+function withLineDiscount(item: ReceiptDoc['items'][number]): string {
+  const off = Math.round(item.quantity * item.price - itemSum(item))
+  return off > 0 ? `${item.name} (chegirma -${fmtMoney(off)})` : item.name
+}
+
 const METHOD_LABELS: Record<string, string> = {
   Cash: 'Naqd', Card: 'Karta', Click: 'Click', Debt: 'Qarz', BankTransfer: "O'tkazma",
 }
@@ -213,8 +223,8 @@ export function receiptHtml(doc: ReceiptDoc, layout: ReceiptLayoutConfig): strin
   if (doc.cashierName) lines.push(div('invoiceInfo', `Kassir: ${doc.cashierName}`))
 
   lines.push(...tableLinesHtml(doc.items.map((item) => ({
-    ...boxLineForPrint(item.name, item.quantity, item.price, item.unitsPerPackage),
-    sum: item.quantity * item.price * (1 - (item.discount ?? 0) / 100),
+    ...boxLineForPrint(withLineDiscount(item), item.quantity, item.price, item.unitsPerPackage),
+    sum: itemSum(item),
   })), layout))
 
   // The table's Jami is the goods; the amount due differs only when there
@@ -507,7 +517,7 @@ export function registerPrinterIpc() {
       let totalQty = 0
       let goods = 0
       d.items.forEach((item, i) => {
-        const lineTotal = item.price * item.quantity * (1 - (item.discount ?? 0) / 100)
+        const lineTotal = itemSum(item)
         const shown = boxLineForPrint(item.name, item.quantity, item.price, item.unitsPerPackage)
         totalQty += shown.qty
         goods += lineTotal
@@ -518,6 +528,15 @@ export function registerPrinterIpc() {
           { text: fmt(shown.price), width: 0.2, align: 'RIGHT' },
           { text: fmt(lineTotal), width: 0.24, align: 'RIGHT' },
         ])
+        // Names are cut to fit here, so a line discount gets its own row.
+        const off = Math.round(item.quantity * item.price - lineTotal)
+        if (off > 0) {
+          printer.tableCustom([
+            { text: '', width: 0.06 },
+            { text: 'chegirma', width: 0.7 },
+            { text: `-${fmt(off)}`, width: 0.24, align: 'RIGHT' },
+          ])
+        }
       })
 
       printer

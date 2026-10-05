@@ -36,6 +36,11 @@ interface CartStore {
   loadHeldCarts: () => void
 }
 
+/** What a cart line costs: its % discount, then its money discount, off. */
+export function cartLineTotal(item: Pick<CartItem, 'unitPrice' | 'quantity' | 'discount' | 'flatDiscount'>): number {
+  return Math.max(0, item.unitPrice * item.quantity * (1 - (item.discount || 0) / 100) - (item.flatDiscount || 0))
+}
+
 /** Quantity of the same product+batch on every line except `skipIdx`. */
 function otherLinesQty(items: CartItem[], skipIdx: number, item: Pick<CartItem, 'productId' | 'batchId'>): number {
   return items.reduce((sum, i, idx) =>
@@ -49,11 +54,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
   heldCarts: [],
 
   getSubtotal: () =>
-    get().items.reduce((sum, item) => {
-      const lineTotal = item.unitPrice * item.quantity
-      const lineDiscount = item.discount > 0 ? lineTotal * (item.discount / 100) : 0
-      return sum + lineTotal - lineDiscount
-    }, 0),
+    get().items.reduce((sum, item) => sum + cartLineTotal(item), 0),
 
   getTotalChargeAmount: () => {
     const subtotal = get().getSubtotal()
@@ -63,8 +64,10 @@ export const useCartStore = create<CartStore>((set, get) => ({
     }, 0)
   },
 
+  // A check discount entered earlier can't take the total below zero if lines
+  // are removed afterwards.
   getFinalTotal: () =>
-    get().getSubtotal() + get().getTotalChargeAmount() - get().discount,
+    Math.max(0, get().getSubtotal() + get().getTotalChargeAmount() - get().discount),
 
   // maxStock (the shop shelf's quantity, unset for products that aren't
   // stock-managed) caps every line: nothing is sold that isn't in the system.

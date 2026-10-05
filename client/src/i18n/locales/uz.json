@@ -905,6 +905,7 @@
     "action_shift_close": "Smena yopildi",
     "action_settings_change": "Sozlama o'zgardi",
     "action_drawer_open": "Kassa qutisi ochildi",
+    "action_discount": "Chegirma berildi",
     "action_debt_reminder": "Qarz eslatmasi yuborildi"
   },
   "labels": {
@@ -950,5 +951,18 @@
     "stocktakeNet": "Inventarizatsiya natijasi ({{count}} marta)",
     "noLosses": "Bu davrda hisobdan chiqarish yo'q",
     "showMore": "Yana ko'rsatish ({{count}} ta qoldi)"
+  },
+  "discount": {
+    "title": "Chegirma",
+    "checkTitle": "Chekka chegirma",
+    "add": "Qo'shish",
+    "remove": "Olib tashlash",
+    "inMoney": "So'mda",
+    "inPercent": "Foizda",
+    "amountLabel": "Chegirma summasi (UZS)",
+    "percentLabel": "Chegirma foizi (%)",
+    "before": "Chegirmasiz",
+    "after": "Chegirma bilan",
+    "tooMuch": "Chegirma narxdan katta"
   }
 }

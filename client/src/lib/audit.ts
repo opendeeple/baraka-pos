@@ -12,7 +12,7 @@ export type AuditAction =
   | 'purchase_order' | 'purchase_receive' | 'supplier_payment'
   | 'price_change' | 'product_create' | 'product_delete'
   | 'expense' | 'debt_payment' | 'debt_clear'
-  | 'shift_close' | 'settings_change' | 'drawer_open'
+  | 'shift_close' | 'settings_change' | 'drawer_open' | 'discount'
 
 export async function logAudit(
   action: AuditAction,

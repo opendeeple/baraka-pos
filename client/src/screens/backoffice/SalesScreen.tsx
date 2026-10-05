@@ -19,7 +19,7 @@ interface Sale {
 
 interface SaleItem {
   id: number; description: string; quantity: number; unit_price: number
-  unit_cost: number; discount: number; is_free: number
+  unit_cost: number; discount: number; flat_discount: number | null; is_free: number
   product_id: number | null; batch_id: number | null
   /** Box products only (pieces per box) — for printing loose pieces as "dona". */
   units_per_package: number | null
@@ -116,7 +116,7 @@ export default function SalesScreen() {
     const [items, payments, sessionRows, returnedRows] = await Promise.all([
       window.electronAPI.db.query(
         `SELECT si.id, si.description, si.quantity, si.unit_price, si.unit_cost,
-                si.discount, si.is_free, si.product_id, si.batch_id,
+                si.discount, si.flat_discount, si.is_free, si.product_id, si.batch_id,
                 CASE WHEN p.unit = 'box' THEN p.units_per_package END AS units_per_package
          FROM sale_items si LEFT JOIN products p ON p.id = si.product_id
          WHERE si.sale_id=? AND si.item_type='product'`, [id]
@@ -173,7 +173,7 @@ export default function SalesScreen() {
     await window.electronAPI.printer.print({
       lines: [], invoiceNumber: sale.invoice_number, storeName: storeRow?.name ?? store?.name ?? 'Store',
       storeAddress: storeRow?.address, storePhone: storeRow?.phone, header: template.header, footer: template.footer,
-      items: sale.items.map((i) => ({ name: i.description, quantity: i.quantity, price: i.unit_price, discount: i.discount, unitsPerPackage: i.units_per_package ?? undefined })),
+      items: sale.items.map((i) => ({ name: i.description, quantity: i.quantity, price: i.unit_price, discount: i.discount, flatDiscount: Number(i.flat_discount) || 0, unitsPerPackage: i.units_per_package ?? undefined })),
       subtotal: Number(sale.subtotal), charges: [], discount: Number(sale.discount), total: Number(sale.total_amount),
       payments: sale.payments.map((p) => ({ method: p.payment_method, amount: Number(p.amount) })),
       change: Number(sale.change_amount), cashierName: sale.user_name ?? user?.name ?? '',
@@ -186,6 +186,7 @@ export default function SalesScreen() {
     // What each unit actually cost the customer: its own discount, then the
     // sale-level discount/charges spread over all lines.
     const lineNet = (i: SaleItem) => Number(i.unit_price) * (1 - Number(i.discount || 0) / 100)
+      - (Number(i.flat_discount) || 0) / Math.max(Math.abs(Number(i.quantity)), 1e-9)
     const itemsNet = detail.items.reduce((s, i) => s + lineNet(i) * Math.abs(Number(i.quantity)), 0)
     const ratio = itemsNet > 0 ? Number(detail.total_amount) / itemsNet : 1
     setReturnItems(
@@ -344,7 +345,7 @@ export default function SalesScreen() {
                         {item.discount > 0 && <span className="text-green-400 ml-1">-{item.discount}%</span>}
                       </span>
                       <span className="text-white whitespace-nowrap">
-                        UZS {fmtUZS(item.unit_price * item.quantity * (1 - item.discount / 100))}
+                        UZS {fmtUZS(item.unit_price * item.quantity * (1 - item.discount / 100) - (Number(item.flat_discount) || 0))}
                       </span>
                     </div>
                   ))}

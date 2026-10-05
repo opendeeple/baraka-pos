@@ -1,12 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Trash2, Pause, ShoppingBag, Plus, Minus, LogOut } from 'lucide-react'
-import { useCartStore } from '../../store/cart.store'
+import { Trash2, Pause, ShoppingBag, Plus, Minus, LogOut, Tag } from 'lucide-react'
+import { useCartStore, cartLineTotal } from '../../store/cart.store'
 import { fmtUZS } from '../../lib/currency'
 import { HeldOrdersPanel } from './HeldOrdersDrawer'
 import { DebtHistoryPanel } from './DebtHistoryDrawer'
 import { NumPad } from './NumPad'
+import { DiscountModal } from './DiscountModal'
 import { Modal, Button } from '../ui'
 import { Debtor } from '../../types/pos.types'
 import { OPEN_DEBT_CONDITION } from '../../lib/debt'
@@ -21,7 +22,7 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
   const {
     items, charges, heldCarts,
     getSubtotal, getTotalChargeAmount, getFinalTotal,
-    removeItem, setQuantity, holdCart, clearCart,
+    removeItem, setQuantity, updateItem, holdCart, clearCart,
   } = useCartStore()
 
   const [debtors, setDebtors] = useState<Debtor[]>([])
@@ -162,9 +163,11 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
             <div className="divide-y divide-dark-border">
               {items.map((item, index) => (
                 <CartItemRow
-                  key={`${item.productId}-${item.batchId}`}
+                  // One product can have two lines (whole boxes and loose pieces).
+                  key={`${item.productId}-${item.batchId}-${item.unitPrice}`}
                   item={item}
                   onRemove={() => removeItem(index)}
+                  onDiscountChange={(percent, amount) => updateItem(index, { discount: percent, flatDiscount: amount })}
                   onQtyChange={(qty) => {
                     if (setQuantity(index, qty)) {
                       toast.warning(t('pos.onlyInStock', { name: item.name, count: item.maxStock }))
@@ -229,13 +232,17 @@ function CartItemRow({
   item,
   onRemove,
   onQtyChange,
+  onDiscountChange,
 }: {
-  item: { name: string; quantity: number; unitPrice: number; discount: number; maxStock?: number }
+  item: { name: string; quantity: number; unitPrice: number; discount: number; flatDiscount?: number; maxStock?: number }
   onRemove: () => void
   onQtyChange: (qty: number) => void
+  onDiscountChange: (percent: number, amount: number) => void
 }) {
   const { t } = useTranslation()
-  const lineTotal = item.unitPrice * item.quantity * (1 - item.discount / 100)
+  const lineTotal = cartLineTotal(item)
+  const hasDiscount = item.discount > 0 || (item.flatDiscount ?? 0) > 0
+  const [showDiscount, setShowDiscount] = useState(false)
   const [offset, setOffset] = useState(0)
   const [dragging, setDragging] = useState(false)
   const startX = useRef(0)
@@ -340,6 +347,9 @@ function CartItemRow({
             {item.discount > 0 && (
               <span className="text-xs text-green-400">-{item.discount}%</span>
             )}
+            {(item.flatDiscount ?? 0) > 0 && (
+              <span className="text-xs text-green-400">-UZS {fmtUZS(item.flatDiscount ?? 0)}</span>
+            )}
           </div>
           <span className="text-primary font-bold text-sm whitespace-nowrap shrink-0">
             UZS {fmtUZS(lineTotal)}
@@ -371,11 +381,34 @@ function CartItemRow({
               <Plus size={15} />
             </button>
           </div>
-          <span className="text-xs text-gray-500">
-            UZS {fmtUZS(item.unitPrice)} × {item.quantity}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">
+              UZS {fmtUZS(item.unitPrice)} × {item.quantity}
+            </span>
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); setShowDiscount(true) }}
+              title={t('discount.title')}
+              className={`w-10 h-10 flex items-center justify-center rounded-xl border transition-colors ${
+                hasDiscount ? 'border-green-500/50 text-green-400 bg-green-500/10' : 'border-dark-border text-gray-400 active:text-white'
+              }`}
+            >
+              <Tag size={15} />
+            </button>
+          </div>
         </div>
       </div>
+
+      {showDiscount && (
+        <DiscountModal
+          title={`${t('discount.title')}: ${item.name}`}
+          base={item.unitPrice * item.quantity}
+          allowPercent
+          initial={{ percent: item.discount, amount: item.flatDiscount ?? 0 }}
+          onSave={({ percent, amount }) => { onDiscountChange(percent, amount); setShowDiscount(false) }}
+          onClose={() => setShowDiscount(false)}
+        />
+      )}
 
       {showQtyPad && (
         <Modal
