@@ -80,15 +80,16 @@ export async function createPurchaseOrder(
 /** The order slip: what to buy, how many, estimated cost — handed to whoever goes buying. */
 export async function printPurchaseOrder(purchaseId: number): Promise<{ success: boolean; error?: string }> {
   const [head] = await window.electronAPI.db.query(
-    `SELECT reference_number FROM purchases WHERE id = ?`, [purchaseId]
-  ) as Array<{ reference_number: string | null }>
+    `SELECT pu.reference_number, c.name AS supplier FROM purchases pu
+     LEFT JOIN contacts c ON c.id = pu.vendor_id WHERE pu.id = ?`, [purchaseId]
+  ) as Array<{ reference_number: string | null; supplier: string | null }>
   const items = await window.electronAPI.db.query(
     `SELECT p.name, pi.quantity, pi.unit_cost FROM purchase_items pi
      JOIN products p ON p.id = pi.product_id WHERE pi.purchase_id = ? ORDER BY pi.id`, [purchaseId]
   ) as Array<{ name: string; quantity: number; unit_cost: number }>
   return window.electronAPI.printer.printShoppingList(
     items.map((i) => ({ name: i.name, qty: Number(i.quantity), cost: Number(i.unit_cost) })),
-    { title: 'BUYURTMA', reference: head?.reference_number ?? undefined }
+    { title: 'BUYURTMA', reference: head?.reference_number ?? undefined, supplier: head?.supplier }
   )
 }
 

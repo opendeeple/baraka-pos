@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { dbQuery } from '../services/db.service'
 import type { ReceiptDoc } from '@baraka/app-core'
+import { thermalItemsTable, fmtMoney, fmtDateTime, THANKS, type DocItem } from '../services/documentLayout'
 
 interface EscposPrinter {
   font: (f: string) => EscposPrinter
@@ -37,8 +38,10 @@ type PrinterConfig = {
 // the width+margin:auto / flex / inline-block / text-align combo that broke
 // things; it's a fixed single-direction offset with no container-width
 // computation involved.
+// 'items' and 'itemQty' are no longer drawn (the bordered table is 'table');
+// kept so saved layouts still parse.
 export type ReceiptElementKey =
-  | 'storeName' | 'storeInfo' | 'invoiceInfo' | 'items' | 'itemQty'
+  | 'storeName' | 'storeInfo' | 'invoiceInfo' | 'items' | 'itemQty' | 'table'
   | 'totals' | 'totalRow' | 'footer' | 'saleNumber'
 
 interface ElementStyle { fontPx: number; shiftPx: number }
@@ -69,6 +72,9 @@ const DEFAULT_RECEIPT_LAYOUT: ReceiptLayoutConfig = {
     invoiceInfo: { fontPx: 11, shiftPx: -1 },
     items: { fontPx: 11, shiftPx: 0 },
     itemQty: { fontPx: 10, shiftPx: 0 },
+    // Smaller than the body so the five columns (№/Tovar/Soni/Narx/Summa)
+    // leave the name column wide enough to read: 34 chars at 11px ≈ 41 at 9px.
+    table: { fontPx: 9, shiftPx: 0 },
     totals: { fontPx: 11, shiftPx: 0 },
     totalRow: { fontPx: 11, shiftPx: 0 },
     footer: { fontPx: 13, shiftPx: 0 },
@@ -129,34 +135,23 @@ function padRow(left: string, right: string, width: number): string {
   return left + ' '.repeat(space) + right
 }
 
-// A real bordered items table (№ / Nomi / Soni / Narx columns), drawn with
-// plain +/-/| characters inside the same plain <div> primitive as every
+// The bordered items table (documentLayout.ts thermalItemsTable) is drawn
+// with plain +/-/| characters inside the same plain <div> primitive as every
 // other line here — no CSS table/width/flex involved, so it doesn't touch
 // any of the properties already proven to blank the page on this printer.
-// Column widths are chars, sized to sum to exactly `width` including the 5
-// border pipes, so every row/border line lines up under the same font.
-const TABLE_NO_W = 2
-const TABLE_QTY_W = 3
-const TABLE_PRICE_W = 8
-function tableNameWidth(width: number): number {
-  return Math.max(4, width - 5 - TABLE_NO_W - TABLE_QTY_W - TABLE_PRICE_W)
+// It has its own element style ('table'), and its character width is the
+// calibrated charWidth scaled to that font, so the grid fills the paper.
+function tableLinesHtml(items: DocItem[], layout: ReceiptLayoutConfig): string[] {
+  const el = layout.elements.table
+  const width = Math.floor(layout.charWidth * REFERENCE_FONT_PX / el.fontPx)
+  return thermalItemsTable(items, width).map((l) =>
+    `<div style="font-size:${el.fontPx}px;margin-left:${el.shiftPx}px;${l.bold ? 'font-weight:700;' : ''}">${escapeHtml(l.text)}</div>`)
 }
-function tableBorder(width: number): string {
-  const nameW = tableNameWidth(width)
-  return '+' + '-'.repeat(TABLE_NO_W) + '+' + '-'.repeat(nameW) + '+' + '-'.repeat(TABLE_QTY_W) + '+' + '-'.repeat(TABLE_PRICE_W) + '+'
+
+const METHOD_LABELS: Record<string, string> = {
+  Cash: 'Naqd', Card: 'Karta', Click: 'Click', Debt: 'Qarz', BankTransfer: "O'tkazma",
 }
-// Pads to width; never truncates (a too-long number would lose its most
-// significant digits) — an overflowing cell just nudges that one row's
-// border alignment slightly instead of corrupting the value.
-function tableCell(s: string, w: number, align: 'l' | 'r' = 'l'): string {
-  if (s.length >= w) return s
-  const pad = ' '.repeat(w - s.length)
-  return align === 'l' ? s + pad : pad + s
-}
-function tableRow(no: string, name: string, qty: string, price: string, width: number): string {
-  const nameW = tableNameWidth(width)
-  return `|${tableCell(no, TABLE_NO_W)}|${tableCell(name.slice(0, nameW), nameW)}|${tableCell(qty, TABLE_QTY_W, 'r')}|${tableCell(price, TABLE_PRICE_W, 'r')}|`
-}
+const methodLabel = (m: string) => METHOD_LABELS[m] ?? m
 
 // Leading-space centering instead of CSS text-align:center — every element
 // that had text-align:center (store name/address/phone/header/footer)
@@ -197,36 +192,38 @@ export function receiptHtml(doc: ReceiptDoc, layout: ReceiptLayoutConfig): strin
 
   const lines: string[] = []
 
+  // Laid out like the store's document template (documentLayout.ts): name,
+  // number and date, the customer, the items table with its Jami row, the
+  // payment, then the phone and the thank-you line at the bottom.
   lines.push(div('storeName', centerPad(doc.storeName, W, scaleOf('storeName')), 'font-weight:700;letter-spacing:0.5px;'))
   if (doc.storeAddress) lines.push(div('storeInfo', centerPad(doc.storeAddress, W, scaleOf('storeInfo')), 'font-weight:700;'))
-  if (doc.storePhone) lines.push(div('storeInfo', centerPad(doc.storePhone, W, scaleOf('storeInfo')), 'font-weight:700;'))
   if (doc.header) lines.push(div('storeInfo', centerPad(doc.header, W, scaleOf('storeInfo')), 'font-weight:700;'))
   lines.push(`<div class="divider"></div>`)
-  lines.push(div('invoiceInfo', `Invoice: ${doc.invoiceNumber}`))
-  if (doc.cashierName) lines.push(div('invoiceInfo', `Cashier: ${doc.cashierName}`))
-  lines.push(div('invoiceInfo', doc.timestamp.slice(0, 19).replace('T', ' ')))
-  lines.push(`<div class="divider"></div>`)
+  lines.push(div('invoiceInfo', `Chek № ${doc.invoiceNumber}`, 'font-weight:700;'))
+  lines.push(div('invoiceInfo', `Sana: ${fmtDateTime(doc.timestamp)}`))
+  if (doc.customerName) lines.push(div('invoiceInfo', `Mijoz: ${doc.customerName}`, 'font-weight:700;'))
+  if (doc.cashierName) lines.push(div('invoiceInfo', `Kassir: ${doc.cashierName}`))
 
-  // Bordered items table (№ / Nomi / Soni / Narx) — every row, including
-  // the borders, renders at the SAME element style ('items') so the
-  // monospace character grid lines up between them; mixing font sizes
-  // within this table would throw off the border alignment.
-  lines.push(div('items', tableBorder(W)))
-  lines.push(div('items', tableRow('№', 'Nomi', 'Soni', 'Narx', W), 'font-weight:700;'))
-  lines.push(div('items', tableBorder(W)))
-  doc.items.forEach((item, i) => {
-    const itemTotal = (item.quantity * item.price).toLocaleString()
-    lines.push(div('items', tableRow(String(i + 1), item.name, String(item.quantity), itemTotal, W)))
-  })
-  lines.push(div('items', tableBorder(W)))
+  lines.push(...tableLinesHtml(doc.items.map((item) => ({
+    name: item.name,
+    qty: item.quantity,
+    price: item.price,
+    sum: item.quantity * item.price * (1 - (item.discount ?? 0) / 100),
+  })), layout))
 
-  for (const c of doc.charges) lines.push(div('totals', padRow(c.name, c.amount.toLocaleString(), W)))
-  if (doc.discount) lines.push(div('totals', padRow('DISCOUNT:', `-${doc.discount.toLocaleString()}`, W)))
-  lines.push(div('totalRow', padRow('TOTAL AMOUNT:', doc.total.toLocaleString(), W), 'font-weight:700;'))
-  for (const p of doc.payments) lines.push(div('totals', padRow(`${p.method.toUpperCase()}:`, p.amount.toLocaleString(), W)))
-  if (doc.change > 0) lines.push(div('totals', padRow('CHANGE:', doc.change.toLocaleString(), W)))
+  // The table's Jami is the goods; the amount due differs only when there
+  // are sale-level charges or a discount, so it's repeated only then.
+  for (const c of doc.charges) lines.push(div('totals', padRow(c.name, fmtMoney(c.amount), W)))
+  if (doc.discount) lines.push(div('totals', padRow('Chegirma:', `-${fmtMoney(doc.discount)}`, W)))
+  if (doc.charges.length || doc.discount) {
+    lines.push(div('totalRow', padRow("TO'LOV:", fmtMoney(doc.total), W), 'font-weight:700;'))
+  }
+  for (const p of doc.payments) lines.push(div('totals', padRow(`${methodLabel(p.method)}:`, fmtMoney(p.amount), W)))
+  if (doc.change > 0) lines.push(div('totals', padRow('Qaytim:', fmtMoney(doc.change), W)))
   lines.push(`<div class="divider"></div>`)
-  if (doc.footer) lines.push(div('footer', centerPad(doc.footer, W, scaleOf('footer')), 'font-weight:700;letter-spacing:0.5px;'))
+  if (doc.storePhone) lines.push(div('storeInfo', centerPad(`Tel: ${doc.storePhone}`, W, scaleOf('storeInfo')), 'font-weight:700;'))
+  const thanks = doc.footer ?? THANKS
+  if (thanks) lines.push(div('footer', centerPad(thanks, W, scaleOf('footer')), 'font-weight:700;letter-spacing:0.5px;'))
   // Sale number as plain text where the Code 39 barcode used to be.
   lines.push(div('saleNumber', centerPad(`№ ${doc.invoiceNumber}`, W, scaleOf('saleNumber')), 'font-weight:700;letter-spacing:0.5px;margin-top:4px;'))
 
@@ -339,17 +336,18 @@ function printOnWindowsPrinter(deviceName: string, doc: ReceiptDoc, layout: Rece
 
 export interface ShoppingListItem { name: string; qty: number; cost: number }
 
-/** A purchase order prints as a titled, numbered list ("BUYURTMA", ZK-…). */
-export interface ShoppingListMeta { title?: string; reference?: string }
+/** A purchase order prints as a titled, numbered list ("BUYURTMA", ZK-…) for its supplier. */
+export interface ShoppingListMeta { title?: string; reference?: string; supplier?: string | null }
 
 // A restock shopping list: which low-stock products need buying and a rough
 // estimate of what it'll cost, based on the product's stored cost price
 // (tannarx). Nothing here is persisted anywhere — it exists only for this
 // one print, built fresh from the caller's numbers each time, since the
 // real market price on the day of buying can differ from the stored cost.
-// Reuses the exact same monospace/table primitives as receiptHtml (no CSS
-// text-align/width/flex — see the notes on those above) so it prints
-// correctly on the same hardware without a second round of trial and error.
+// Same document layout as the sale receipt (store, number and date, the
+// supplier, the items table with Jami, phone at the bottom) and the same
+// monospace primitives (no CSS text-align/width/flex — see the notes on
+// those above), so it prints correctly on the same hardware.
 function shoppingListHtml(items: ShoppingListItem[], layout: ReceiptLayoutConfig, meta: ShoppingListMeta = {}): string {
   const W = layout.charWidth
   const esc = escapeHtml
@@ -360,24 +358,18 @@ function shoppingListHtml(items: ShoppingListItem[], layout: ReceiptLayoutConfig
   const div = (k: ReceiptElementKey, text: string, extraCss = '') =>
     `<div style="${styleOf(k, extraCss)}">${esc(text)}</div>`
 
-  const total = items.reduce((s, it) => s + it.qty * it.cost, 0)
+  const store = (dbQuery(`SELECT name, phone FROM stores LIMIT 1`, []) as Array<{ name: string; phone: string | null }>)[0]
   const lines: string[] = []
-  lines.push(div('storeName', centerPad(meta.title ?? "XARID RO'YXATI", W, scaleOf('storeName')), 'font-weight:700;letter-spacing:0.5px;'))
-  lines.push(div('storeInfo', centerPad('(taxminiy, tannarx boyicha)', W, scaleOf('storeInfo')), 'font-weight:700;'))
+  if (store?.name) lines.push(div('storeName', centerPad(store.name, W, scaleOf('storeName')), 'font-weight:700;letter-spacing:0.5px;'))
   lines.push(`<div class="divider"></div>`)
-  if (meta.reference) lines.push(div('invoiceInfo', `No: ${meta.reference}`, 'font-weight:700;'))
-  lines.push(div('invoiceInfo', new Date().toLocaleString().slice(0, 19)))
+  const title = meta.title ?? "XARID RO'YXATI"
+  lines.push(div('invoiceInfo', meta.reference ? `${title} № ${meta.reference}` : title, 'font-weight:700;'))
+  lines.push(div('invoiceInfo', `Sana: ${fmtDateTime(new Date())}`))
+  if (meta.supplier) lines.push(div('invoiceInfo', `Yetkazib beruvchi: ${meta.supplier}`, 'font-weight:700;'))
+  lines.push(...tableLinesHtml(items.map((it) => ({ name: it.name, qty: it.qty, price: it.cost })), layout))
+  lines.push(div('totals', 'Narxlar taxminiy (tannarx bo\'yicha)'))
   lines.push(`<div class="divider"></div>`)
-  lines.push(div('items', tableBorder(W)))
-  lines.push(div('items', tableRow('№', 'Nomi', 'Kerak', 'Summa', W), 'font-weight:700;'))
-  lines.push(div('items', tableBorder(W)))
-  items.forEach((it, i) => {
-    lines.push(div('items', tableRow(String(i + 1), it.name, String(it.qty), (it.qty * it.cost).toLocaleString(), W)))
-  })
-  lines.push(div('items', tableBorder(W)))
-  lines.push(div('totalRow', padRow('JAMI (taxminiy):', total.toLocaleString(), W), 'font-weight:700;'))
-  lines.push(`<div class="divider"></div>`)
-  lines.push(div('footer', centerPad('Narxlar bozorda farq qilishi mumkin', W, scaleOf('footer'))))
+  if (store?.phone) lines.push(div('storeInfo', centerPad(`Tel: ${store.phone}`, W, scaleOf('storeInfo')), 'font-weight:700;'))
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
     @page { size: ${layout.paperWidthMm}mm auto; margin: 0; }
@@ -478,7 +470,7 @@ export function registerPrinterIpc() {
 
       const printer = new Printer(device)
 
-      const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      const fmt = fmtMoney
 
       printer
         .font('a')
@@ -486,67 +478,88 @@ export function registerPrinterIpc() {
         .style('b')
         .text(d.storeName)
         .style('normal')
+      if (d.storeAddress) printer.text(d.storeAddress)
+      printer
         .drawLine()
         .align('lt')
-        .text(`Invoice: ${d.invoiceNumber}`)
-        .text(`Date:    ${new Date(d.timestamp).toLocaleString()}`)
-        .text(`Cashier: ${d.cashierName}`)
+        .style('b')
+        .text(`Chek № ${d.invoiceNumber}`)
+        .style('normal')
+        .text(`Sana: ${fmtDateTime(d.timestamp)}`)
+      if (d.customerName) printer.style('b').text(`Mijoz: ${d.customerName}`).style('normal')
+      if (d.cashierName) printer.text(`Kassir: ${d.cashierName}`)
+      printer
         .drawLine()
         .tableCustom([
-          { text: '#', width: 0.06 },
-          { text: 'Item', width: 0.44 },
-          { text: 'Qty', width: 0.1 },
-          { text: 'Price', width: 0.2 },
-          { text: 'Total', width: 0.2, align: 'RIGHT' },
+          { text: '№', width: 0.06 },
+          { text: 'Tovar', width: 0.38 },
+          { text: 'Soni', width: 0.12, align: 'RIGHT' },
+          { text: 'Narx', width: 0.2, align: 'RIGHT' },
+          { text: 'Summa', width: 0.24, align: 'RIGHT' },
         ])
 
+      let totalQty = 0
+      let goods = 0
       d.items.forEach((item, i) => {
         const lineTotal = item.price * item.quantity * (1 - (item.discount ?? 0) / 100)
+        totalQty += item.quantity
+        goods += lineTotal
         printer.tableCustom([
           { text: String(i + 1), width: 0.06 },
-          { text: item.name.slice(0, 24), width: 0.44 },
-          { text: String(item.quantity), width: 0.1 },
-          { text: fmt(item.price), width: 0.2 },
-          { text: fmt(lineTotal), width: 0.2, align: 'RIGHT' },
+          { text: item.name.slice(0, 20), width: 0.38 },
+          { text: String(item.quantity), width: 0.12, align: 'RIGHT' },
+          { text: fmt(item.price), width: 0.2, align: 'RIGHT' },
+          { text: fmt(lineTotal), width: 0.24, align: 'RIGHT' },
         ])
       })
 
-      printer.drawLine()
+      printer
+        .drawLine()
+        .tableCustom([
+          { text: 'Jami', width: 0.44, style: 'b' },
+          { text: String(totalQty), width: 0.12, style: 'b', align: 'RIGHT' },
+          { text: fmt(goods), width: 0.44, style: 'b', align: 'RIGHT' },
+        ])
 
       for (const c of d.charges) {
         printer.tableCustom([
-          { text: c.name, width: 0.7 },
-          { text: `UZS ${fmt(c.amount)}`, width: 0.3, align: 'RIGHT' },
+          { text: c.name, width: 0.6 },
+          { text: fmt(c.amount), width: 0.4, align: 'RIGHT' },
+        ])
+      }
+      if (d.discount) {
+        printer.tableCustom([
+          { text: 'Chegirma', width: 0.6 },
+          { text: `-${fmt(d.discount)}`, width: 0.4, align: 'RIGHT' },
+        ])
+      }
+      if (d.charges.length || d.discount) {
+        printer.tableCustom([
+          { text: "TO'LOV", width: 0.6, style: 'b' },
+          { text: fmt(d.total), width: 0.4, style: 'b', align: 'RIGHT' },
         ])
       }
 
-      printer
-        .tableCustom([
-          { text: 'TOTAL', width: 0.7, style: 'b' },
-          { text: `UZS ${fmt(d.total)}`, width: 0.3, style: 'b', align: 'RIGHT' },
-        ])
-        .drawLine()
-
       for (const p of d.payments) {
         printer.tableCustom([
-          { text: p.method, width: 0.7 },
-          { text: `UZS ${fmt(p.amount)}`, width: 0.3, align: 'RIGHT' },
+          { text: methodLabel(p.method), width: 0.6 },
+          { text: fmt(p.amount), width: 0.4, align: 'RIGHT' },
         ])
       }
 
       if (d.change > 0) {
         printer.tableCustom([
-          { text: 'Change', width: 0.7 },
-          { text: `UZS ${fmt(d.change)}`, width: 0.3, align: 'RIGHT' },
+          { text: 'Qaytim', width: 0.6 },
+          { text: fmt(d.change), width: 0.4, align: 'RIGHT' },
         ])
       }
 
+      printer.drawLine().align('ct')
+      if (d.storePhone) printer.style('b').text(`Tel: ${d.storePhone}`).style('normal')
       printer
-        .drawLine()
-        .align('ct')
-        .text('Thank you for shopping with us!')
         .style('b')
-        .text(d.invoiceNumber)
+        .text(d.footer ?? THANKS)
+        .text(`№ ${d.invoiceNumber}`)
         .style('normal')
         .cut()
         .close()
@@ -583,37 +596,41 @@ export function registerPrinterIpc() {
       const fmt = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 0 })
       const total = list.reduce((s, it) => s + it.qty * it.cost, 0)
 
+      const title = meta.title ?? "XARID RO'YXATI"
       printer
         .font('a')
         .align('ct')
         .style('b')
-        .text(`${meta.title ?? "XARID RO'YXATI"} (taxminiy)`)
+        .text(meta.reference ? `${title} № ${meta.reference}` : title)
         .style('normal')
         .drawLine()
         .align('lt')
-      if (meta.reference) printer.style('b').text(`No: ${meta.reference}`).style('normal')
-      printer
-        .text(new Date().toLocaleString().slice(0, 19))
-        .tableCustom([
-          { text: '#', width: 0.06 },
-          { text: 'Nomi', width: 0.5 },
-          { text: 'Kerak', width: 0.14 },
-          { text: 'Summa', width: 0.3, align: 'RIGHT' },
-        ])
+        .text(`Sana: ${fmtDateTime(new Date())}`)
+      if (meta.supplier) printer.style('b').text(`Yetkazib beruvchi: ${meta.supplier}`).style('normal')
+      printer.tableCustom([
+        { text: '№', width: 0.06 },
+        { text: 'Tovar', width: 0.38 },
+        { text: 'Soni', width: 0.12, align: 'RIGHT' },
+        { text: 'Narx', width: 0.2, align: 'RIGHT' },
+        { text: 'Summa', width: 0.24, align: 'RIGHT' },
+      ])
       list.forEach((it, i) => {
         printer.tableCustom([
           { text: String(i + 1), width: 0.06 },
-          { text: it.name.slice(0, 28), width: 0.5 },
-          { text: String(it.qty), width: 0.14 },
-          { text: fmt(it.qty * it.cost), width: 0.3, align: 'RIGHT' },
+          { text: it.name.slice(0, 20), width: 0.38 },
+          { text: String(it.qty), width: 0.12, align: 'RIGHT' },
+          { text: fmt(it.cost), width: 0.2, align: 'RIGHT' },
+          { text: fmt(it.qty * it.cost), width: 0.24, align: 'RIGHT' },
         ])
       })
       printer
         .drawLine()
         .tableCustom([
-          { text: 'JAMI (taxminiy)', width: 0.7, style: 'b' },
-          { text: fmt(total), width: 0.3, style: 'b', align: 'RIGHT' },
+          { text: 'Jami', width: 0.44, style: 'b' },
+          { text: String(list.reduce((s, it) => s + it.qty, 0)), width: 0.12, style: 'b', align: 'RIGHT' },
+          { text: fmt(total), width: 0.44, style: 'b', align: 'RIGHT' },
         ])
+        .text("Narxlar taxminiy (tannarx bo'yicha)")
         .drawLine()
         .cut()
         .close()
@@ -688,21 +705,24 @@ export function registerPrinterIpc() {
         // exercises the item table layout, not just the header/footer — an
         // empty-items test print looked "unchanged" after layout edits
         // because there was nothing in it for those edits to affect.
+        // A long name too, so the test also shows names wrapping in the table.
         const testDoc: ReceiptDoc = {
           invoiceNumber: 'TEST-0001',
           storeName: 'TEST PRINT',
-          header: 'If you can read this, the printer is connected correctly.',
+          header: 'Printer ulangan',
           cashierName: 'Test',
+          customerName: 'Mijoz ismi',
           timestamp: new Date().toISOString(),
           items: [
-            { name: 'Sample item A', quantity: 1, price: 10000 },
-            { name: 'Sample item B', quantity: 2, price: 5000 },
+            { name: 'Navot dil 10kg', quantity: 1, price: 158000 },
+            { name: 'Zaychik malako 500gr 12ta', quantity: 2, price: 13500 },
           ],
           charges: [],
-          total: 20000,
-          payments: [{ method: 'Cash', amount: 20000 }],
+          total: 185000,
+          payments: [{ method: 'Cash', amount: 185000 }],
           change: 0,
-          footer: 'Thank you for shopping with us!',
+          storePhone: '+998 90 000 00 00',
+          footer: THANKS,
         }
         const result = await printOnWindowsPrinter(config.name, testDoc, getReceiptLayoutConfig())
         return result.success ? { success: true, message: 'Test print sent' } : result

@@ -54,7 +54,7 @@ export interface ElectronAPI {
     /** Prints an employee badge page through the system print dialog. */
     printBadge: (html: string) => Promise<{ success: boolean; error?: string }>
     /** Prints a name/qty/estimated-cost list on the receipt printer; `meta` titles and numbers it (a purchase order prints as "BUYURTMA", No: ZK-…). */
-    printShoppingList: (items: Array<{ name: string; qty: number; cost: number }>, meta?: { title?: string; reference?: string }) => Promise<{ success: boolean; error?: string }>
+    printShoppingList: (items: Array<{ name: string; qty: number; cost: number }>, meta?: { title?: string; reference?: string; supplier?: string | null }) => Promise<{ success: boolean; error?: string }>
     /** Label/value report on the receipt printer (X/Z shift reports, stocktake results). */
     printReport: (doc: ReportDoc) => Promise<{ success: boolean; error?: string }>
     openCashDrawer: () => Promise<{ success: boolean; error?: string }>

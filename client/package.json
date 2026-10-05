@@ -1,12 +1,12 @@
 {
   "name": "client",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "private": true,
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "dev:pos": "electron-vite dev",
-    "dev:office": "electron-vite dev --config electron.vite.office.config.ts",
+    "dev:office": "electron-vite dev --config electron.vite.office.config.ts --entry out-office/main/index.js",
     "build": "electron-vite build",
     "build:pos": "electron-vite build",
     "build:office": "electron-vite build --config electron.vite.office.config.ts",

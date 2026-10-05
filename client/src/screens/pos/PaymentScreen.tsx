@@ -280,6 +280,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
         storePhone: storeRow?.phone ?? store?.phone,
         header: template.header,
         cashierName: template.show_cashier === false ? null : (user?.name ?? 'Cashier'),
+        customerName: effectiveHasDebt ? debtContact?.name : null,
         timestamp: now,
         items: items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.unitPrice, discount: i.discount })),
         charges: chargeDisplay,

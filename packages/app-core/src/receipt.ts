@@ -16,6 +16,8 @@ export interface ReceiptDoc {
   header?: string | null
   /** Omit (empty/undefined) to hide the cashier line entirely. */
   cashierName?: string | null
+  /** The sale's customer (debt sales), printed as "Mijoz: …". */
+  customerName?: string | null
   timestamp: string
   items: ReceiptLine[]
   charges: Array<{ name: string; amount: number }>

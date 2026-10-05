@@ -1,6 +1,8 @@
 import { dbQuery, dbExec } from './db.service'
 import { logger } from './logger.service'
-import { sendTelegramMessage, isTelegramConfigured } from './telegram.service'
+import { sendTelegramMessage, sendTelegramDocument, isTelegramConfigured } from './telegram.service'
+import { htmlToPdf } from './pdf.service'
+import { documentPageHtml, fmtDate, THANKS } from './documentLayout'
 
 // Automatic debt reminders — runs entirely client-side like the rest of the
 // Telegram integration (see telegram.service.ts). A contact is only ever
@@ -51,15 +53,15 @@ interface DebtorContact {
 // cleared (deleted) debt, see debt_clearances in schema v12.
 const LIST_LIMIT = 10
 
-function buildReminderMessage(contact: DebtorContact): string {
-  const storeRows = dbQuery(`SELECT name FROM stores LIMIT 1`) as Array<{ name: string }>
-  const storeName = storeRows[0]?.name ?? ''
-  const lines = [
-    `Assalomu alaykum, ${contact.name}!`, '',
-    `${storeName} do'konidan sizda UZS ${fmt(Number(contact.balance))} miqdorida qarz mavjud.`,
-    `Iltimos, imkon qadar tezroq to'lashingizni so'raymiz.`, '',
-    `Qarzga olingan xaridlar:`,
-  ]
+interface ReminderData {
+  store: { name: string; address: string | null; phone: string | null }
+  debtSales: Array<{ invoice_number: string; sale_date: string; amount: number }>
+  repayments: Array<{ created_at: string; amount: number }>
+}
+
+function loadReminderData(contact: DebtorContact): ReminderData {
+  const store = (dbQuery(`SELECT name, address, phone FROM stores LIMIT 1`) as ReminderData['store'][])[0]
+    ?? { name: '', address: null, phone: null }
   const since = `COALESCE((SELECT MAX(cleared_at) FROM debt_clearances WHERE contact_id = ?), '')`
   const debtSales = dbQuery(
     `SELECT s.invoice_number, s.sale_date, SUM(pt.amount) as amount
@@ -69,15 +71,7 @@ function buildReminderMessage(contact: DebtorContact): string {
      GROUP BY s.id
      ORDER BY s.created_at DESC`,
     [contact.id, contact.id]
-  ) as Array<{ invoice_number: string; sale_date: string; amount: number }>
-  if (debtSales.length === 0) {
-    lines.push("Ma'lumot topilmadi.")
-  } else {
-    for (const s of debtSales.slice(0, LIST_LIMIT)) lines.push(`${s.sale_date} - ${s.invoice_number} - UZS ${fmt(Number(s.amount))}`)
-    if (debtSales.length > LIST_LIMIT) lines.push(`... va yana ${debtSales.length - LIST_LIMIT} ta`)
-    lines.push(`Jami qarz: UZS ${fmt(debtSales.reduce((sum, s) => sum + Number(s.amount), 0))}`)
-  }
-
+  ) as ReminderData['debtSales']
   // Same repayment match as client/src/lib/debt.ts REPAYMENT_FOR_CONTACT:
   // desktop 'debt_payment' rows plus 'deposit' ones pulled from other devices.
   const repayments = dbQuery(
@@ -87,7 +81,61 @@ function buildReminderMessage(contact: DebtorContact): string {
        AND created_at > ${since}
      ORDER BY created_at DESC`,
     [contact.id, contact.id, contact.id]
-  ) as Array<{ created_at: string; amount: number }>
+  ) as ReminderData['repayments']
+  return { store, debtSales, repayments }
+}
+
+/** The statement as a PDF in the store's document layout (documentLayout.ts). */
+function reminderPageHtml(contact: DebtorContact, data: ReminderData): string {
+  const { debtSales, repayments } = data
+  const salesTotal = debtSales.reduce((sum, s) => sum + Number(s.amount), 0)
+  const paidTotal = repayments.reduce((sum, p) => sum + Number(p.amount), 0)
+  const tables = [{
+    title: 'Qarzga olingan xaridlar',
+    columns: [{ label: '№', align: 'center' as const }, { label: 'Sana' }, { label: 'Chek №' }, { label: 'Summa', align: 'right' as const }],
+    rows: debtSales.map((s, i) => [String(i + 1), fmtDate(s.sale_date), s.invoice_number, fmt(Number(s.amount))]),
+    total: ['', 'Jami', '', fmt(salesTotal)],
+  }]
+  if (repayments.length > 0) {
+    tables.push({
+      title: "To'lovlar",
+      columns: [{ label: '№', align: 'center' as const }, { label: 'Sana' }, { label: 'Summa', align: 'right' as const }],
+      rows: repayments.map((p, i) => [String(i + 1), fmtDate(p.created_at), fmt(Number(p.amount))]),
+      total: ['', 'Jami', fmt(paidTotal)],
+    })
+  }
+  return documentPageHtml({
+    storeName: data.store.name,
+    storeAddress: data.store.address,
+    title: `Qarzdorlik hisoboti · ${fmtDate(new Date())}`,
+    info: [['Mijoz', contact.name]],
+    tables,
+    summary: [
+      { label: 'Jami qarzga olingan', value: `UZS ${fmt(salesTotal)}` },
+      ...(repayments.length > 0 ? [{ label: "Jami to'langan", value: `UZS ${fmt(paidTotal)}` }] : []),
+      { label: 'Qolgan qarz', value: `UZS ${fmt(Number(contact.balance))}`, bold: true },
+    ],
+    phone: data.store.phone,
+    thanks: THANKS,
+  })
+}
+
+function buildReminderMessage(contact: DebtorContact, data: ReminderData): string {
+  const { debtSales, repayments } = data
+  const lines = [
+    `Assalomu alaykum, ${contact.name}!`, '',
+    `${data.store.name} do'konidan sizda UZS ${fmt(Number(contact.balance))} miqdorida qarz mavjud.`,
+    `Iltimos, imkon qadar tezroq to'lashingizni so'raymiz.`, '',
+    `Qarzga olingan xaridlar:`,
+  ]
+  if (debtSales.length === 0) {
+    lines.push("Ma'lumot topilmadi.")
+  } else {
+    for (const s of debtSales.slice(0, LIST_LIMIT)) lines.push(`${s.sale_date} - ${s.invoice_number} - UZS ${fmt(Number(s.amount))}`)
+    if (debtSales.length > LIST_LIMIT) lines.push(`... va yana ${debtSales.length - LIST_LIMIT} ta`)
+    lines.push(`Jami qarz: UZS ${fmt(debtSales.reduce((sum, s) => sum + Number(s.amount), 0))}`)
+  }
+
   if (repayments.length > 0) {
     lines.push('', "To'lovlar:")
     for (const p of repayments.slice(0, LIST_LIMIT)) lines.push(`${p.created_at.slice(0, 10)} - UZS ${fmt(Number(p.amount))}`)
@@ -134,8 +182,24 @@ export async function runAutoReminderCheck(): Promise<{ sent: number; skipped: n
           result.skipped++
           continue
         }
-        body = buildReminderMessage(contact)
-        await sendTelegramMessage(contact.telegram_chat_id as string, body)
+        const data = loadReminderData(contact)
+        body = buildReminderMessage(contact, data)
+        const caption = [
+          `Assalomu alaykum, ${contact.name}!`,
+          `${data.store.name} do'konidan sizda UZS ${fmt(Number(contact.balance))} miqdorida qarz mavjud.`,
+          `Iltimos, imkon qadar tezroq to'lashingizni so'raymiz.`,
+          'Batafsil hisobot ilova qilingan hujjatda.',
+        ].join('\n')
+        const fileName = `Qarzdorlik-${new Date().toISOString().slice(0, 10)}.pdf`
+        try {
+          const pdf = await htmlToPdf(reminderPageHtml(contact, data))
+          await sendTelegramDocument(contact.telegram_chat_id as string, pdf, fileName, caption)
+          body = `${caption}\n[PDF: ${fileName}]`
+        } catch (pdfErr) {
+          // The reminder still goes out — as the plain-text statement.
+          logger.warn(`Reminder PDF failed for contact ${contact.id}, sending text`, pdfErr)
+          await sendTelegramMessage(contact.telegram_chat_id as string, body)
+        }
         dbExec(
           `INSERT INTO message_log (contact_id, channel, body, status, error, created_at, trigger) VALUES (?,?,?,?,?,?,?)`,
           [contact.id, 'telegram', body, 'sent', null, new Date().toISOString(), 'auto']

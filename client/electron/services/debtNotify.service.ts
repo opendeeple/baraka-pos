@@ -1,12 +1,19 @@
 import { dbQuery, dbExec } from './db.service'
 import { logger } from './logger.service'
-import { sendTelegramMessage, isTelegramConfigured } from './telegram.service'
+import { sendTelegramMessage, sendTelegramDocument, isTelegramConfigured } from './telegram.service'
 import { sendSms, isSmsConfigured, toSmsText } from './sms.service'
+import { htmlToPdf } from './pdf.service'
+import { documentPageHtml, itemsDocTable, fmtDateTime, THANKS, type DocItem } from './documentLayout'
 
 // Instant "you just took this on credit" message, sent right after a sale
 // with a Debt payment is committed (PaymentScreen → notify:debtSale). Unlike
 // autoReminder.service.ts (periodic, Telegram-only) this fires once per sale
 // and falls back to SMS when the contact never connected Telegram.
+//
+// On Telegram the customer gets the sale as a PDF in the store's document
+// layout (documentLayout.ts) with a short caption; the plain-text message is
+// only a fallback for when the PDF can't be made or sent. SMS can't carry a
+// file, so it always gets the text.
 
 interface DebtNotifyConfig {
   enabled: boolean
@@ -44,8 +51,8 @@ export async function notifyDebtSale(saleSyncId: string): Promise<DebtNotifyResu
   if (!getConfig().enabled) return { status: 'skipped', reason: 'disabled' }
 
   const sale = (dbQuery(
-    `SELECT id, contact_id, total_amount FROM sales WHERE sync_id=? LIMIT 1`, [saleSyncId]
-  ) as Array<{ id: number; contact_id: number | null; total_amount: number }>)[0]
+    `SELECT id, contact_id, total_amount, invoice_number, created_at FROM sales WHERE sync_id=? LIMIT 1`, [saleSyncId]
+  ) as Array<{ id: number; contact_id: number | null; total_amount: number; invoice_number: string; created_at: string }>)[0]
   if (!sale?.contact_id) return { status: 'skipped', reason: 'no contact' }
 
   const debtRow = (dbQuery(
@@ -70,7 +77,10 @@ export async function notifyDebtSale(saleSyncId: string): Promise<DebtNotifyResu
   const items = dbQuery(
     `SELECT description, quantity, unit_price, discount FROM sale_items WHERE sale_id=? ORDER BY id`, [sale.id]
   ) as Array<{ description: string; quantity: number; unit_price: number; discount: number }>
-  const storeName = (dbQuery(`SELECT name FROM stores LIMIT 1`) as Array<{ name: string }>)[0]?.name ?? ''
+  const store = (dbQuery(`SELECT name, address, phone FROM stores LIMIT 1`) as Array<{
+    name: string; address: string | null; phone: string | null
+  }>)[0]
+  const storeName = store?.name ?? ''
 
   const lines = [
     `Assalomu alaykum, ${contact.name}!`, '',
@@ -90,11 +100,49 @@ export async function notifyDebtSale(saleSyncId: string): Promise<DebtNotifyResu
     'Rahmat!',
   )
   // Logged exactly as the customer receives it.
-  const body = channel === 'sms' ? toSmsText(lines.join('\n')) : lines.join('\n')
+  let body = channel === 'sms' ? toSmsText(lines.join('\n')) : lines.join('\n')
 
   try {
-    if (channel === 'telegram') await sendTelegramMessage(contact.telegram_chat_id as string, body)
-    else await sendSms(contact.phone as string, body)
+    if (channel === 'telegram') {
+      const docItems: DocItem[] = items.map((item) => ({
+        name: item.description,
+        qty: Number(item.quantity),
+        price: Number(item.unit_price),
+        sum: Number(item.unit_price) * Number(item.quantity) * (1 - Number(item.discount || 0) / 100),
+      }))
+      const summary = [
+        ...(debtAmount < Number(sale.total_amount)
+          ? [{ label: 'Xarid summasi', value: `UZS ${fmt(Number(sale.total_amount))}` }] : []),
+        { label: 'Qarzga yozildi', value: `UZS ${fmt(debtAmount)}` },
+        { label: 'Umumiy qarzingiz', value: `UZS ${fmt(Number(contact.balance))}`, bold: true },
+      ]
+      const caption = [
+        `Assalomu alaykum, ${contact.name}!`,
+        `${storeName} do'konidan qarzga xarid: UZS ${fmt(debtAmount)}.`,
+        `Umumiy qarzingiz: UZS ${fmt(Number(contact.balance))}.`,
+        'Xarid tafsilotlari ilova qilingan hujjatda.',
+      ].join('\n')
+      try {
+        const pdf = await htmlToPdf(documentPageHtml({
+          storeName,
+          storeAddress: store?.address,
+          title: `Chek № ${sale.invoice_number} · ${fmtDateTime(sale.created_at)}`,
+          info: [['Mijoz', contact.name]],
+          tables: [itemsDocTable(docItems)],
+          summary,
+          phone: store?.phone,
+          thanks: THANKS,
+        }))
+        await sendTelegramDocument(contact.telegram_chat_id as string, pdf, `Chek-${sale.invoice_number}.pdf`, caption)
+        body = `${caption}\n[PDF: Chek-${sale.invoice_number}.pdf]`
+      } catch (pdfErr) {
+        // The customer still has to hear about the debt — as plain text.
+        logger.warn(`Debt-sale PDF failed for contact ${contact.id}, sending text`, pdfErr)
+        await sendTelegramMessage(contact.telegram_chat_id as string, body)
+      }
+    } else {
+      await sendSms(contact.phone as string, body)
+    }
     dbExec(
       `INSERT INTO message_log (contact_id, channel, body, status, error, created_at, trigger) VALUES (?,?,?,?,?,?,?)`,
       [contact.id, channel, body, 'sent', null, new Date().toISOString(), 'debt_sale']

@@ -50,7 +50,7 @@ interface ReceiptSettings {
 }
 
 type ReceiptElementKey =
-  | 'storeName' | 'storeInfo' | 'invoiceInfo' | 'items' | 'itemQty'
+  | 'storeName' | 'storeInfo' | 'invoiceInfo' | 'items' | 'itemQty' | 'table'
   | 'totals' | 'totalRow' | 'footer' | 'saleNumber'
 
 interface ElementStyle { fontPx: number; shiftPx: number }
@@ -65,11 +65,10 @@ interface ReceiptLayout {
 const ELEMENT_LABELS: Array<[ReceiptElementKey, string]> = [
   ['storeName', 'Store Name'],
   ['storeInfo', 'Address / Phone / Header'],
-  ['invoiceInfo', 'Invoice / Cashier / Date'],
-  ['items', 'Item Name + Price'],
-  ['itemQty', 'Item Qty × Unit Price'],
+  ['invoiceInfo', 'Chek № / Sana / Mijoz / Kassir'],
+  ['table', 'Jadval (№ / Tovar / Soni / Narx / Summa)'],
   ['totals', 'Charges / Payment / Change'],
-  ['totalRow', 'TOTAL AMOUNT'],
+  ['totalRow', "TO'LOV (chegirma bo'lsa)"],
   ['footer', 'Footer (Thank You)'],
   ['saleNumber', 'Sale Number (bottom)'],
 ]
@@ -87,6 +86,7 @@ const DEFAULT_LAYOUT: ReceiptLayout = {
     invoiceInfo: { fontPx: 11, shiftPx: -1 },
     items: { fontPx: 11, shiftPx: 0 },
     itemQty: { fontPx: 10, shiftPx: 0 },
+    table: { fontPx: 9, shiftPx: 0 },
     totals: { fontPx: 11, shiftPx: 0 },
     totalRow: { fontPx: 11, shiftPx: 0 },
     footer: { fontPx: 13, shiftPx: 0 },
@@ -114,7 +114,7 @@ export default function SettingsScreen() {
     type: 'usb', vendorId: '0x0416', productId: '0x5011', host: '192.168.1.100', port: '9100', name: '',
   })
   const [receipt, setReceipt] = useState<ReceiptSettings>({
-    header: '', footer: 'Thank you for shopping with us!', show_logo: false, show_cashier: true, copies: 1,
+    header: '', footer: 'XARIDINGIZ UCHUN RAHMAT', show_logo: false, show_cashier: true, copies: 1,
   })
   const [layout, setLayout] = useState<ReceiptLayout>(DEFAULT_LAYOUT)
   const [telegram, setTelegram] = useState<TelegramConfig>({ botToken: '', botUsername: '' })

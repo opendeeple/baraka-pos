@@ -43,6 +43,20 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
   if (!data.ok) throw new Error(data.description || 'Telegram send failed')
 }
 
+/** Sends a file (the PDF documents) with a short caption under it. */
+export async function sendTelegramDocument(chatId: string, file: Buffer, fileName: string, caption: string): Promise<void> {
+  const c = getConfig()
+  if (!c?.botToken) throw new Error('Telegram bot token not configured')
+  const form = new FormData()
+  form.append('chat_id', chatId)
+  // Telegram cuts captions at 1024 characters.
+  form.append('caption', caption.slice(0, 1024))
+  form.append('document', new Blob([new Uint8Array(file)], { type: 'application/pdf' }), fileName)
+  const res = await fetch(`https://api.telegram.org/bot${c.botToken}/sendDocument`, { method: 'POST', body: form })
+  const data = await res.json() as { ok: boolean; description?: string }
+  if (!data.ok) throw new Error(data.description || 'Telegram send failed')
+}
+
 // ─── Polling ────────────────────────────────────────────────────────────────
 // Runs entirely client-side (no server deploy needed): short-polls
 // getUpdates every few seconds, looking for a /start <contactSyncId> from a

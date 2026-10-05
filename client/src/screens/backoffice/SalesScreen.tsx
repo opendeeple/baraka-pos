@@ -158,8 +158,17 @@ export default function SalesScreen() {
   }
 
   async function reprintReceipt(sale: SaleDetail) {
+    // Same store block and receipt template as the original (PaymentScreen).
+    const [storeRow] = await window.electronAPI.db.query(
+      `SELECT name, address, phone FROM stores LIMIT 1`, []
+    ) as Array<{ name: string; address: string | null; phone: string | null }>
+    const [templateRow] = await window.electronAPI.db.query(
+      `SELECT meta_value FROM settings WHERE meta_key='receipt_template' LIMIT 1`, []
+    ) as Array<{ meta_value: string }>
+    const template = templateRow ? JSON.parse(templateRow.meta_value) as { header?: string; footer?: string } : {}
     await window.electronAPI.printer.print({
-      lines: [], invoiceNumber: sale.invoice_number, storeName: store?.name ?? 'Store',
+      lines: [], invoiceNumber: sale.invoice_number, storeName: storeRow?.name ?? store?.name ?? 'Store',
+      storeAddress: storeRow?.address, storePhone: storeRow?.phone, header: template.header, footer: template.footer,
       items: sale.items.map((i) => ({ name: i.description, quantity: i.quantity, price: i.unit_price, discount: i.discount })),
       subtotal: Number(sale.subtotal), charges: [], discount: Number(sale.discount), total: Number(sale.total_amount),
       payments: sale.payments.map((p) => ({ method: p.payment_method, amount: Number(p.amount) })),
