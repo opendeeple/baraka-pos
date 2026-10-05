@@ -395,7 +395,17 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
             base={subtotal + chargeAmount}
             allowPercent={false}
             initial={{ percent: 0, amount: discount }}
-            onSave={({ amount }) => { setDiscount(amount); setShowDiscount(false) }}
+            onSave={({ amount }) => {
+              setDiscount(amount)
+              // Anything entered before the discount was for the old total —
+              // kept, it would show the discount as change to hand back.
+              // Start over from the new amount due instead.
+              const newTotal = Math.max(0, subtotal + chargeAmount - amount)
+              setPayments([])
+              setAmountInput(String(Math.round(newTotal * 100) / 100))
+              setError('')
+              setShowDiscount(false)
+            }}
             onClose={() => setShowDiscount(false)}
           />
         )}
