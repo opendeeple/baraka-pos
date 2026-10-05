@@ -6,7 +6,6 @@ import { env } from './config/env'
 import { errorMiddleware } from './middleware/error.middleware'
 import authRouter from './modules/auth/auth.router'
 import reportsRouter from './modules/reports/reports.router'
-import devicesRouter from './modules/devices/devices.router'
 import syncV2Router from './modules/sync/syncV2.router'
 import shiftsRouter from './modules/shifts/shifts.router'
 
@@ -30,7 +29,6 @@ app.use(express.json({ limit: '10mb' }))
 // older rules; they're gone.
 app.use('/api/auth', authRouter)
 app.use('/api/sync/v2', syncV2Router)
-app.use('/api/devices', devicesRouter)
 app.use('/api/reports', reportsRouter)
 app.use('/api/shifts', shiftsRouter)
 

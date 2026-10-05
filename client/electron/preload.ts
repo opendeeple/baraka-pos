@@ -46,8 +46,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     pushPending: () => ipcRenderer.invoke('sync:pushPending'),
     pullLatest: (table: string) => ipcRenderer.invoke('sync:pullLatest', table),
     getStatus: () => ipcRenderer.invoke('sync:getStatus'),
-    ensureDevice: (jwtToken: string) => ipcRenderer.invoke('sync:ensureDevice', jwtToken),
-    isDeviceRegistered: () => ipcRenderer.invoke('sync:isDeviceRegistered'),
+    setTerminalToken: (token: string, role: string) => ipcRenderer.invoke('sync:setTerminalToken', token, role),
+    hasTerminalToken: () => ipcRenderer.invoke('sync:hasTerminalToken'),
     nextInvoiceNumber: () => ipcRenderer.invoke('sync:nextInvoiceNumber'),
     enqueue: (table: string, syncId: string, op: 'upsert' | 'delete') =>
       ipcRenderer.invoke('sync:enqueue', table, syncId, op),

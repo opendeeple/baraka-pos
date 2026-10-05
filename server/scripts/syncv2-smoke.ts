@@ -23,28 +23,25 @@ async function json(method: string, path: string, body?: unknown, headers: Recor
 }
 
 async function main() {
-  // --- auth + registration ---
+  // --- auth (devices sync with a terminal token: a user JWT) ---
   const login = await json('POST', '/api/auth/login', { username: 'admin', password: process.env.ADMIN_PASSWORD || 'admin123' })
   check('admin login', login.status === 200)
-  const jwt = { Authorization: `Bearer ${login.data.token}` }
+  const dev = { Authorization: `Bearer ${login.data.token}` }
+  const storeId = login.data.store.id
 
   const unauth = await json('GET', '/api/sync/v2/pull?table=products')
-  check('pull without device auth → 401', unauth.status === 401)
+  check('pull without token → 401', unauth.status === 401)
 
-  const reg = await json('POST', '/api/devices/register', { name: 'SMOKE-DEVICE', platform: 'android-pos' }, jwt)
-  check('device registration → 201 with one-time key', reg.status === 201 && Boolean(reg.data.deviceKey))
-  const dev = { Authorization: `Device ${reg.data.deviceId}:${reg.data.deviceKey}` }
-
-  const badKey = await json('GET', '/api/sync/v2/pull?table=products', undefined, {
-    Authorization: `Device ${reg.data.deviceId}:wrong-key`,
+  const badToken = await json('GET', '/api/sync/v2/pull?table=products', undefined, {
+    Authorization: 'Bearer not-a-token',
   })
-  check('wrong device key → 401', badKey.status === 401)
+  check('invalid token → 401', badToken.status === 401)
 
   // --- pull: store scoping, pagination, cursor ---
   const pull1 = await json('GET', '/api/sync/v2/pull?table=products&limit=5', undefined, dev)
   check('paginated pull', pull1.status === 200 && pull1.data.records.length === 5 && pull1.data.hasMore === true)
   check('records carry syncId + serverId', pull1.data.records.every((r: any) => r.syncId && r.id))
-  check('records store-scoped to device store', pull1.data.records.every((r: any) => r.storeId === reg.data.storeId))
+  check('records store-scoped to the user\'s store', pull1.data.records.every((r: any) => r.storeId === storeId))
 
   const pull2 = await json(
     'GET',
@@ -137,11 +134,6 @@ async function main() {
   }, dev)
   check('sale with unknown session → per-sale error', noSession.data.errors.length === 1)
 
-  // --- revocation ---
-  await json('PUT', `/api/devices/${reg.data.deviceId}/revoke`, {}, jwt)
-  const revoked = await json('GET', '/api/sync/v2/pull?table=products', undefined, dev)
-  check('revoked device → 401', revoked.status === 401)
-
   // --- cleanup (direct prisma) ---
   const { prisma } = await import('../src/config/database')
   const saleId = salePush.data.synced[0]?.serverId
@@ -155,14 +147,13 @@ async function main() {
     const batchId = (await prisma.productBatch.findUnique({ where: { syncId: stockRec.batchSyncId } }))?.id
     if (productId && batchId) {
       await prisma.productStock.updateMany({
-        where: { storeId: reg.data.storeId, productId, batchId },
+        where: { storeId, productId, batchId },
         data: { quantity: { increment: 1 } },
       })
     }
   }
   await prisma.posSession.deleteMany({ where: { syncId: sessionSyncId } })
   await prisma.contact.deleteMany({ where: { syncId: contactSyncId } })
-  await prisma.device.delete({ where: { id: reg.data.deviceId } }).catch(() => {})
   await prisma.$disconnect()
 
   console.log(failures === 0 ? '\n🎉 ALL SYNC V2 CHECKS PASSED' : `\n💥 ${failures} CHECK(S) FAILED`)

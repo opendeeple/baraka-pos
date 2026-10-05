@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { dbExec, dbQuery } from '../services/db.service'
 import { getServerUrl } from '../services/sync.service'
 import { httpRequest } from './auth.ipc'
+import { getTerminalId } from './session.ipc'
 
 function getSetting(key: string): string | undefined {
   const rows = dbQuery(`SELECT meta_value FROM settings WHERE meta_key=? LIMIT 1`, [key]) as Array<{ meta_value: string }>
@@ -16,25 +17,31 @@ function setSetting(key: string, value: string): void {
   )
 }
 
-// Shift calls authenticate as this terminal (the sync v2 device key), not as
-// a user: the badge scan is what identifies the employee, and the server
-// needs to know WHICH terminal to enforce one-cashier-per-terminal.
+// Shift calls authenticate with the POS terminal token (whoever last signed
+// in here with a password), not as the cashier: the badge scan is what
+// identifies the employee, and terminalName tells the server WHICH terminal,
+// to enforce one-cashier-per-terminal.
 // Network failures and timeouts resolve to status 0 so the renderer can tell
 // "offline" apart from a server-side refusal.
-async function deviceRequest(path: string, body: unknown, timeoutMs: number): Promise<{ status: number; data: unknown }> {
-  const deviceId = getSetting('device_id')
-  const deviceKey = getSetting('device_key')
-  if (!deviceId || !deviceKey) return { status: 0, data: { code: 'DEVICE_NOT_REGISTERED' } }
-  const payload = JSON.stringify(body)
+async function terminalRequest(path: string, body: object, timeoutMs: number): Promise<{ status: number; data: unknown }> {
+  const token = getSetting('terminal_token')
+  if (!token) return { status: 0, data: { code: 'TERMINAL_NOT_SIGNED_IN' } }
+  const payload = JSON.stringify({ ...body, terminalName: getTerminalId() })
   try {
-    return await httpRequest(`${getServerUrl()}${path}`, {
+    const res = await httpRequest(`${getServerUrl()}${path}`, {
       method: 'POST',
       headers: {
-        Authorization: `Device ${deviceId}:${deviceKey}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(payload),
       },
     }, payload, timeoutMs)
+    // Expired, or its user deactivated: only a password sign-in fixes that.
+    if (res.status === 401) {
+      setSetting('terminal_token', '')
+      return { status: 401, data: { code: 'TERMINAL_NOT_SIGNED_IN' } }
+    }
+    return res
   } catch (err) {
     return { status: 0, data: { code: 'NETWORK', error: err instanceof Error ? err.message : 'network error' } }
   }
@@ -81,10 +88,11 @@ function flushPendingEnds(): Promise<void> {
   if (!flushing) {
     flushing = (async () => {
       for (let end = readPendingEnds()[0]; end; end = readPendingEnds()[0]) {
-        const res = await deviceRequest('/api/shifts/end', end, BACKGROUND_TIMEOUT_MS)
-        // Offline or server trouble: keep it (and everything after it) for the next run.
-        if (res.status === 0 || res.status >= 500) return
-        // Delivered — or refused for good (e.g. device revoked), which retrying can't fix.
+        const res = await terminalRequest('/api/shifts/end', end, BACKGROUND_TIMEOUT_MS)
+        // Offline, server trouble or no valid terminal token yet: keep it (and
+        // everything after it) for the next run.
+        if (res.status === 0 || res.status === 401 || res.status >= 500) return
+        // Delivered — or refused for good (e.g. shift not found), which retrying can't fix.
         const delivered = end
         writePendingEnds(readPendingEnds().filter((e) => e.shiftId !== delivered.shiftId))
       }
@@ -100,10 +108,10 @@ export function registerShiftIpc(): void {
     // A shift ended here offline must reach the server first: otherwise it
     // would be closed as "replaced" at this moment instead of when it ended.
     await flushPendingEnds()
-    return deviceRequest('/api/shifts/start', { badgeCode }, START_TIMEOUT_MS)
+    return terminalRequest('/api/shifts/start', { badgeCode }, START_TIMEOUT_MS)
   })
   ipcMain.handle('shift:heartbeat', (_e, shiftId: number) =>
-    deviceRequest('/api/shifts/heartbeat', { shiftId }, BACKGROUND_TIMEOUT_MS))
+    terminalRequest('/api/shifts/heartbeat', { shiftId }, BACKGROUND_TIMEOUT_MS))
   // Returns at once: the cashier is signed out right away, online or not.
   ipcMain.handle('shift:end', (_e, shiftId: number) => {
     const ends = readPendingEnds().filter((e) => e.shiftId !== shiftId)

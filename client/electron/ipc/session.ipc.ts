@@ -68,9 +68,30 @@ export function registerSessionIpc(isTraining = false) {
   ipcMain.handle('app:getVersion', () => app.getVersion())
 }
 
-function getTerminalId(): string {
+// Every desktop used to be 'TERMINAL-001'; badge shifts tell terminals apart
+// by this name, so each machine now gets its own on first use.
+const LEGACY_TERMINAL_ID = 'TERMINAL-001'
+
+/** This machine's terminal name — shared by the POS and Office apps on it. */
+export function getTerminalId(): string {
   const rows = dbQuery(`SELECT meta_value FROM settings WHERE meta_key='terminal_id' LIMIT 1`, [])
-  return (rows[0] as { meta_value: string })?.meta_value ?? 'TERMINAL-001'
+  const existing = (rows[0] as { meta_value: string } | undefined)?.meta_value
+  if (existing) return existing
+
+  const terminalId = `PC-${randomUUID().slice(0, 6).toUpperCase()}`
+  const now = new Date().toISOString()
+  dbTransaction([
+    {
+      sql: `INSERT OR REPLACE INTO settings (store_id, meta_key, meta_value, updated_at) VALUES (?, 'terminal_id', ?, ?)`,
+      params: [getStoreId(), terminalId, now],
+    },
+    // A register left open under the old shared name must stay this terminal's.
+    {
+      sql: `UPDATE pos_sessions SET terminal_id=? WHERE terminal_id=? AND state IN ('opened','opening_control')`,
+      params: [terminalId, LEGACY_TERMINAL_ID],
+    },
+  ])
+  return terminalId
 }
 
 function getStoreId(): number {

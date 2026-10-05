@@ -2,13 +2,14 @@
 // ELECTRON_RUN_AS_NODE (matching the project better-sqlite3 ABI):
 //   pnpm --filter client test:sync
 // Exercises:
-// fresh DB migration → device registration → full pull → local sale + contact
+// fresh DB migration → terminal token → full pull → local sale + contact
 // creation → outbox flush → server verification → incremental pull.
 import Database from 'better-sqlite3'
 import { randomUUID } from 'crypto'
 import { runMigrations, setDbInstance, getDb } from '../electron/services/db.service'
 import {
-  ensureDeviceRegistered,
+  setTerminalToken,
+  hasTerminalToken,
   pullTableV2,
   flushOutbox,
   enqueueOutbox,
@@ -38,7 +39,7 @@ async function main() {
   setSetting('store_id', '1')
   setSetting('terminal_id', 'E2E-HARNESS-1')
 
-  // 1. Login as admin (JWT) and register the device
+  // 1. Login as admin (JWT); its token becomes the terminal token
   const loginRes = await fetch(`${SERVER}/api/auth/login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: 'admin', password: process.env.ADMIN_PASSWORD || 'admin123' }),
@@ -46,8 +47,8 @@ async function main() {
   const login = await loginRes.json() as any
   check('admin login', loginRes.status === 200)
 
-  const reg = await ensureDeviceRegistered(login.token, 'electron-pos')
-  check('device registration', reg.registered, reg.error)
+  await setTerminalToken(login.token, login.user.role)
+  check('terminal token stored', hasTerminalToken())
   backfillOutboxOnce()
 
   // 2. Full pull of all tables in dependency order

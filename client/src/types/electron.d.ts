@@ -73,8 +73,9 @@ export interface ElectronAPI {
     pushPending: () => Promise<{ synced: number; errors: number; dead: number }>
     pullLatest: (table: string) => Promise<{ table: string; count: number }>
     getStatus: () => Promise<string>
-    ensureDevice: (jwtToken: string) => Promise<{ registered: boolean; error?: string }>
-    isDeviceRegistered: () => Promise<boolean>
+    /** After an online password sign-in: this app syncs (and badge sign-in works) with that token. */
+    setTerminalToken: (token: string, role: string) => Promise<void>
+    hasTerminalToken: () => Promise<boolean>
     nextInvoiceNumber: () => Promise<string | null>
     enqueue: (table: string, syncId: string, op: 'upsert' | 'delete') => Promise<void>
     retryDead: () => Promise<number>

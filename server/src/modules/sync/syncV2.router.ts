@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
-import { deviceAuthMiddleware } from '../../middleware/deviceAuth.middleware'
+import { authMiddleware } from '../../middleware/auth.middleware'
 import { pullTableV2, pushChangesV2, pushSalesV2, leaseInvoiceRange } from './syncV2.service'
 import type { SyncV2PullTable } from '@baraka/shared'
 
@@ -23,7 +23,9 @@ router.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', version: 2, timestamp: new Date().toISOString() })
 })
 
-router.use(deviceAuthMiddleware)
+// Devices sync with their terminal token: the JWT of whoever last signed in
+// on them with a password (kept across shift changes).
+router.use(authMiddleware)
 
 router.get('/pull', async (req: Request, res: Response) => {
   try {
@@ -33,7 +35,7 @@ router.get('/pull', async (req: Request, res: Response) => {
     }
     const cursor = (req.query.cursor as string) || undefined
     const limit = req.query.limit ? Number(req.query.limit) : undefined
-    const result = await pullTableV2(req.device!, table, cursor, limit)
+    const result = await pullTableV2(req.user!, table, cursor, limit)
     res.json(result)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Pull failed'
@@ -56,7 +58,7 @@ const pushSchema = z.object({
 router.post('/push', async (req: Request, res: Response) => {
   try {
     const body = pushSchema.parse(req.body)
-    const result = await pushChangesV2(req.device!, body.changes as never)
+    const result = await pushChangesV2(req.user!, body.changes as never)
     res.json(result)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Push failed'
@@ -80,7 +82,7 @@ const salesSchema = z.object({
 router.post('/sales', async (req: Request, res: Response) => {
   try {
     const body = salesSchema.parse(req.body)
-    const result = await pushSalesV2(req.device!, body.sales as never)
+    const result = await pushSalesV2(req.user!, body.sales as never)
     res.json(result)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Sales push failed'
@@ -93,7 +95,7 @@ const invoiceRangeSchema = z.object({ count: z.number().int().min(1).max(10000) 
 router.post('/invoice-range', async (req: Request, res: Response) => {
   try {
     const { count } = invoiceRangeSchema.parse(req.body)
-    const result = await leaseInvoiceRange(req.device!, count)
+    const result = await leaseInvoiceRange(req.user!, count)
     res.json(result)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Invoice range lease failed'

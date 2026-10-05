@@ -2,7 +2,6 @@ import { CashLogSource, Prisma } from '@prisma/client'
 import dayjs from 'dayjs'
 import { prisma } from '../../config/database'
 import { broadcastSaleCompleted, broadcastStockUpdated, broadcastToStore } from '../../socket'
-import { touchDevice } from '../../middleware/deviceAuth.middleware'
 import { SHARED_SETTING_KEYS } from '@baraka/shared'
 import type {
   SyncV2PullTable,
@@ -18,10 +17,12 @@ import type {
 const DEFAULT_LIMIT = 500
 const MAX_LIMIT = 1000
 
+// Who is syncing: the user whose token the device sends (its terminal token).
+// Store scope always derives from that user, never from the request body.
 interface DeviceCtx {
-  deviceId: number
+  userId: number
   storeId: number
-  platform?: string
+  role: string
 }
 
 // ---------------------------------------------------------------------------
@@ -389,8 +390,6 @@ export async function pullTableV2(
 
   const last = page[page.length - 1]
   const nextCursor = last ? makeCursor(last.updatedAt, last.id) : cursor ?? ''
-
-  touchDevice(device.deviceId, 'lastPulledAt')
 
   return {
     table,
@@ -1084,11 +1083,12 @@ async function allocateSupplierPayment(tx: Tx, storeId: number, vendorId: number
   }
 }
 
-// Staff and store-wide configuration are managed in the back office. A till's
-// device key sits on a shared counter PC; through these tables it could mint
-// an admin or rewrite the owner PIN, so they're refused from POS devices.
+// Staff and store-wide configuration are managed in the back office. A
+// cashier's token sits on a shared counter PC; through these tables it could
+// mint an admin or rewrite the owner PIN, so only managers may change them.
 const OFFICE_ONLY_TABLES = new Set(['users', 'settings', 'stores', 'charges'])
-const isOfficeDevice = (device: DeviceCtx) => !device.platform || device.platform.endsWith('-office')
+const OFFICE_ROLES = new Set(['admin', 'manager', 'super_admin'])
+const isOfficeUser = (device: DeviceCtx) => OFFICE_ROLES.has(device.role)
 
 // What else a pushed change alters on the server, so the sync:changed event
 // names every table devices should re-pull (they pull only those).
@@ -1112,7 +1112,7 @@ export async function pushChangesV2(
       results.push({ syncId: change.syncId, status: 'error', error: `Unknown table: ${change.table}` })
       continue
     }
-    if (OFFICE_ONLY_TABLES.has(change.table) && !isOfficeDevice(device)) {
+    if (OFFICE_ONLY_TABLES.has(change.table) && !isOfficeUser(device)) {
       results.push({ syncId: change.syncId, status: 'error', error: `${change.table} can only be changed from the back office` })
       continue
     }
@@ -1168,10 +1168,7 @@ export async function pushSalesV2(
       }
 
       const created = await prisma.$transaction(async (tx) => {
-        const device_ = await tx.device.findUniqueOrThrow({ where: { id: device.deviceId } })
-        const userId =
-          (await resolveSyncId(tx, 'user', sale.userSyncId)) ?? device_.registeredBy
-        if (!userId) throw new Error('Cannot resolve sale user (no userSyncId, device has no registrant)')
+        const userId = (await resolveSyncId(tx, 'user', sale.userSyncId)) ?? device.userId
         const sessionId = await resolveSyncId(tx, 'posSession', sale.sessionSyncId)
         if (!sessionId) throw new Error('Cannot resolve sessionSyncId (push pos_sessions first)')
         const contactId = await resolveSyncId(tx, 'contact', sale.contactSyncId)
@@ -1200,7 +1197,6 @@ export async function pushSalesV2(
             sessionId,
             contactId,
             userId,
-            deviceId: device.deviceId,
             invoiceNumber: sale.invoiceNumber,
             saleType: sale.saleType as never,
             referenceId,
@@ -1323,7 +1319,7 @@ export async function pushSalesV2(
         broadcastSaleCompleted(device.storeId, {
           saleId: created.id,
           invoiceNumber: created.invoiceNumber,
-          terminalId: `device:${device.deviceId}`,
+          terminalId: `user:${device.userId}`,
           total: Number(created.totalAmount),
           paymentMethod: sale.payments[0]?.paymentMethod ?? 'Cash',
         })
@@ -1369,11 +1365,6 @@ export async function leaseInvoiceRange(
     })
     const end = store.currentSaleNumber
     const start = end - count + 1
-
-    await tx.device.update({
-      where: { id: device.deviceId },
-      data: { invoiceRangeStart: start, invoiceRangeEnd: end, invoiceRangeNext: start },
-    })
 
     return { prefix: store.salePrefix, start, end }
   })

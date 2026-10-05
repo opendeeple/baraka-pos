@@ -16,13 +16,20 @@ mounted for the transition; remove it once the Electron fleet has updated.
 - Stock quantities never sync as absolutes — they move as **deltas** (sale
   items, purchase items, signed `quantity_adjustments`).
 
-## Device identity
+## Terminal token (2026-10, replaces device keys)
 
-- `POST /api/devices/register` (JWT, role ≥ manager) → `{deviceId, deviceKey}`.
-  The key is returned once and stored bcrypt-hashed (`devices.keyHash`).
-- All `/api/sync/v2/*` calls authenticate with `Authorization: Device <id>:<key>`
-  (`deviceAuth.middleware.ts`). Store scope always derives from the device row.
-- `GET /api/devices` lists, `PUT /api/devices/:id/revoke` revokes.
+- There is no device registration. After every online password sign-in the
+  app stores that user's JWT as its **terminal token** (settings key
+  `terminal_token`; the desktop Office app, which shares the POS database,
+  uses `office_token`). It survives sign-out, so sync and badge sign-in keep
+  working across shift changes until the token expires (7 days).
+- All `/api/sync/v2/*` and terminal `/api/shifts/*` calls send
+  `Authorization: Bearer <terminal token>`. Store scope derives from the
+  token's user; `users`/`settings`/`stores`/`charges` pushes need a manager
+  role (a cashier's token leaves them pending in the outbox).
+- A 401 clears the token; sync then waits for the next password sign-in.
+- Badge shifts name their terminal by its `terminal_id` (`PC-XXXXXX` on
+  desktop) sent as `terminalName`. The `devices` table is no longer written.
 
 ## Endpoints
 
@@ -30,7 +37,7 @@ mounted for the transition; remove it once the Electron fleet has updated.
 |---|---|
 | `GET /api/sync/v2/pull?table=&cursor=&limit=` | Store-scoped incremental pull. Opaque cursor (`updatedAt\|id`), pages of ≤1000, tombstones included (`deletedAt` set → client deletes). Records carry `id` (server PK), `syncId`, `*SyncId` FKs. `sales` pulls nested `items`/`payments`; the client inserts child rows only when the sale is new locally (sales are immutable facts apart from status flips), so office devices get full local dashboards and POS devices see cross-terminal history without echo duplicates. |
 | `POST /api/sync/v2/push` | Generic change batch `{changes:[{table, syncId, op, data, clientUpdatedAt}]}`. Dimension tables use last-writer-wins on `clientUpdatedAt`; facts are insert-only idempotent on `syncId`. Per-change results: `applied \| skipped-stale \| error` (+`serverId`). |
-| `POST /api/sync/v2/sales` | Sales batch (complex transaction). Idempotent on `syncId`; resolves `userSyncId`/`sessionSyncId`/`contactSyncId`; stores `deviceId`; clamps stock at 0 (logged discrepancy); broadcasts `sale:completed`/`stock:updated` after commit. |
+| `POST /api/sync/v2/sales` | Sales batch (complex transaction). Idempotent on `syncId`; resolves `userSyncId`/`sessionSyncId`/`contactSyncId` (no `userSyncId` → the token's user); clamps stock at 0 (logged discrepancy); broadcasts `sale:completed`/`stock:updated` after commit. |
 | `POST /api/sync/v2/invoice-range` | Atomically leases a block of invoice numbers from `store.currentSaleNumber`. Printed offline receipts are final; gaps from wiped devices are accepted. |
 
 After any accepted push the server emits `sync:changed {tables}` to the store's

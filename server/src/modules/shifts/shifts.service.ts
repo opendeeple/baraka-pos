@@ -1,6 +1,5 @@
 import { Shift } from '@prisma/client'
 import { prisma } from '../../config/database'
-import type { DeviceAuthContext } from '../../middleware/deviceAuth.middleware'
 import { signUserToken, toAuthResponse } from '../auth/auth.service'
 
 // A shift only ever ends on an explicit command: "End shift" on its terminal,
@@ -23,7 +22,14 @@ function toShiftDto(shift: Shift) {
   return { id: shift.id, userId: shift.userId, startedAt: shift.startedAt }
 }
 
-export async function startShift(device: DeviceAuthContext, badgeCode: unknown) {
+function parseTerminalName(terminalName: unknown): string {
+  const name = typeof terminalName === 'string' ? terminalName.trim() : ''
+  if (!name || name.length > 100) throw new ShiftError(400, 'TERMINAL_REQUIRED', 'Terminal name is required')
+  return name
+}
+
+export async function startShift(storeId: number, terminalName: unknown, badgeCode: unknown) {
+  const terminal = parseTerminalName(terminalName)
   const code = typeof badgeCode === 'string' ? badgeCode.trim() : ''
   if (!code) throw new ShiftError(400, 'BADGE_REQUIRED', 'Badge code is required')
   const now = new Date()
@@ -32,10 +38,10 @@ export async function startShift(device: DeviceAuthContext, badgeCode: unknown) 
     // Serializes shift starts within a store: the one-open-shift-per-cashier
     // rule spans terminals, so two terminals scanning the same badge at the
     // same moment must not both see "no open shift" and both open one.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('shift_start'), ${device.storeId}::int)`
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('shift_start'), ${storeId}::int)`
 
     const user = await tx.user.findFirst({
-      where: { badgeCode: code, storeId: device.storeId, isActive: true, deletedAt: null },
+      where: { badgeCode: code, storeId, isActive: true, deletedAt: null },
       include: { store: true },
     })
     if (!user) throw new ShiftError(404, 'BADGE_NOT_FOUND', 'No active employee has this badge')
@@ -44,17 +50,17 @@ export async function startShift(device: DeviceAuthContext, badgeCode: unknown) 
       where: { userId: user.id, endedAt: null },
       include: { device: { select: { name: true } } },
     })
-    if (open && open.deviceId !== device.deviceId) {
+    if (open && open.terminalName !== terminal) {
       throw new ShiftError(409, 'SHIFT_OPEN_ELSEWHERE', `${user.name} has not ended their shift on another terminal`, {
         employeeName: user.name,
-        deviceName: open.device.name,
+        deviceName: open.terminalName || open.device?.name || '',
         startedAt: open.startedAt,
       })
     }
 
     // Shift change: whoever was working on this terminal hands over now.
     await tx.shift.updateMany({
-      where: { deviceId: device.deviceId, endedAt: null, userId: { not: user.id } },
+      where: { storeId, terminalName: terminal, endedAt: null, userId: { not: user.id } },
       data: { endedAt: now, endReason: 'replaced' },
     })
 
@@ -62,7 +68,7 @@ export async function startShift(device: DeviceAuthContext, badgeCode: unknown) 
     const shift = open
       ? await tx.shift.update({ where: { id: open.id }, data: { lastSeenAt: now } })
       : await tx.shift.create({
-          data: { storeId: device.storeId, userId: user.id, deviceId: device.deviceId, startedAt: now, lastSeenAt: now },
+          data: { storeId, userId: user.id, terminalName: terminal, startedAt: now, lastSeenAt: now },
         })
     return { user, shift }
   })
@@ -70,8 +76,9 @@ export async function startShift(device: DeviceAuthContext, badgeCode: unknown) 
   return { token: signUserToken(user), shift: toShiftDto(shift), ...toAuthResponse(user) }
 }
 
-export async function heartbeatShift(device: DeviceAuthContext, shiftId: number) {
-  const shift = await prisma.shift.findFirst({ where: { id: shiftId, deviceId: device.deviceId } })
+export async function heartbeatShift(storeId: number, terminalName: unknown, shiftId: number) {
+  const terminal = parseTerminalName(terminalName)
+  const shift = await prisma.shift.findFirst({ where: { id: shiftId, storeId, terminalName: terminal } })
   if (!shift) return { active: false, endReason: 'not_found' }
   if (shift.endedAt) return { active: false, endReason: shift.endReason }
   await prisma.shift.updateMany({ where: { id: shift.id, endedAt: null }, data: { lastSeenAt: new Date() } })
@@ -84,8 +91,9 @@ export async function heartbeatShift(device: DeviceAuthContext, shiftId: number)
  * delivers it later, and the hours must stop at the press, not at delivery.
  * Clamped to [startedAt, now] so a skewed terminal clock can't distort them.
  */
-export async function endShift(device: DeviceAuthContext, shiftId: number, endedAt?: unknown) {
-  const shift = await prisma.shift.findFirst({ where: { id: shiftId, deviceId: device.deviceId, endedAt: null } })
+export async function endShift(storeId: number, terminalName: unknown, shiftId: number, endedAt?: unknown) {
+  const terminal = parseTerminalName(terminalName)
+  const shift = await prisma.shift.findFirst({ where: { id: shiftId, storeId, terminalName: terminal, endedAt: null } })
   if (!shift) return { ended: false }
   const now = new Date()
   const requested = typeof endedAt === 'string' ? new Date(endedAt) : now
@@ -116,7 +124,8 @@ export async function listShifts(storeId: number, from: Date, to: Date) {
     lastSeenAt: s.lastSeenAt,
     endReason: s.endReason,
     user,
-    deviceName: device.name,
+    // Shifts from before terminal names were recorded still name their device.
+    deviceName: s.terminalName || device?.name || '',
   }))
 }
 

@@ -146,7 +146,7 @@ app.whenReady().then(async () => {
   registerDatabaseIpc()
   registerPrinterIpc()
   registerSessionIpc(isTraining)
-  registerSyncIpc('electron-pos')
+  registerSyncIpc('pos')
   registerWindowIpc(createCustomerWindow, () => customerWindow)
   registerFullscreenIpc(() => mainWindow)
   registerAuthIpc()

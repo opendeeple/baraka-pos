@@ -104,7 +104,7 @@ app.whenReady().then(async () => {
   registerDatabaseIpc()
   registerPrinterIpc()
   registerSessionIpc()
-  registerSyncIpc('electron-office')
+  registerSyncIpc('office')
   registerAuthIpc()
   registerReportsIpc()
   registerFullscreenIpc(() => mainWindow)

@@ -191,6 +191,7 @@
   },
   "sync": {
     "online": "Online",
+    "signInRequired": "Sync paused: sign in on this computer with username and password (7 days since the last sign-in, or never signed in).",
     "syncing": "Syncing",
     "offline": "Offline",
     "error": "Error",
@@ -621,7 +622,7 @@
     "badgeNotFound": "This barcode isn't assigned to any active employee",
     "badgeShiftOpenElsewhere": "{{name}} hasn't finished their shift on \"{{device}}\" yet (started at {{time}}). End that shift first.",
     "badgeOffline": "Can't reach the server — starting a shift needs internet",
-    "badgeDeviceNotRegistered": "This terminal isn't registered yet. An administrator needs to sign in once with username and password.",
+    "badgeTerminalNotSignedIn": "This terminal needs a username and password sign-in (never signed in, or the 7-day sign-in expired). Any employee can sign in once with their password.",
     "officeManagersOnly": "Office is for managers and the owner only. Cashiers use the till app."
   },
   "shift": {
@@ -951,20 +952,5 @@
     "stocktakeNet": "Stocktake result ({{count}})",
     "noLosses": "No write-offs in this period",
     "showMore": "Show more ({{count}} left)"
-  },
-  "devices": {
-    "title": "Devices",
-    "hint": "Tills and offices connected to the server. Switch off a lost or replaced device — it can no longer connect.",
-    "empty": "No devices",
-    "revoke": "Switch off",
-    "confirmRevoke": "Yes, switch off",
-    "revoked": "Device switched off",
-    "thisOne": "(this computer)",
-    "lastSeen": "Last seen",
-    "revokedAt": "Switched off",
-    "platform_electron_pos": "Till (computer)",
-    "platform_electron_office": "Office (computer)",
-    "platform_android_pos": "Till (Android)",
-    "platform_android_office": "Office (Android)"
   }
 }

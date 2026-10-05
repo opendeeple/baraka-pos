@@ -15,7 +15,6 @@ import { SYNC_TABLES, pullSyncTable } from '../../hooks/useSync'
 import { SHARED_SETTING_KEYS } from '@baraka/shared'
 import { v4 as uuidv4 } from 'uuid'
 import { logAudit } from '../../lib/audit'
-import { DevicesPanel } from '../../components/backoffice/DevicesPanel'
 
 interface StoreSetting { meta_key: string; meta_value: string }
 
@@ -425,8 +424,6 @@ export default function SettingsScreen() {
             ))}
           </div>
         </div>
-
-        <DevicesPanel className={SECTION_CLS} />
 
         {/* Owner personal-expense PIN */}
         <div className={SECTION_CLS}>

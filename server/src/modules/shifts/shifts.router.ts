@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, requireRole } from '../../middleware/auth.middleware'
-import { deviceAuthMiddleware } from '../../middleware/deviceAuth.middleware'
 import {
   ShiftError, startShift, heartbeatShift, endShift, listShifts, adminEndShift,
 } from './shifts.service'
@@ -14,27 +13,30 @@ function sendError(res: Response, err: unknown) {
   res.status(400).json({ error: err instanceof Error ? err.message : 'Failed' })
 }
 
-// --- terminal (device-authenticated): badge scan → shift lifecycle ---------
+// --- terminal (terminal token): badge scan → shift lifecycle ---------------
+// The terminal token (whoever last signed in on that terminal with a
+// password) vouches that the call comes from one of this store's terminals;
+// terminalName says which one.
 
-router.post('/start', deviceAuthMiddleware, async (req: Request, res: Response) => {
+router.post('/start', authMiddleware, async (req: Request, res: Response) => {
   try {
-    res.json(await startShift(req.device!, req.body?.badgeCode))
+    res.json(await startShift(req.user!.storeId, req.body?.terminalName, req.body?.badgeCode))
   } catch (err) {
     sendError(res, err)
   }
 })
 
-router.post('/heartbeat', deviceAuthMiddleware, async (req: Request, res: Response) => {
+router.post('/heartbeat', authMiddleware, async (req: Request, res: Response) => {
   try {
-    res.json(await heartbeatShift(req.device!, Number(req.body?.shiftId)))
+    res.json(await heartbeatShift(req.user!.storeId, req.body?.terminalName, Number(req.body?.shiftId)))
   } catch (err) {
     sendError(res, err)
   }
 })
 
-router.post('/end', deviceAuthMiddleware, async (req: Request, res: Response) => {
+router.post('/end', authMiddleware, async (req: Request, res: Response) => {
   try {
-    res.json(await endShift(req.device!, Number(req.body?.shiftId), req.body?.endedAt))
+    res.json(await endShift(req.user!.storeId, req.body?.terminalName, Number(req.body?.shiftId), req.body?.endedAt))
   } catch (err) {
     sendError(res, err)
   }

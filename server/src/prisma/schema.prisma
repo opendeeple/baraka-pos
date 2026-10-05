@@ -832,7 +832,10 @@ model Shift {
   id         Int       @id @default(autoincrement())
   storeId    Int
   userId     Int
-  deviceId   Int
+  /// Shifts from before terminal names; new shifts leave it null.
+  deviceId   Int?
+  /// The terminal's own name (its terminal_id setting).
+  terminalName String  @default("")
   startedAt  DateTime  @default(now())
   /// Refreshed by the terminal's heartbeat while the shift is open (informational only).
   lastSeenAt DateTime  @default(now())
@@ -844,10 +847,11 @@ model Shift {
 
   store  Store  @relation(fields: [storeId], references: [id])
   user   User   @relation(fields: [userId], references: [id])
-  device Device @relation(fields: [deviceId], references: [id])
+  device Device? @relation(fields: [deviceId], references: [id])
 
   @@index([storeId, startedAt])
   @@index([userId, endedAt])
   @@index([deviceId, endedAt])
+  @@index([storeId, terminalName, endedAt])
   @@map("shifts")
 }

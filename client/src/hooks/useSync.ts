@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
+import i18n from '../i18n'
 import { useSyncStore } from '../store/sync.store'
 import { useAuthStore } from '../store/auth.store'
 
@@ -75,11 +76,14 @@ export function useSync() {
 
     const run = async () => {
       try {
-        // Login sets isAuthenticated before device registration's network round
-        // trip resolves (so login still works while offline) — a pull racing that
-        // gap would hit "Device not registered" and falsely flash Error. Skip
-        // quietly; the next interval retries once registration has landed.
-        if (!(await window.electronAPI.sync.isDeviceRegistered())) return
+        // No terminal token yet (never signed in with a password online here,
+        // or it expired): nothing can sync until someone does. Skip quietly —
+        // the sync badge shows it; the next interval retries.
+        if (!(await window.electronAPI.sync.hasTerminalToken())) {
+          setStatus('error')
+          setLastError(i18n.t('sync.signInRequired'))
+          return
+        }
         setStatus('syncing')
         // Send first: tables with unsent local changes skip their pull.
         await window.electronAPI.sync.pushPending().catch(() => {})
@@ -118,7 +122,7 @@ export function useSync() {
     const wanted = SYNC_TABLES.filter((t) => tables.includes(t))
     if (!wanted.length) return
     try {
-      if (!(await window.electronAPI.sync.isDeviceRegistered())) return
+      if (!(await window.electronAPI.sync.hasTerminalToken())) return
       for (const table of wanted) await serialPull(table)
     } catch (err) {
       // The periodic full sync retries; nothing to surface for a nudge.

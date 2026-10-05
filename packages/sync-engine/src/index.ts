@@ -22,9 +22,13 @@ export interface SyncEngineDeps {
   /** Defaults to global fetch. */
   fetchImpl?: typeof fetch
   log?: (message: string) => void
+  /**
+   * Settings key holding this app's terminal token. Defaults to
+   * 'terminal_token'; the desktop Office app shares the POS app's database
+   * and keeps its own token under another key.
+   */
+  tokenKey?: string
 }
-
-export type SyncPlatform = 'android-pos' | 'android-office' | 'electron-pos' | 'electron-office'
 
 export interface PullResult {
   table: string
@@ -68,6 +72,11 @@ function rewindCursor(cursor: string, ms: number): string {
   return `${new Date(date.getTime() - ms).toISOString()}|0`
 }
 
+// Staff and store-wide configuration: the server only takes these from a
+// manager's token (see syncV2.service).
+const OFFICE_ONLY_TABLES = new Set(['users', 'settings', 'stores', 'charges'])
+const OFFICE_ROLES = new Set(['admin', 'manager', 'super_admin'])
+
 const INVOICE_LEASE_COUNT = 500
 const MAX_ATTEMPTS = 10
 const BACKOFF_STEPS_MS = [30_000, 60_000, 300_000, 900_000, 3_600_000]
@@ -75,7 +84,8 @@ const BACKOFF_STEPS_MS = [30_000, 60_000, 300_000, 900_000, 3_600_000]
 /** Local settings keys that server-pulled settings must never clobber. */
 const RESERVED_SETTINGS = new Set([
   'server_url', 'sync_api_key', 'store_id', 'terminal_id', 'cached_user',
-  'cached_store', 'printer_config', 'device_id', 'device_key',
+  'cached_store', 'printer_config', 'terminal_token', 'terminal_token_role',
+  'office_token', 'office_token_role',
   'invoice_prefix', 'invoice_range_start', 'invoice_range_end', 'invoice_range_next',
   'v2_backfill_done', 'active_shift', 'pending_shift_ends',
   // Per device: the paper calibration belongs to this till's printer, the
@@ -188,6 +198,8 @@ export function createSyncEngine(deps: SyncEngineDeps) {
   const { db, uuid } = deps
   const fetchImpl = deps.fetchImpl ?? fetch
   const log = deps.log ?? (() => {})
+  const tokenKey = deps.tokenKey ?? 'terminal_token'
+  const roleKey = `${tokenKey}_role`
 
   let lastHttpSuccessAt = 0
 
@@ -207,20 +219,14 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     )
   }
 
-  // A 401 on a device-authenticated call means the server no longer accepts
-  // this device_id/device_key pair (revoked, or its row is simply gone — a
-  // fresh-start reset truncates the devices table wholesale). Without this,
-  // isDeviceRegistered() keeps reporting "registered" forever for a key the
-  // server will never accept again: every pull/push fails the same way on
-  // every retry, with no path back to a working state short of someone
-  // manually finding and clearing these two settings. Clearing them here as
-  // soon as a 401 is seen makes isDeviceRegistered() correctly report false
-  // again, and logging in once more re-registers the device with a fresh key
-  // (LoginScreen already calls ensureDeviceRegistered on every login).
-  function clearDeviceRegistrationOn401(status: number): void {
+  // A 401 means the server no longer accepts the terminal token (expired, or
+  // its user was deactivated). Every retry would fail the same way, so it's
+  // dropped: hasTerminalToken() then reports false, sync waits, and the next
+  // password sign-in on this device stores a fresh token.
+  function clearTerminalTokenOn401(status: number): void {
     if (status !== 401) return
-    setSetting('device_id', '')
-    setSetting('device_key', '')
+    setSetting(tokenKey, '')
+    setSetting(roleKey, '')
   }
 
   function getServerUrl(): string {
@@ -255,49 +261,28 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     }
   }
 
-  function deviceHeaders(): Record<string, string> {
-    const id = getSetting('device_id')
-    const key = getSetting('device_key')
-    if (!id || !key) throw new Error('Device not registered — log in as a manager/admin while online')
-    return { Authorization: `Device ${id}:${key}` }
+  function authHeaders(): Record<string, string> {
+    const token = getSetting(tokenKey)
+    if (!token) throw new Error('Not signed in — sign in with a password while online')
+    return { Authorization: `Bearer ${token}` }
   }
 
-  function isDeviceRegistered(): boolean {
-    return Boolean(getSetting('device_id') && getSetting('device_key'))
+  function hasTerminalToken(): boolean {
+    return Boolean(getSetting(tokenKey))
   }
 
-  // --- device registration + invoice range ---------------------------------
+  // --- terminal token + invoice range --------------------------------------
 
-  async function ensureDeviceRegistered(
-    jwtToken: string,
-    platform: SyncPlatform
-  ): Promise<{ registered: boolean; error?: string }> {
-    if (isDeviceRegistered()) {
-      await ensureInvoiceRange().catch(() => {})
-      // ensureInvoiceRange can itself discover the device was revoked (a 401
-      // triggers clearDeviceRegistrationOn401 as a side effect) — re-check
-      // rather than trusting the snapshot from before that call. Without
-      // this, a revoked device reports "registered: true" right after
-      // clearing its own credentials, and the real registration call below
-      // never runs until the next full app restart.
-      if (isDeviceRegistered()) return { registered: true }
-    }
-    const terminalId = getSetting('terminal_id', 'TERMINAL-001')
-    try {
-      const { status, data } = await httpJson('POST', '/api/devices/register', {
-        headers: { Authorization: `Bearer ${jwtToken}` },
-        body: { name: terminalId, platform },
-      })
-      if (status !== 201) {
-        return { registered: false, error: data?.error ?? `HTTP ${status}` }
-      }
-      setSetting('device_id', String(data.deviceId))
-      setSetting('device_key', data.deviceKey)
-      await ensureInvoiceRange().catch(() => {})
-      return { registered: true }
-    } catch (err) {
-      return { registered: false, error: err instanceof Error ? err.message : 'network error' }
-    }
+  /**
+   * Called after every online sign-in on this device: the signed-in user's
+   * token becomes the one this device syncs with. It deliberately outlives
+   * sign-out (a shift change), so sync and badge sign-in keep working until
+   * the token itself expires.
+   */
+  async function setTerminalToken(token: string, role: string): Promise<void> {
+    setSetting(tokenKey, token)
+    setSetting(roleKey, role)
+    await ensureInvoiceRange().catch(() => {})
   }
 
   async function ensureInvoiceRange(): Promise<void> {
@@ -307,11 +292,11 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     if (end >= 0 && remaining > INVOICE_LEASE_COUNT * 0.2) return
 
     const { status, data } = await httpJson('POST', '/api/sync/v2/invoice-range', {
-      headers: deviceHeaders(),
+      headers: authHeaders(),
       body: { count: INVOICE_LEASE_COUNT },
     })
     if (status !== 200) {
-      clearDeviceRegistrationOn401(status)
+      clearTerminalTokenOn401(status)
       throw new Error(data?.error ?? `invoice-range HTTP ${status}`)
     }
     setSetting('invoice_prefix', data.prefix)
@@ -322,7 +307,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
 
   /**
    * Next invoice number from the leased range, or null when no range is
-   * available (device never registered / never online) — callers fall back to
+   * available (never signed in online) — callers fall back to
    * a local placeholder in that case.
    */
   function nextInvoiceNumber(): string | null {
@@ -731,10 +716,10 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       const params = new URLSearchParams({ table, limit: '500' })
       if (cursor) params.set('cursor', cursor)
       const { status, data } = await httpJson('GET', `/api/sync/v2/pull?${params}`, {
-        headers: deviceHeaders(),
+        headers: authHeaders(),
       })
       if (status !== 200) {
-        clearDeviceRegistrationOn401(status)
+        clearTerminalTokenOn401(status)
         throw new Error(data?.error ?? `Pull ${table}: HTTP ${status}`)
       }
 
@@ -1191,15 +1176,21 @@ export function createSyncEngine(deps: SyncEngineDeps) {
   }
 
   async function flushOutbox(): Promise<FlushResult> {
-    if (!isDeviceRegistered()) return { synced: 0, errors: 0, dead: deadCount() }
+    if (!hasTerminalToken()) return { synced: 0, errors: 0, dead: deadCount() }
 
+    // A cashier's token can't push staff/settings changes; they stay pending
+    // for a manager's token (on desktop, the Office app sharing this outbox)
+    // instead of burning their retries on certain refusals.
+    const officeOnly = [...OFFICE_ONLY_TABLES]
+    const skipOffice = OFFICE_ROLES.has(getSetting(roleKey)) ? 0 : 1
     const now = new Date().toISOString()
     const rows = db.all<OutboxRow>(
       `SELECT id, table_name, entity_type, op, payload, sync_id, attempt_count
        FROM sync_queue_local
        WHERE status='pending' AND (next_retry_at IS NULL OR next_retry_at <= ?)
+         AND (? = 0 OR COALESCE(table_name, entity_type) NOT IN (${officeOnly.map(() => '?').join(',')}))
        ORDER BY id LIMIT 200`,
-      [now]
+      [now, skipOffice, ...officeOnly]
     )
     if (!rows.length) return { synced: 0, errors: 0, dead: deadCount() }
 
@@ -1248,12 +1239,12 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       if (changes.length) {
         try {
           const { status, data } = await httpJson('POST', '/api/sync/v2/push', {
-            headers: deviceHeaders(),
+            headers: authHeaders(),
             body: { changes: changes.map((c) => c.change) },
           })
           if (isTransientStatus(status)) throw new NetworkError(`push HTTP ${status}`)
           if (status !== 200) {
-            clearDeviceRegistrationOn401(status)
+            clearTerminalTokenOn401(status)
             throw new Error(data?.error ?? `push HTTP ${status}`)
           }
           const bySyncId = new Map<string, { status: string; serverId?: number; error?: string }>(
@@ -1301,12 +1292,12 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       if (payloads.length) {
         try {
           const { status, data } = await httpJson('POST', '/api/sync/v2/sales', {
-            headers: deviceHeaders(),
+            headers: authHeaders(),
             body: { sales: payloads.map((p) => p.sale) },
           })
           if (isTransientStatus(status)) throw new NetworkError(`sales push HTTP ${status}`)
           if (status !== 200) {
-            clearDeviceRegistrationOn401(status)
+            clearTerminalTokenOn401(status)
             throw new Error(data?.error ?? `sales push HTTP ${status}`)
           }
           const okBySyncId = new Map<string, { serverId: number; invoiceNumber: string }>(
@@ -1378,10 +1369,10 @@ export function createSyncEngine(deps: SyncEngineDeps) {
 
   return {
     getServerUrl,
-    ensureDeviceRegistered,
+    setTerminalToken,
     ensureInvoiceRange,
     nextInvoiceNumber,
-    isDeviceRegistered,
+    hasTerminalToken,
     pullTableV2,
     enqueueOutbox,
     flushOutbox,

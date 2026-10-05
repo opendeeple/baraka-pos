@@ -36,7 +36,7 @@ interface BadgeError {
 
 function badgeErrorMessage(t: TFunction, data: BadgeError | undefined): string {
   switch (data?.code) {
-    case 'DEVICE_NOT_REGISTERED': return t('auth.badgeDeviceNotRegistered')
+    case 'TERMINAL_NOT_SIGNED_IN': return t('auth.badgeTerminalNotSignedIn')
     case 'NETWORK': return t('auth.badgeOffline')
     case 'BADGE_NOT_FOUND': return t('auth.badgeNotFound')
     case 'SHIFT_OPEN_ELSEWHERE':
@@ -147,16 +147,11 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
 
       setAuth(user, token, store)
 
-      // A restored session skips handleLogin entirely, which is the only
-      // other place this gets called — if the device was ever cleared (lost
-      // credentials, or a revoked/missing device the sync engine detected
-      // and cleared on its own), a restored session would otherwise never
-      // re-register it, since nothing else ever calls this again. No-op
-      // when already registered.
-      try {
-        const reg = await window.electronAPI.sync.ensureDevice(token)
-        if (!reg.registered && reg.error) console.warn('Device registration pending:', reg.error)
-      } catch { /* offline — sync will surface it once reachable */ }
+      // Installs from before terminal tokens synced with a device key: adopt
+      // the restored session's token instead of forcing a password sign-in.
+      if (!(await window.electronAPI.sync.hasTerminalToken())) {
+        await window.electronAPI.sync.setTerminalToken(token, user.role).catch(() => {})
+      }
 
       await checkAndNavigate()
     } catch {
@@ -175,12 +170,9 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
         if (!OFFICE_ROLES.has(data.user.role)) { await window.electronAPI.auth.clearToken(); return }
         setAuth(data.user, token, data.store)
 
-        // Same reasoning as restorePosSession: a restored session is the
-        // only path that never re-registers a cleared/revoked device.
-        try {
-          const reg = await window.electronAPI.sync.ensureDevice(token)
-          if (!reg.registered && reg.error) console.warn('Device registration pending:', reg.error)
-        } catch { /* offline — sync will surface it once reachable */ }
+        // The server just accepted this token, so it's a good one to sync with
+        // (also covers installs from before terminal tokens).
+        await window.electronAPI.sync.setTerminalToken(token, data.user.role).catch(() => {})
 
         navigate('/backoffice', { replace: true })
       }
@@ -237,13 +229,10 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
       if (isOffice && !OFFICE_ROLES.has(data.user.role)) throw new Error(t('auth.officeManagersOnly'))
       await completeLogin(data)
 
-      // Register this terminal for sync v2 before entering the app — the sync
-      // hooks fire immediately on auth and need the device credentials.
-      // (First registration needs a manager/admin token; no-op afterwards.)
-      try {
-        const reg = await window.electronAPI.sync.ensureDevice(data.token)
-        if (!reg.registered && reg.error) console.warn('Device registration pending:', reg.error)
-      } catch { /* offline or non-manager — sync will surface it */ }
+      // This sign-in's token becomes the terminal token before entering the
+      // app — the sync hooks fire immediately on auth and need it. It also
+      // outlives this user's sign-out, so badge sign-in keeps working.
+      await window.electronAPI.sync.setTerminalToken(data.token, data.user.role).catch(() => {})
 
       if (isOffice) navigate('/backoffice', { replace: true })
       else await checkAndNavigate()

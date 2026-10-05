@@ -13,11 +13,10 @@ const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL || DEFAULT_SERVER_URL
 
 export interface LoginScreenProps {
   subtitle: string
-  platformKind: 'android-pos' | 'android-office'
 }
 
-/** Shared login: the two apps differ only by subtitle and device platform. */
-export function LoginScreen({ subtitle, platformKind }: LoginScreenProps) {
+/** Shared login: the two apps differ only by subtitle. */
+export function LoginScreen({ subtitle }: LoginScreenProps) {
   const theme = useTheme()
   const { repos, engine } = getServices()
   const setAuth = useAuthStore((s) => s.setAuth)
@@ -73,11 +72,9 @@ export function LoginScreen({ subtitle, platformKind }: LoginScreenProps) {
         repos.settings.set('terminal_id', `ANDROID-${Math.random().toString(36).slice(2, 8).toUpperCase()}`)
       }
 
-      // Device registration needs a manager/admin token the first time.
-      const reg = await engine.ensureDeviceRegistered(data.token, platformKind)
-      if (!reg.registered && reg.error) {
-        console.warn('Device registration pending:', reg.error)
-      }
+      // This sign-in's token becomes the one the phone syncs with; it
+      // outlives sign-out and is replaced by the next password sign-in.
+      await engine.setTerminalToken(data.token, data.user.role)
 
       setAuth(data.user, data.token, data.store)
     } catch (err) {

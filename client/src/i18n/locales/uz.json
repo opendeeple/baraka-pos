@@ -189,6 +189,7 @@
   },
   "sync": {
     "online": "Onlayn",
+    "signInRequired": "Sinxronlash to'xtagan: bu kompyuterda login va parol bilan qayta kiring (oxirgi kirishdan 7 kun o'tgan yoki hali kirilmagan).",
     "syncing": "Sinxronlanmoqda",
     "offline": "Oflayn",
     "error": "Xato",
@@ -616,7 +617,7 @@
     "badgeNotFound": "Bu shtrix-kod hech bir faol xodimga biriktirilmagan",
     "badgeShiftOpenElsewhere": "{{name}} hali \"{{device}}\" qurilmasida ishni yakunlamagan (smena {{time}} da boshlangan). Avval o'sha qurilmada smenani yakunlang.",
     "badgeOffline": "Server bilan aloqa yo'q — smenani boshlash uchun internet kerak",
-    "badgeDeviceNotRegistered": "Bu qurilma hali ro'yxatdan o'tmagan. Administrator bir marta login va parol bilan kirsin.",
+    "badgeTerminalNotSignedIn": "Bu kassada login va parol bilan kirish kerak (hali kirilmagan yoki 7 kunlik muddat tugagan). Istalgan xodim bir marta parol bilan kirsin.",
     "officeManagersOnly": "Office faqat menejer va do'kon egasi uchun. Kassir kassa ilovasida ishlaydi."
   },
   "shift": {
@@ -946,20 +947,5 @@
     "stocktakeNet": "Inventarizatsiya natijasi ({{count}} marta)",
     "noLosses": "Bu davrda hisobdan chiqarish yo'q",
     "showMore": "Yana ko'rsatish ({{count}} ta qoldi)"
-  },
-  "devices": {
-    "title": "Qurilmalar",
-    "hint": "Serverga ulangan kassa va Office qurilmalari. Yo'qolgan yoki almashtirilgan qurilmani o'chiring — u boshqa ulana olmaydi.",
-    "empty": "Qurilmalar yo'q",
-    "revoke": "O'chirish",
-    "confirmRevoke": "Ha, o'chirish",
-    "revoked": "Qurilma o'chirildi",
-    "thisOne": "(shu kompyuter)",
-    "lastSeen": "Oxirgi ulanish",
-    "revokedAt": "O'chirilgan",
-    "platform_electron_pos": "Kassa (kompyuter)",
-    "platform_electron_office": "Office (kompyuter)",
-    "platform_android_pos": "Kassa (Android)",
-    "platform_android_office": "Office (Android)"
   }
 }

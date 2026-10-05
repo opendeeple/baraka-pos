@@ -3,16 +3,18 @@ import {
   pullTableV2,
   flushOutbox,
   getSyncStatus,
-  ensureDeviceRegistered,
-  isDeviceRegistered,
+  setTerminalToken,
+  hasTerminalToken,
   nextInvoiceNumber,
   backfillOutboxOnce,
   retryDeadLetters,
   enqueueOutbox,
   startOutboxLoop,
+  setSyncApp,
 } from '../services/sync.service'
 
-export function registerSyncIpc(platform: 'electron-pos' | 'electron-office' = 'electron-pos') {
+export function registerSyncIpc(app: 'pos' | 'office' = 'pos') {
+  setSyncApp(app)
   startOutboxLoop()
 
   ipcMain.handle('sync:pushPending', async () => {
@@ -27,17 +29,16 @@ export function registerSyncIpc(platform: 'electron-pos' | 'electron-office' = '
     return getSyncStatus()
   })
 
-  // Called after a successful online login: registers this device with the
-  // server (needs a manager/admin JWT the first time) and enqueues any
-  // pre-v2 local rows for push.
-  ipcMain.handle('sync:ensureDevice', async (_event, jwtToken: string) => {
-    const result = await ensureDeviceRegistered(jwtToken, platform)
-    if (result.registered) backfillOutboxOnce()
-    return result
+  // Called after a successful online password sign-in: that user's token
+  // becomes the one this app syncs with (and, on the POS, the one badge
+  // sign-in uses), and any pre-v2 local rows are enqueued for push.
+  ipcMain.handle('sync:setTerminalToken', async (_event, token: string, role: string) => {
+    await setTerminalToken(token, role)
+    backfillOutboxOnce()
   })
 
-  ipcMain.handle('sync:isDeviceRegistered', () => {
-    return isDeviceRegistered()
+  ipcMain.handle('sync:hasTerminalToken', () => {
+    return hasTerminalToken()
   })
 
   // Next invoice number from the server-leased range; null when no range is

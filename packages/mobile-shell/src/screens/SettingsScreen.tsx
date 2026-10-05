@@ -26,7 +26,6 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
 
   const [serverUrl, setServerUrl] = useState('')
   const [terminalId, setTerminalId] = useState('')
-  const [registered, setRegistered] = useState(false)
   const [pending, setPending] = useState(0)
   const [dead, setDead] = useState(0)
   const [syncing, setSyncing] = useState(false)
@@ -35,7 +34,6 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
   function refresh() {
     setServerUrl(repos.settings.get('server_url'))
     setTerminalId(repos.settings.get('terminal_id'))
-    setRegistered(engine.isDeviceRegistered())
     const counts = outboxCounts()
     setPending(counts.pending)
     setDead(counts.dead)
@@ -44,9 +42,9 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
   useEffect(refresh, [])
 
   // Explicit sign-out must forget the cached identity, or the login screen's
-  // offline-restore effect signs the user straight back in. Device
-  // registration, server URL, and terminal id survive — they belong to the
-  // device, not the user.
+  // offline-restore effect signs the user straight back in. The terminal
+  // token, server URL, and terminal id survive — they belong to the device,
+  // not the user.
   function logout() {
     repos.settings.set('cached_user', '')
     repos.settings.set('cached_store', '')
@@ -94,11 +92,6 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
       <SectionHeader title="Device" />
       <Card>
         <Row label="Terminal" value={terminalId || '—'} />
-        <Row
-          label="Registration"
-          value={registered ? 'Registered' : 'Not registered'}
-          valueColor={registered ? theme.success : theme.danger}
-        />
       </Card>
 
       <SectionHeader

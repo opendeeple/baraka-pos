@@ -18,23 +18,32 @@ const dbAdapter: SyncDb = {
 }
 
 let engine: SyncEngine | null = null
+// POS and Office share one database but each syncs with its own signed-in
+// user's token, so a cashier signing in at the till never replaces the
+// manager token the back office needs.
+let tokenKey = 'terminal_token'
+
+/** Must run before the first sync call. */
+export function setSyncApp(app: 'pos' | 'office'): void {
+  tokenKey = app === 'office' ? 'office_token' : 'terminal_token'
+}
 
 function getEngine(): SyncEngine {
   if (!engine) {
-    engine = createSyncEngine({ db: dbAdapter, uuid: randomUUID, log: console.log })
+    engine = createSyncEngine({ db: dbAdapter, uuid: randomUUID, log: console.log, tokenKey })
   }
   return engine
 }
 
 export const getServerUrl: SyncEngine['getServerUrl'] = () => getEngine().getServerUrl()
-export const ensureDeviceRegistered: SyncEngine['ensureDeviceRegistered'] = (...args) =>
-  getEngine().ensureDeviceRegistered(...args)
+export const setTerminalToken: SyncEngine['setTerminalToken'] = (...args) =>
+  getEngine().setTerminalToken(...args)
 export const ensureInvoiceRange: SyncEngine['ensureInvoiceRange'] = () =>
   getEngine().ensureInvoiceRange()
 export const nextInvoiceNumber: SyncEngine['nextInvoiceNumber'] = () =>
   getEngine().nextInvoiceNumber()
-export const isDeviceRegistered: SyncEngine['isDeviceRegistered'] = () =>
-  getEngine().isDeviceRegistered()
+export const hasTerminalToken: SyncEngine['hasTerminalToken'] = () =>
+  getEngine().hasTerminalToken()
 export const pullTableV2: SyncEngine['pullTableV2'] = (...args) => getEngine().pullTableV2(...args)
 export const enqueueOutbox: SyncEngine['enqueueOutbox'] = (...args) =>
   getEngine().enqueueOutbox(...args)
