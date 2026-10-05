@@ -19,6 +19,22 @@ export interface DocItem {
   sum?: number
 }
 
+/**
+ * How a box product's line reads on paper. Sales store it per box (5 pieces
+ * of a 30-piece box = 0.1667 at the box price); customers count whole boxes
+ * or pieces, so a whole number stays boxes and anything else becomes pieces
+ * at the per-piece price. qty × price still equals the line's amount.
+ */
+export function boxLineForPrint(name: string, quantity: number, price: number, unitsPerPackage?: number | null): { name: string; qty: number; price: number } {
+  if (!unitsPerPackage || unitsPerPackage <= 0) return { name, qty: quantity, price }
+  if (Math.abs(quantity - Math.round(quantity)) < 1e-6) return { name: `${name} (karobka)`, qty: Math.round(quantity), price }
+  return {
+    name: `${name} (dona)`,
+    qty: Math.round(quantity * unitsPerPackage * 1000) / 1000,
+    price: price / unitsPerPackage,
+  }
+}
+
 export function fmtMoney(n: number): string {
   return Math.round(n).toLocaleString('en-US')
 }

@@ -205,6 +205,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
       notes: '',
       isFree: false,
       maxStock: managed ? stock : undefined,
+      unitsPerPackage: product.unit === 'box' && Number(product.units_per_package) > 0 ? Number(product.units_per_package) : undefined,
     })
     if (result === 'capped') toast.warning(t('pos.onlyInStock', { name: product.name, count: stock }))
   }

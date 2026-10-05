@@ -21,6 +21,8 @@ interface SaleItem {
   id: number; description: string; quantity: number; unit_price: number
   unit_cost: number; discount: number; is_free: number
   product_id: number | null; batch_id: number | null
+  /** Box products only (pieces per box) — for printing loose pieces as "dona". */
+  units_per_package: number | null
 }
 
 interface SaleDetail extends Sale {
@@ -114,8 +116,10 @@ export default function SalesScreen() {
     const [items, payments, sessionRows, returnedRows] = await Promise.all([
       window.electronAPI.db.query(
         `SELECT si.id, si.description, si.quantity, si.unit_price, si.unit_cost,
-                si.discount, si.is_free, si.product_id, si.batch_id
-         FROM sale_items si WHERE si.sale_id=? AND si.item_type='product'`, [id]
+                si.discount, si.is_free, si.product_id, si.batch_id,
+                CASE WHEN p.unit = 'box' THEN p.units_per_package END AS units_per_package
+         FROM sale_items si LEFT JOIN products p ON p.id = si.product_id
+         WHERE si.sale_id=? AND si.item_type='product'`, [id]
       ),
       window.electronAPI.db.query(`SELECT payment_method,amount FROM payment_transactions WHERE sale_id=?`, [id]),
       window.electronAPI.db.query(`SELECT state FROM pos_sessions WHERE id=?`, [saleRows[0].session_id ?? -1]),
@@ -169,7 +173,7 @@ export default function SalesScreen() {
     await window.electronAPI.printer.print({
       lines: [], invoiceNumber: sale.invoice_number, storeName: storeRow?.name ?? store?.name ?? 'Store',
       storeAddress: storeRow?.address, storePhone: storeRow?.phone, header: template.header, footer: template.footer,
-      items: sale.items.map((i) => ({ name: i.description, quantity: i.quantity, price: i.unit_price, discount: i.discount })),
+      items: sale.items.map((i) => ({ name: i.description, quantity: i.quantity, price: i.unit_price, discount: i.discount, unitsPerPackage: i.units_per_package ?? undefined })),
       subtotal: Number(sale.subtotal), charges: [], discount: Number(sale.discount), total: Number(sale.total_amount),
       payments: sale.payments.map((p) => ({ method: p.payment_method, amount: Number(p.amount) })),
       change: Number(sale.change_amount), cashierName: sale.user_name ?? user?.name ?? '',

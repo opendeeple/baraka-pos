@@ -1,7 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { dbQuery } from '../services/db.service'
 import type { ReceiptDoc } from '@baraka/app-core'
-import { thermalItemsTable, fmtMoney, fmtDateTime, THANKS, type DocItem } from '../services/documentLayout'
+import { thermalItemsTable, boxLineForPrint, fmtMoney, fmtQty, fmtDateTime, THANKS, type DocItem } from '../services/documentLayout'
 
 interface EscposPrinter {
   font: (f: string) => EscposPrinter
@@ -211,9 +211,7 @@ export function receiptHtml(doc: ReceiptDoc, layout: ReceiptLayoutConfig): strin
   if (doc.cashierName) lines.push(div('invoiceInfo', `Kassir: ${doc.cashierName}`))
 
   lines.push(...tableLinesHtml(doc.items.map((item) => ({
-    name: item.name,
-    qty: item.quantity,
-    price: item.price,
+    ...boxLineForPrint(item.name, item.quantity, item.price, item.unitsPerPackage),
     sum: item.quantity * item.price * (1 - (item.discount ?? 0) / 100),
   })), layout))
 
@@ -508,13 +506,14 @@ export function registerPrinterIpc() {
       let goods = 0
       d.items.forEach((item, i) => {
         const lineTotal = item.price * item.quantity * (1 - (item.discount ?? 0) / 100)
-        totalQty += item.quantity
+        const shown = boxLineForPrint(item.name, item.quantity, item.price, item.unitsPerPackage)
+        totalQty += shown.qty
         goods += lineTotal
         printer.tableCustom([
           { text: String(i + 1), width: 0.06 },
-          { text: item.name.slice(0, 20), width: 0.38 },
-          { text: String(item.quantity), width: 0.12, align: 'RIGHT' },
-          { text: fmt(item.price), width: 0.2, align: 'RIGHT' },
+          { text: shown.name.slice(0, 20), width: 0.38 },
+          { text: fmtQty(shown.qty), width: 0.12, align: 'RIGHT' },
+          { text: fmt(shown.price), width: 0.2, align: 'RIGHT' },
           { text: fmt(lineTotal), width: 0.24, align: 'RIGHT' },
         ])
       })
@@ -523,7 +522,7 @@ export function registerPrinterIpc() {
         .drawLine()
         .tableCustom([
           { text: 'Jami', width: 0.44, style: 'b' },
-          { text: String(totalQty), width: 0.12, style: 'b', align: 'RIGHT' },
+          { text: fmtQty(totalQty), width: 0.12, style: 'b', align: 'RIGHT' },
           { text: fmt(goods), width: 0.44, style: 'b', align: 'RIGHT' },
         ])
 

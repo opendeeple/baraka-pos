@@ -28,6 +28,9 @@ export interface CartItem {
   notes?: string
   isFree: boolean
   maxStock?: number
+  /** Box products only: pieces per box. quantity/unitPrice stay per box;
+   *  the receipt uses this to print loose pieces as "dona". */
+  unitsPerPackage?: number
 }
 
 export interface SaleCheckoutRequest {

@@ -5,6 +5,8 @@ export interface ReceiptLine {
   quantity: number
   price: number
   discount?: number
+  /** Box products only: pieces per box (quantity and price are per box). */
+  unitsPerPackage?: number
 }
 
 export interface ReceiptDoc {
