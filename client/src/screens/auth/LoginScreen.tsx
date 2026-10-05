@@ -81,6 +81,11 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
   // office variant shows the form immediately while it restores in background.
   const [restoring, setRestoring] = useState(!isOffice)
   const [error, setError] = useState('')
+  const [version, setVersion] = useState('')
+
+  useEffect(() => {
+    window.electronAPI.app.getVersion().then(setVersion).catch(() => {})
+  }, [])
 
   // Pin settings.server_url to the fixed URL — overwrites any stale address
   // (e.g. an old localhost) saved by a previous build so sync targets it.
@@ -394,9 +399,7 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
         </div>
 
         <div className="text-center mt-4 text-xs text-dark-border">
-          {isOffice
-            ? 'BarakaPOS Office v1.0.0 — © 2026 Baraka Mini Market'
-            : 'BarakaPOS v1.0.0 — © 2026 Baraka Mini Market'}
+          {isOffice ? 'BarakaPOS Office' : 'BarakaPOS'}{version && ` v${version}`} — © 2026 Baraka Mini Market
         </div>
       </div>
     </div>
