@@ -1,6 +1,7 @@
 import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../../config/database'
 
 dayjs.extend(utc)
@@ -42,6 +43,13 @@ function dayRange(tz: string, from: string, to = from): { start: Date; end: Date
 // Raw SQL compares naive-UTC columns with these: an explicit cast keeps the
 // comparison in UTC whatever the database session's TimeZone is.
 const utcParam = (d: Date) => d.toISOString()
+
+// Per sale_items row (si, product p), for the raw-SQL reports. A box
+// product's quantity is stored as a fraction of a box, so it's counted in
+// pieces; what a line brought in is after its own % and flat discounts.
+const SOLD_UNITS = Prisma.sql`(CASE WHEN p.unit = 'box' AND p."unitsPerPackage" > 0
+  THEN si.quantity * p."unitsPerPackage" ELSE si.quantity END)`
+const LINE_NET = Prisma.sql`(si.quantity * si."unitPrice" * (1 - COALESCE(si.discount, 0) / 100) - COALESCE(si."flatDiscount", 0))`
 
 // `dateTo` lets the same aggregation serve both the single-day view and the
 // "Date Range" tab — omit it (or pass the same value as `date`) for a
@@ -134,10 +142,13 @@ export async function getTopProducts(
   // this product at least once, as opposed to quantitySold (total units):
   // a product sold 1 unit each in 50 sales ranks high here but low by
   // quantity, and vice versa for one bulk sale of the same product.
-  const rows = await prisma.$queryRaw<Array<{ productId: number; name: string; quantitySold: number; revenue: number; saleCount: number }>>`
+  // quantitySold is in the product's selling unit: pieces (box products
+  // too), or kg — `unit` says which.
+  const rows = await prisma.$queryRaw<Array<{ productId: number; name: string; unit: string; quantitySold: number; revenue: number; saleCount: number }>>`
     SELECT si."productId" as "productId", p.name as name,
-           SUM(CASE WHEN s."saleType" = 'return' THEN -ABS(si.quantity) ELSE si.quantity END) as "quantitySold",
-           SUM(CASE WHEN s."saleType" = 'return' THEN -ABS(si.quantity * si."unitPrice") ELSE si.quantity * si."unitPrice" END) as revenue,
+           CASE WHEN p.unit = 'kg' THEN 'kg' ELSE 'piece' END as unit,
+           SUM(CASE WHEN s."saleType" = 'return' THEN -ABS(${SOLD_UNITS}) ELSE ${SOLD_UNITS} END) as "quantitySold",
+           SUM(CASE WHEN s."saleType" = 'return' THEN -ABS(${LINE_NET}) ELSE ${LINE_NET} END) as revenue,
            COUNT(DISTINCT CASE WHEN s."saleType" = 'sale' THEN si."saleId" END) as "saleCount"
     FROM sale_items si
     JOIN sales s ON s.id = si."saleId"
@@ -146,15 +157,16 @@ export async function getTopProducts(
       AND s."saleTime" >= (${utcParam(start)}::timestamptz AT TIME ZONE 'UTC')
       AND s."saleTime" < (${utcParam(end)}::timestamptz AT TIME ZONE 'UTC')
       AND si."productId" IS NOT NULL
-    GROUP BY si."productId", p.name
+    GROUP BY si."productId", p.name, p.unit
     ORDER BY "quantitySold" DESC
     LIMIT ${limit}
   `
   return rows.map((r) => ({
     productId: r.productId,
     name: r.name,
-    quantitySold: Number(r.quantitySold),
-    revenue: Number(r.revenue),
+    unit: r.unit,
+    quantitySold: Math.round(Number(r.quantitySold) * 1000) / 1000,
+    revenue: Math.round(Number(r.revenue)),
     saleCount: Number(r.saleCount),
   }))
 }
@@ -163,8 +175,8 @@ export async function getCategorySales(storeId: number, dateFrom: string, dateTo
   const { start, end } = dayRange(await storeTimezone(storeId), dateFrom, dateTo)
   const result = await prisma.$queryRaw<Array<{ category: string; revenue: number; qty: number }>>`
     SELECT COALESCE(c.name, 'Uncategorized') as category,
-           SUM(CASE WHEN s."saleType" = 'return' THEN -ABS(si.quantity * si."unitPrice") ELSE si.quantity * si."unitPrice" END) as revenue,
-           SUM(CASE WHEN s."saleType" = 'return' THEN -ABS(si.quantity) ELSE si.quantity END) as qty
+           SUM(CASE WHEN s."saleType" = 'return' THEN -ABS(${LINE_NET}) ELSE ${LINE_NET} END) as revenue,
+           SUM(CASE WHEN s."saleType" = 'return' THEN -ABS(${SOLD_UNITS}) ELSE ${SOLD_UNITS} END) as qty
     FROM sale_items si
     JOIN sales s ON s.id = si."saleId"
     JOIN products p ON p.id = si."productId"
@@ -178,8 +190,8 @@ export async function getCategorySales(storeId: number, dateFrom: string, dateTo
   `
   return result.map((r) => ({
     category: r.category,
-    revenue: Number(r.revenue),
-    qty: Number(r.qty),
+    revenue: Math.round(Number(r.revenue)),
+    qty: Math.round(Number(r.qty) * 1000) / 1000,
   }))
 }
 

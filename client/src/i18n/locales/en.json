@@ -234,6 +234,7 @@
     "byRevenue": "By revenue",
     "byCount": "By times sold",
     "salesCount": "Sales count",
+    "soldQty": "Sold",
     "revenue": "Revenue",
     "units": "Units",
     "salesByCategory": "Sales by Category",

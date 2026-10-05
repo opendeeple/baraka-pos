@@ -12,7 +12,12 @@ type AbcClass = 'A' | 'B' | 'C'
 
 // Net of refunds: a return line counts against the product (quantities on
 // returns are positive since the integrity round, negative on older rows).
-const SIGNED_QTY = `CASE WHEN s.sale_type = 'return' THEN -ABS(si.quantity) ELSE si.quantity END`
+const SIGN = `(CASE WHEN s.sale_type = 'return' THEN -1 ELSE 1 END)`
+// A box product's quantity is a fraction of a box; it's counted in pieces.
+const SOLD_UNITS = `${SIGN} * ABS(si.quantity) * (CASE WHEN p.unit = 'box' AND p.units_per_package > 0 THEN p.units_per_package ELSE 1 END)`
+// discount is a percentage; flat_discount comes off the whole line.
+const LINE_NET = `${SIGN} * (ABS(si.quantity) * ABS(si.unit_price) * (1 - COALESCE(si.discount, 0) / 100.0) - COALESCE(si.flat_discount, 0))`
+const LINE_COST = `${SIGN} * ABS(si.quantity) * ABS(COALESCE(si.unit_cost, 0))`
 
 /**
  * Product analysis from this device's synced data:
@@ -34,9 +39,9 @@ export function ProductAnalysis({ dateFrom, dateTo }: { dateFrom: string; dateTo
   useEffect(() => {
     window.electronAPI.db.query(
       `SELECT p.id, p.name,
-              SUM(${SIGNED_QTY}) AS qty,
-              SUM(${SIGNED_QTY} * ABS(si.unit_price) - COALESCE(si.discount, 0)) AS revenue,
-              SUM(${SIGNED_QTY} * (ABS(si.unit_price) - ABS(COALESCE(si.unit_cost, 0))) - COALESCE(si.discount, 0)) AS profit
+              SUM(${SOLD_UNITS}) AS qty,
+              SUM(${LINE_NET}) AS revenue,
+              SUM(${LINE_NET} - ${LINE_COST}) AS profit
        FROM sale_items si
        JOIN sales s ON s.id = si.sale_id
        JOIN products p ON p.id = si.product_id

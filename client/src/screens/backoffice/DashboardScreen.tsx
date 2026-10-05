@@ -135,8 +135,11 @@ export default function DashboardScreen() {
 
       window.electronAPI.db.query(
         `SELECT p.name,
-                SUM(CASE WHEN s.sale_type = 'return' THEN -ABS(si.quantity) ELSE si.quantity END) as qty,
-                SUM(CASE WHEN s.sale_type = 'return' THEN -ABS(si.quantity * si.unit_price) ELSE si.quantity * si.unit_price END) as revenue
+                -- box products in pieces; revenue after line discounts (% and flat)
+                SUM((CASE WHEN s.sale_type = 'return' THEN -1 ELSE 1 END) * ABS(si.quantity)
+                    * (CASE WHEN p.unit = 'box' AND p.units_per_package > 0 THEN p.units_per_package ELSE 1 END)) as qty,
+                SUM((CASE WHEN s.sale_type = 'return' THEN -1 ELSE 1 END)
+                    * (ABS(si.quantity) * ABS(si.unit_price) * (1 - COALESCE(si.discount, 0) / 100.0) - COALESCE(si.flat_discount, 0))) as revenue
          FROM sale_items si
          JOIN products p ON p.id = si.product_id
          JOIN sales s ON s.id = si.sale_id

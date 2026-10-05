@@ -238,6 +238,7 @@
     "byRevenue": "По сумме",
     "byCount": "По числу продаж",
     "salesCount": "Число продаж",
+    "soldQty": "Продано",
     "revenue": "Сумма",
     "units": "Единиц",
     "salesByCategory": "Продажи по категориям",

@@ -28,7 +28,10 @@ interface DailySummary {
   cashFlow: Array<{ type: string; amount: number; source: string; description?: string }>
 }
 
-interface TopProduct { productId: number; name: string; quantitySold: number; revenue?: number; saleCount?: number }
+/** quantitySold is in pieces (box products too) or kg — `unit` says which. */
+interface TopProduct { productId: number; name: string; unit?: string; quantitySold: number; revenue?: number; saleCount?: number }
+
+const fmtQty = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 3 })
 interface CategorySale { category: string; revenue: number; qty: number }
 interface HourlySlot { hour: number; label: string; revenue: number; transactions: number }
 interface LowStockItem { productId: number; name: string; sku?: string; stock: number; alertQuantity: number }
@@ -256,7 +259,7 @@ export default function ReportsScreen() {
               <table className="w-full">
                 <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
                   <tr>
-                    {['#', t('common.name'), t('reports.units'), t('reports.revenue'), t('reports.salesCount')].map((h) => (
+                    {['#', t('common.name'), t('reports.soldQty'), t('reports.revenue'), t('reports.salesCount')].map((h) => (
                       <th key={h} className="text-left px-3 py-2 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
@@ -266,7 +269,9 @@ export default function ReportsScreen() {
                     <tr key={p.productId} className="hover:bg-dark-card/40">
                       <td className="px-3 py-2 text-gray-500 text-xs">{i + 1}</td>
                       <td className="px-3 py-2 text-white text-sm font-medium">{p.name}</td>
-                      <td className={`px-3 py-2 text-sm ${topProductsSort === 'quantity' ? 'text-primary font-semibold' : 'text-gray-300'}`}>{p.quantitySold}</td>
+                      <td className={`px-3 py-2 text-sm ${topProductsSort === 'quantity' ? 'text-primary font-semibold' : 'text-gray-300'}`}>
+                        {fmtQty(p.quantitySold)} {p.unit === 'kg' ? 'kg' : t('reports.units').toLowerCase()}
+                      </td>
                       <td className={`px-3 py-2 text-sm ${topProductsSort === 'revenue' ? 'text-primary font-semibold' : 'text-gray-300'}`}>UZS {fmtUZS(p.revenue ?? 0)}</td>
                       <td className={`px-3 py-2 text-sm ${topProductsSort === 'count' ? 'text-primary font-semibold' : 'text-gray-300'}`}>{p.saleCount ?? 0}</td>
                     </tr>
