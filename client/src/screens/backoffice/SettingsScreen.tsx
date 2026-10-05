@@ -412,19 +412,6 @@ export default function SettingsScreen() {
         </>)}
 
         {tab === 'store' && (<>
-        {/* Store Info */}
-        <div className={SECTION_CLS}>
-          <h2 className="text-white font-semibold text-sm">{t('settings.storeInformation')}</h2>
-          <div className="grid grid-cols-3 gap-3">
-            {[[t('settings.storeName'), storeName, setStoreName], [t('common.address'), storeAddress, setStoreAddress], [t('common.phone'), storePhone, setStorePhone]].map(([label, val, set]) => (
-              <div key={label as string}>
-                <label className={LABEL_CLS}>{label as string}</label>
-                <input value={val as string} onChange={(e) => (set as (v: string) => void)(e.target.value)} className={INPUT_CLS} />
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Owner personal-expense PIN */}
         <div className={SECTION_CLS}>
           <h2 className="text-white font-semibold text-sm">{t('settings.ownerExpensePin')}</h2>
@@ -736,6 +723,20 @@ export default function SettingsScreen() {
             </button>
           </div>
         )}
+
+        {/* Store Info — printed at the top (name, address) and bottom (phone)
+            of every receipt, so it's edited next to the receipt settings. */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm">{t('settings.storeInformation')}</h2>
+          <div className="grid grid-cols-3 gap-3">
+            {[[t('settings.storeName'), storeName, setStoreName], [t('common.address'), storeAddress, setStoreAddress], [t('common.phone'), storePhone, setStorePhone]].map(([label, val, set]) => (
+              <div key={label as string}>
+                <label className={LABEL_CLS}>{label as string}</label>
+                <input value={val as string} onChange={(e) => (set as (v: string) => void)(e.target.value)} className={INPUT_CLS} />
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* Receipt */}
         <div className={SECTION_CLS}>
