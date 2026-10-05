@@ -8,7 +8,9 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('7d'),
   PORT: z.coerce.number().default(3001),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  SYNC_API_KEY: z.string().min(8),
+  // Unused since sync v1 was removed (devices authenticate with their own
+  // keys); still accepted so existing deployments that set it keep booting.
+  SYNC_API_KEY: z.string().optional(),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   // Optional: Telegram reminders/purchase-history messages are disabled
   // (endpoints no-op with a clear error) until this is set, rather than the

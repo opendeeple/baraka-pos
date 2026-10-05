@@ -41,6 +41,15 @@ export async function pullSyncTable(table: string): Promise<void> {
   }
 }
 
+// Table pulls run one at a time, in call order: two overlapping pulls of the
+// same table (a full sync and a sync:changed one) race on its cursor.
+let pullChain: Promise<unknown> = Promise.resolve()
+function serialPull(table: string): Promise<void> {
+  const next = pullChain.then(() => pullSyncTable(table))
+  pullChain = next.catch(() => {})
+  return next
+}
+
 export function useSync() {
   const { setStatus, setPendingCount, setLastSync, setLastError } = useSyncStore()
   const { isAuthenticated } = useAuthStore()
@@ -72,8 +81,10 @@ export function useSync() {
         // quietly; the next interval retries once registration has landed.
         if (!(await window.electronAPI.sync.isDeviceRegistered())) return
         setStatus('syncing')
+        // Send first: tables with unsent local changes skip their pull.
+        await window.electronAPI.sync.pushPending().catch(() => {})
         for (const table of SYNC_TABLES) {
-          await pullSyncTable(table)
+          await serialPull(table)
         }
         setLastSync(new Date().toISOString())
         setLastError(null)
@@ -96,6 +107,24 @@ export function useSync() {
     inFlightRef.current = promise
     return promise
   }, [isAuthenticated, setStatus, setLastSync, setLastError])
+
+  /**
+   * Only the given tables (those a sync:changed event names), in dependency
+   * order. Every device gets that event for every push from any device, so
+   * re-pulling all fifteen tables each time was most of the server's load.
+   */
+  const pullTables = useCallback(async (tables: string[]): Promise<void> => {
+    if (!isAuthenticated) return
+    const wanted = SYNC_TABLES.filter((t) => tables.includes(t))
+    if (!wanted.length) return
+    try {
+      if (!(await window.electronAPI.sync.isDeviceRegistered())) return
+      for (const table of wanted) await serialPull(table)
+    } catch (err) {
+      // The periodic full sync retries; nothing to surface for a nudge.
+      console.warn('sync:changed pull failed', err)
+    }
+  }, [isAuthenticated])
 
   const pushPending = useCallback(async () => {
     try {
@@ -147,5 +176,5 @@ export function useSync() {
     }
   }, [isAuthenticated])
 
-  return { pullAll, pushPending, checkPendingCount }
+  return { pullAll, pullTables, pushPending, checkPendingCount }
 }

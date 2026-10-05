@@ -1,12 +1,13 @@
 import { Router, Request, Response } from 'express'
-import { authMiddleware } from '../../middleware/auth.middleware'
+import { authMiddleware, requireRole } from '../../middleware/auth.middleware'
 import {
   getDailySummary, getTopProducts, getCategorySales,
   getHourlySales, getLowStockReport, getDashboardSummary,
 } from './reports.service'
 
 const router = Router()
-router.use(authMiddleware)
+// Revenue and profit are the owner's figures — not for a cashier's token.
+router.use(authMiddleware, requireRole('admin', 'manager', 'super_admin'))
 
 router.get('/daily', async (req: Request, res: Response) => {
   try {

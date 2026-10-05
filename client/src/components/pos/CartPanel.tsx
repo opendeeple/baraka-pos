@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { Trash2, Pause, ShoppingBag, Plus, Minus, LogOut } from 'lucide-react'
 import { useCartStore } from '../../store/cart.store'
 import { fmtUZS } from '../../lib/currency'
@@ -164,7 +165,11 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
                   key={`${item.productId}-${item.batchId}`}
                   item={item}
                   onRemove={() => removeItem(index)}
-                  onQtyChange={(qty) => setQuantity(index, qty)}
+                  onQtyChange={(qty) => {
+                    if (setQuantity(index, qty)) {
+                      toast.warning(t('pos.onlyInStock', { name: item.name, count: item.maxStock }))
+                    }
+                  }}
                 />
               ))}
             </div>

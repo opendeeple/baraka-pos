@@ -52,15 +52,23 @@ export async function moveStock(opts: {
   const previous = Number(stock.quantity)
   const adjusted = previous + opts.delta
   const adjSyncId = uuidv4()
+  // The figure moves by the delta where it stands (POS and Office share this
+  // database — a sale in between must not be overwritten), and the outbox row
+  // is in the same transaction, so the movement can't be left unsent.
   await window.electronAPI.db.transaction([
-    { sql: `UPDATE product_stocks SET quantity=?, updated_at=? WHERE id=?`, params: [adjusted, now, stock.id] },
+    { sql: `UPDATE product_stocks SET quantity = quantity + ?, updated_at=? WHERE id=?`, params: [opts.delta, now, stock.id] },
     {
       sql: `INSERT INTO quantity_adjustments (sync_id, batch_id, stock_id, previous_quantity, adjusted_quantity, reason, location, kind, created_by, created_at, updated_at)
             VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       params: [adjSyncId, opts.batchId, stock.id, previous, adjusted, opts.reason || null, opts.location, opts.kind, user?.id ?? null, now, now],
     },
+    {
+      sql: `INSERT INTO sync_queue_local (entity_type, table_name, op, payload, sync_id, created_at, status)
+            VALUES ('quantity_adjustments', 'quantity_adjustments', 'upsert', '{}', ?, ?, 'pending')`,
+      params: [adjSyncId, now],
+    },
   ])
-  await window.electronAPI.sync.enqueue('quantity_adjustments', adjSyncId, 'upsert')
+  window.electronAPI.sync.pushPending().catch(() => {})
   return { previous, adjusted }
 }
 

@@ -18,6 +18,9 @@ export interface SaleForOps {
   payments: Array<{ payment_method: string; amount: number }>
 }
 
+/** Thrown by refundSale when there's no till session to pay the refund from. */
+export const REFUND_NEEDS_SESSION = 'REFUND_NEEDS_SESSION'
+
 export interface RefundLine {
   productId: number | null
   batchId: number | null
@@ -78,8 +81,20 @@ export async function refundSale(
   const now = new Date().toISOString()
   const syncId = uuidv4()
   const refundTotal = Math.round(lines.reduce((s, l) => s + l.refundEach * l.qty, 0) * 100) / 100
+  // A refund needs a till session (the server files every sale under one):
+  // the open one here, else the original sale's — but only if this device
+  // has it. A sale pulled from another till has none locally, and a return
+  // filed under no session could never be pushed: it would sit unsent until
+  // it dead-lettered, its stock and debt changes never reaching the server.
   const current = await window.electronAPI.session.current() as { id: number } | null
-  const sessionId = current?.id ?? sale.session_id ?? null
+  let sessionId: number | null = current?.id ?? null
+  if (!sessionId && sale.session_id) {
+    const [own] = await window.electronAPI.db.query(
+      `SELECT sync_id FROM pos_sessions WHERE id = ?`, [sale.session_id]
+    ) as Array<{ sync_id: string | null }>
+    if (own?.sync_id) sessionId = sale.session_id
+  }
+  if (!sessionId) throw new Error(REFUND_NEEDS_SESSION)
   const leased = await window.electronAPI.sync.nextInvoiceNumber()
   const invoice = `RET-${leased ?? syncId.slice(0, 8).toUpperCase()}`
   const storeId = sale.store_id ?? opts.storeId

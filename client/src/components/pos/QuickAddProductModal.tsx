@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { AlertTriangle } from 'lucide-react'
 import { Modal, Button, Input, Select } from '../ui'
 import { LocalProduct } from './ProductGrid'
+import { moveStock } from '../../lib/stock'
 
 interface Props {
   /** Barcode that failed to match any product — prefilled, still editable in
@@ -36,6 +37,10 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
   const [categoryId, setCategoryId] = useState('')
   const [categories, setCategories] = useState<Category[]>([])
   const [similar, setSimilar] = useState<SimilarMatch[]>([])
+  // How many are on hand: the product enters the system with its stock
+  // (the one exception to "stock only via a delivery"), then it's sold.
+  const [qty, setQty] = useState('')
+  const qtyNum = Number(qty.replace(',', '.'))
   const [saving, setSaving] = useState(false)
   const submittingRef = useRef(false)
 
@@ -85,6 +90,12 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
       )
       await window.electronAPI.sync.enqueue('products', productSyncId, 'upsert')
       await window.electronAPI.sync.enqueue('product_batches', batchSyncId, 'upsert')
+      // The stock it arrives with, as a receipt document (pushed after the
+      // product and batch — the outbox flushes those first).
+      await moveStock({
+        productId: pid, batchId: bRows[0].id, location: 'shop', delta: qtyNum,
+        kind: 'receipt', reason: t('pos.quickAddReason'),
+      })
       window.electronAPI.sync.pushPending().catch(() => {})
 
       onCreated({
@@ -98,7 +109,7 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
         batch_id: bRows[0].id,
         price: Number(price),
         cost: Number(cost) || 0,
-        stock: 0,
+        stock: qtyNum,
       })
     } finally {
       setSaving(false)
@@ -145,7 +156,7 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
           <div className="text-sm bg-dark-card border border-dark-border rounded-lg px-3 py-2">
             <p className="text-gray-400 text-xs mb-1">{t('pos.newProductLabel')}</p>
             <p className="text-white font-medium">{name}</p>
-            <p className="text-gray-500 text-xs">{barcodeValue || '—'} · UZS {price}</p>
+            <p className="text-gray-500 text-xs">{barcodeValue || '—'} · UZS {price} · {t('pos.quickAddQty')}: {qtyNum}</p>
           </div>
         </div>
       </Modal>
@@ -161,7 +172,7 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
       footer={
         <>
           <Button variant="secondary" className="flex-1" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button className="flex-1" onClick={goToConfirm} disabled={!name.trim() || !price}>
+          <Button className="flex-1" onClick={goToConfirm} disabled={!name.trim() || !price || !(qtyNum > 0)}>
             {t('common.continue')}
           </Button>
         </>
@@ -183,6 +194,14 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
           <Input label={t('common.price')} value={price} onChange={(e) => setPrice(e.target.value)} />
           <Input label={t('common.cost')} value={cost} onChange={(e) => setCost(e.target.value)} />
         </div>
+        <Input
+          label={t('pos.quickAddQty')}
+          value={qty}
+          inputMode="decimal"
+          placeholder="0"
+          onChange={(e) => setQty(e.target.value)}
+        />
+        <p className="text-xs text-gray-500">{t('pos.quickAddQtyHint')}</p>
       </div>
     </Modal>
   )

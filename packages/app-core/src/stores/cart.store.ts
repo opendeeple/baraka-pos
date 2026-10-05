@@ -55,20 +55,23 @@ export function createCartStore(heldCarts: HeldCartRepository) {
 
     getFinalTotal: () => get().getSubtotal() + get().getTotalChargeAmount() - get().discount,
 
+    // maxStock (the shelf quantity; unset when the product isn't
+    // stock-managed) caps every line: nothing is sold that isn't in the system.
     addItem: (newItem) => {
       set((state) => {
         const existingIdx = state.items.findIndex(
           (i) => i.productId === newItem.productId && i.batchId === newItem.batchId
         )
+        const max = newItem.maxStock
+        const wanted = (existingIdx >= 0 ? state.items[existingIdx].quantity : 0) + newItem.quantity
+        const quantity = max != null && wanted > max ? max : wanted
         if (existingIdx >= 0) {
           const items = [...state.items]
-          items[existingIdx] = {
-            ...items[existingIdx],
-            quantity: items[existingIdx].quantity + newItem.quantity,
-          }
+          items[existingIdx] = { ...items[existingIdx], quantity, maxStock: max }
           return { items }
         }
-        return { items: [...state.items, newItem] }
+        if (quantity <= 0) return {}
+        return { items: [...state.items, { ...newItem, quantity }] }
       })
     },
 
@@ -86,7 +89,8 @@ export function createCartStore(heldCarts: HeldCartRepository) {
         get().removeItem(index)
         return
       }
-      get().updateItem(index, { quantity: qty })
+      const max = get().items[index]?.maxStock
+      get().updateItem(index, { quantity: max != null && qty > max ? max : qty })
     },
 
     setDiscount: (amount) => set({ discount: Math.max(0, amount) }),

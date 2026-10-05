@@ -50,6 +50,24 @@ export const PULL_TABLE_ORDER = [
 // a local row's source would pull it into session cash totals.
 const INSERT_ONLY_PULL = new Set(['cash_logs', 'debt_clearances', 'audit_logs'])
 
+// Pulls of these tables wait while the outbox still holds changes to the
+// listed tables (see pullTableV2).
+const PULL_WAITS_FOR_PUSH: Record<string, string[]> = {
+  product_stocks: ['sales', 'quantity_adjustments', 'purchases'],
+  contacts: ['sales', 'cash_logs'],
+  purchases: ['cash_logs'],
+}
+
+const CURSOR_OVERLAP_MS = 5000
+
+/** "<updatedAt ISO>|<id>" moved back by `ms`, from the start of that instant. */
+function rewindCursor(cursor: string, ms: number): string {
+  const sep = cursor.lastIndexOf('|')
+  const date = new Date(sep === -1 ? cursor : cursor.slice(0, sep))
+  if (Number.isNaN(date.getTime())) return cursor
+  return `${new Date(date.getTime() - ms).toISOString()}|0`
+}
+
 const INVOICE_LEASE_COUNT = 500
 const MAX_ATTEMPTS = 10
 const BACKOFF_STEPS_MS = [30_000, 60_000, 300_000, 900_000, 3_600_000]
@@ -651,6 +669,23 @@ export function createSyncEngine(deps: SyncEngineDeps) {
   }
 
   async function pullTableV2(table: string): Promise<PullResult> {
+    // These tables arrive as absolute figures. While this device still has
+    // unsent changes that move them (a sale's stock and debt, a repayment, a
+    // supplier payment), pulling would overwrite the local figure with the
+    // server's older one until the push lands — the pull waits a cycle.
+    const blockers = PULL_WAITS_FOR_PUSH[table]
+    if (blockers) {
+      const marks = blockers.map(() => '?').join(',')
+      const pending = db.get<{ c: number }>(
+        `SELECT COUNT(*) AS c FROM sync_queue_local
+         WHERE status='pending' AND COALESCE(table_name, CASE entity_type WHEN 'sale' THEN 'sales' ELSE entity_type END) IN (${marks})`,
+        blockers
+      )
+      if (pending && pending.c > 0) {
+        log(`[syncV2] ${table}: pull deferred, ${pending.c} local change(s) not pushed yet`)
+        return { table, count: 0 }
+      }
+    }
     // Self-heal rows written before sale_date normalization existed (pulled
     // sales briefly stored full ISO timestamps, breaking `sale_date = ?`
     // report filters). Idempotent and cheap at POS scale.
@@ -660,6 +695,10 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     const cursorKey = `sync_cursor_${table}`
     let cursor = getSetting(cursorKey)
     const isInitialFullPull = !cursor
+    // A row can commit with an updatedAt a little older than the newest one
+    // already pulled (its transaction started first); re-reading the last few
+    // seconds catches it. Upserts are idempotent, so the overlap is harmless.
+    if (cursor) cursor = rewindCursor(cursor, CURSOR_OVERLAP_MS)
     const allPulled = new Set<string>()
     let total = 0
 
@@ -676,7 +715,9 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       total += data.records.length
 
       // Persist the cursor only after the page is applied — crash-safe resume.
-      if (data.nextCursor) {
+      // An empty page echoes the (rewound) cursor back; keeping that would
+      // walk the cursor further back on every quiet pull.
+      if (data.nextCursor && data.records.length > 0) {
         cursor = data.nextCursor
         setSetting(cursorKey, cursor)
       }
@@ -846,7 +887,11 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       // them there); pushing absolutes would double-count.
       return {
         name: c.name, email: c.email, phone: c.phone, address: c.address,
-        type: c.type, notes: c.notes, _updatedAt: c.updated_at,
+        type: c.type, notes: c.notes,
+        // Learnt by the back office that polls the Telegram bot; shared so
+        // every till can message the customer. The server only ever fills it.
+        telegramChatId: c.telegram_chat_id ?? undefined,
+        _updatedAt: c.updated_at,
       }
     },
     products: ({ sync_id }) => {
@@ -940,9 +985,9 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         receivedAt: p.received_at ?? undefined,
         receivedBy: p.received_by ?? undefined,
         receiptId: p.receipt_id ?? undefined,
-        // What's been paid to the supplier so far (Yetkazib beruvchilar).
-        amountPaid: p.amount_paid ?? 0,
-        paymentStatus: p.payment_status ?? 'pending',
+        // Not amount_paid: the server works it out from the supplier payments
+        // themselves (cash_logs, source 'purchase') — an absolute figure from
+        // two paying devices would overwrite one payment with the other.
         items: items.map((i) => ({
           syncId: i.sync_id ?? undefined,
           batchSyncId: i.batch_sync_id,

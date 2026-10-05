@@ -68,6 +68,13 @@ export function PaymentScreen({ navigation }: Props) {
     // POS apps behave and saves a tap on the most common flow.
     const value = amount ?? (entry ? Number(entry) : remaining)
     if (!value || value <= 0) return
+    // Only cash can exceed what's due (the rest is change from the drawer).
+    // Card, Click and debt settle exactly what they cover: a debt keyed above
+    // the bill would charge the customer for goods they never took.
+    if (method !== 'Cash' && value > remaining + 0.005) {
+      toast.error(`${method} can't be more than what's left: ${fmtUZS(remaining)}`)
+      return
+    }
     // Fat-finger guard (Odoo's large-amount check): a manually keyed amount
     // wildly above what's due is almost always a missed decimal or extra zero.
     if (amount === undefined && entry && total > 0 && value > total * 100) {

@@ -92,6 +92,13 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
     }
     const amt = parseFloat(amountInput)
     if (!amt || amt <= 0) return
+    // Only cash can exceed what's due — the difference is change from the
+    // drawer. Card, Click and debt are exactly what they settle: a debt typed
+    // above the bill would charge the customer for goods they never took.
+    if (selectedMethod !== 'Cash' && amt > remaining + 0.005) {
+      setError(t('payment.nonCashOverRemaining', { amount: `UZS ${fmtUZS(remaining)}` }))
+      return
+    }
     setError('')
     setPayments((prev) => [...prev, { paymentMethod: selectedMethod, amount: amt }])
     setAmountInput('0')
@@ -103,7 +110,9 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
 
   function handleCompleteSale() {
     if (canCompleteFromPending) {
-      processPayment([{ paymentMethod: selectedMethod, amount: pendingAmount }])
+      // A typed card/Click/debt amount above the bill settles just the bill.
+      const amount = selectedMethod === 'Cash' ? pendingAmount : total
+      processPayment([{ paymentMethod: selectedMethod, amount }])
       return
     }
     processPayment()
@@ -153,6 +162,12 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
 
     if (!effectiveFullyPaid) { setError(t('payment.insufficientAmount')); return }
     if (effectiveHasDebt && !debtContact) { setError(t('payment.contactRequiredForDebt')); return }
+    // Change only ever comes out of cash (see addPayment).
+    const nonCashPaid = effectivePayments.filter((p) => p.paymentMethod !== 'Cash').reduce((s, p) => s + p.amount, 0)
+    if (nonCashPaid > total + 0.005) {
+      setError(t('payment.nonCashOverRemaining', { amount: `UZS ${fmtUZS(total)}` }))
+      return
+    }
     setProcessing(true)
     setError('')
 

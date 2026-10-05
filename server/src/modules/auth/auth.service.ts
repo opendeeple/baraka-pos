@@ -52,7 +52,6 @@ export async function login(data: LoginRequest) {
 
   return {
     token: signUserToken(user),
-    syncApiKey: env.SYNC_API_KEY,
     ...toAuthResponse(user),
   }
 }

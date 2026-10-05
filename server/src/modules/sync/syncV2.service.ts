@@ -2,6 +2,7 @@ import { CashLogSource, Prisma } from '@prisma/client'
 import dayjs from 'dayjs'
 import { prisma } from '../../config/database'
 import { broadcastSaleCompleted, broadcastStockUpdated, broadcastToStore } from '../../socket'
+import { touchDevice } from '../../middleware/deviceAuth.middleware'
 import { SHARED_SETTING_KEYS } from '@baraka/shared'
 import type {
   SyncV2PullTable,
@@ -20,6 +21,7 @@ const MAX_LIMIT = 1000
 interface DeviceCtx {
   deviceId: number
   storeId: number
+  platform?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -123,13 +125,12 @@ const PULL_CONFIG: Record<SyncV2PullTable, PullConfig> = {
         orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
         take,
       }),
-    // telegramChatId is a dormant leftover from an earlier server-side
-    // Telegram design, superseded by a local-only client implementation
-    // (client/electron/services/telegram.service.ts) — the server never
-    // sets this field, so every pull would otherwise overwrite the local
-    // chat_id with null the moment a contact's balance/anything else
-    // changes and triggers a pull. Stripped so sync never touches it.
-    map: ({ telegramChatId, ...row }) => row,
+    // The Telegram chat a customer linked by tapping /start — learnt by
+    // whichever back office polls the bot and pushed from there, so every
+    // till can message that customer. Sent only once known: null here means
+    // "not learnt yet", never "unlinked", and a null would wipe a device's own
+    // copy that hasn't been pushed yet (older builds overwrite on pull).
+    map: ({ telegramChatId, ...row }) => (telegramChatId ? { ...row, telegramChatId } : row),
   },
   collections: {
     // Collections are global (slug is globally unique); no store scope exists.
@@ -389,9 +390,7 @@ export async function pullTableV2(
   const last = page[page.length - 1]
   const nextCursor = last ? makeCursor(last.updatedAt, last.id) : cursor ?? ''
 
-  prisma.device
-    .update({ where: { id: device.deviceId }, data: { lastPulledAt: new Date() } })
-    .catch(() => {})
+  touchDevice(device.deviceId, 'lastPulledAt')
 
   return {
     table,
@@ -463,22 +462,37 @@ const CASH_LOG_SOURCES = new Set<string>(Object.values(CashLogSource))
 // Settings that are the same for the whole store (@baraka/shared). Printer,
 // paper layout and UI language stay per device and are never pushed.
 const SHARED_SETTINGS = new Set(SHARED_SETTING_KEYS)
-const PURCHASE_FIELDS = ['purchaseDate', 'referenceNo', 'totalAmount', 'discount', 'amountPaid', 'paymentStatus', 'status', 'note', 'createdBy']
+// amountPaid / paymentStatus are absent: they follow from supplier payments
+// (allocateSupplierPayment), never from a device's absolute copy.
+const PURCHASE_FIELDS = ['purchaseDate', 'referenceNo', 'totalAmount', 'discount', 'status', 'note', 'createdBy']
 
 const PUSH_HANDLERS: Record<string, PushHandler> = {
   contacts: async (tx, device, { syncId, op, data, clientUpdatedAt }) => {
+    // A linked Telegram chat only ever gets set (see the pull map above); a
+    // device that doesn't know it sends null, which must not unlink it.
+    const fields = {
+      ...pick(data, CONTACT_FIELDS),
+      ...(typeof data.telegramChatId === 'string' && data.telegramChatId ? { telegramChatId: data.telegramChatId } : {}),
+    }
     const existing = await tx.contact.findUnique({ where: { syncId } })
     if (existing) {
-      if (isStale(existing.updatedAt, clientUpdatedAt)) return { serverId: existing.id, status: 'skipped-stale' }
+      // Learning the chat is never stale: it can only fill a blank.
+      if (isStale(existing.updatedAt, clientUpdatedAt)) {
+        if (fields.telegramChatId && !existing.telegramChatId) {
+          await tx.contact.update({ where: { syncId }, data: { telegramChatId: fields.telegramChatId as string } })
+          return { serverId: existing.id, status: 'applied' }
+        }
+        return { serverId: existing.id, status: 'skipped-stale' }
+      }
       await tx.contact.update({
         where: { syncId },
-        data: op === 'delete' ? { deletedAt: new Date() } : (pick(data, CONTACT_FIELDS) as never),
+        data: op === 'delete' ? { deletedAt: new Date() } : (fields as never),
       })
       return { serverId: existing.id, status: 'applied' }
     }
     if (op === 'delete') return { serverId: 0, status: 'applied' }
     const created = await tx.contact.create({
-      data: { syncId, storeId: device.storeId, ...(pick(data, CONTACT_FIELDS) as object) } as never,
+      data: { syncId, storeId: device.storeId, ...(fields as object) } as never,
     })
     return { serverId: created.id, status: 'applied' }
   },
@@ -607,18 +621,14 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
     const location = (data.location as string) || 'shop'
 
     // Stock converges via deltas, never absolute overwrites.
-    const stock = await tx.productStock.upsert({
-      where: { storeId_productId_batchId_location: { storeId: device.storeId, productId, batchId, location } },
-      update: { quantity: { increment: delta } },
-      create: { storeId: device.storeId, productId, batchId, location, quantity: Math.max(0, delta) },
-    })
+    const stock = await applyStockDelta(tx, { storeId: device.storeId, productId, batchId, location }, delta)
 
     const created = await tx.quantityAdjustment.create({
       data: {
         syncId,
         storeId: device.storeId,
         batchId,
-        stockId: stock.id,
+        stockId: stock.stockId,
         previousQuantity,
         adjustedQuantity,
         reason: (data.reason as string) ?? null,
@@ -671,6 +681,10 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
         where: { id: contactId },
         data: { balance: { decrement: amount } },
       })
+    }
+    // Paid out to a supplier: it settles their received orders.
+    if (contactId && transactionType === 'cash_out' && source === 'purchase') {
+      await allocateSupplierPayment(tx, device.storeId, contactId, amount)
     }
     return { serverId: created.id, status: 'applied' }
   },
@@ -775,9 +789,14 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
     return { serverId: created.id, status: 'applied' }
   },
 
+  // Staff come from the back office (pushChangesV2 refuses this table from a
+  // till). Even so a device can't hand out or touch the owner account, and
+  // never sets a password: those only change on the server.
   users: async (tx, device, { syncId, op, data, clientUpdatedAt }) => {
+    if (data.role === 'super_admin') throw new Error('The super_admin role cannot be assigned from a device')
     const existing = await tx.user.findUnique({ where: { syncId } })
     if (existing) {
+      if (existing.role === 'super_admin') throw new Error('The owner account cannot be changed from a device')
       if (isStale(existing.updatedAt, clientUpdatedAt)) return { serverId: existing.id, status: 'skipped-stale' }
       await tx.user.update({
         where: { syncId },
@@ -790,10 +809,10 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
       data: {
         syncId,
         storeId: device.storeId,
-        // Offline-created employees have no password yet; an empty hash can
-        // never match bcrypt.compare, so the account is PIN/offline-only until
-        // an admin sets a real password server-side.
-        passwordHash: (data.passwordHash as string) ?? '',
+        // Offline-created employees have no password; an empty hash can never
+        // match bcrypt.compare, so the account is PIN/badge-only until an
+        // admin sets a real password server-side.
+        passwordHash: '',
         // Back-office employees have no login name (they sign in with their
         // badge); username is required + unique, so derive one from syncId.
         username: `emp-${syncId.slice(0, 8)}`,
@@ -857,6 +876,34 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
   },
 }
 
+type StockKey = { storeId: number; productId: number; batchId: number; location: string }
+
+/**
+ * The one way the server moves stock: the row is locked, the change applied
+ * to what's there at that moment, and the result never goes below zero (the
+ * shop's rule: goods are in the system before they're sold). Reading a figure
+ * and writing back an absolute one lost one of two sales pushed at the same
+ * time; with the lock the second waits for the first and sees its result.
+ */
+async function applyStockDelta(
+  tx: Tx,
+  key: StockKey,
+  delta: number
+): Promise<{ stockId: number; previous: number; current: number }> {
+  const row = await tx.productStock.upsert({
+    where: { storeId_productId_batchId_location: key },
+    update: {},
+    create: { ...key, quantity: 0 },
+    select: { id: true },
+  })
+  const [locked] = await tx.$queryRaw<Array<{ quantity: Prisma.Decimal }>>`
+    SELECT quantity FROM product_stocks WHERE id = ${row.id} FOR UPDATE`
+  const previous = Number(locked?.quantity ?? 0)
+  const current = Math.max(0, previous + delta)
+  if (current !== previous) await tx.productStock.update({ where: { id: row.id }, data: { quantity: current } })
+  return { stockId: row.id, previous, current }
+}
+
 /**
  * Undoes everything a sale did: its goods go back on the shop shelf (a voided
  * return takes them off again), the debt it put on a customer comes off, and
@@ -871,17 +918,11 @@ async function voidSaleEffects(tx: Tx, storeId: number, saleId: number): Promise
     const qty = Math.abs(Number(item.quantity))
     const delta = isReturn ? -qty : qty
     const key = { storeId, productId: item.productId, batchId: item.batchId, location: 'shop' }
-    const before = await tx.productStock.findUnique({ where: { storeId_productId_batchId_location: key } })
-    const stock = await tx.productStock.upsert({
-      where: { storeId_productId_batchId_location: key },
-      update: { quantity: { increment: delta } },
-      create: { ...key, quantity: Math.max(0, delta) },
-    })
-    const previous = Number(before?.quantity ?? 0)
+    const stock = await applyStockDelta(tx, key, delta)
     await tx.quantityAdjustment.create({
       data: {
-        storeId, batchId: item.batchId, stockId: stock.id, previousQuantity: previous,
-        adjustedQuantity: previous + delta, reason: `Void ${sale.invoiceNumber}`, location: 'shop', kind: 'sale_void',
+        storeId, batchId: item.batchId, stockId: stock.stockId, previousQuantity: stock.previous,
+        adjustedQuantity: stock.current, reason: `Void ${sale.invoiceNumber}`, location: 'shop', kind: 'sale_void',
       },
     })
   }
@@ -964,20 +1005,14 @@ async function applyPurchaseReceipt(
     })
     const oldQty = Math.max(0, Number(onHand._sum.quantity ?? 0))
     const key = { storeId: device.storeId, productId: batch.productId, batchId: item.batchId, location }
-    const before = await tx.productStock.findUnique({ where: { storeId_productId_batchId_location: key } })
-    const stock = await tx.productStock.upsert({
-      where: { storeId_productId_batchId_location: key },
-      update: { quantity: { increment: received } },
-      create: { ...key, quantity: received },
-    })
-    const previous = Number(before?.quantity ?? 0)
+    const stock = await applyStockDelta(tx, key, received)
     await tx.quantityAdjustment.create({
       data: {
         storeId: device.storeId,
         batchId: item.batchId,
-        stockId: stock.id,
-        previousQuantity: previous,
-        adjustedQuantity: previous + received,
+        stockId: stock.stockId,
+        previousQuantity: stock.previous,
+        adjustedQuantity: stock.current,
         reason: `Purchase ${purchase.referenceNo ?? purchase.id} received${note ? `: ${note}` : ''}`,
         location,
         kind: 'purchase',
@@ -1009,8 +1044,59 @@ async function applyPurchaseReceipt(
       receivedLocation: location,
       receivedAt: data.receivedAt ? new Date(data.receivedAt as string) : new Date(),
       receiptId: typeof data.receiptId === 'string' ? data.receiptId : null,
+      // The total is now what actually arrived; payments made before
+      // delivery count against it.
+      paymentStatus: paymentStatusOf(Number(purchase.amountPaid), Number(purchase.totalAmount)),
     },
   })
+}
+
+function paymentStatusOf(paid: number, total: number): 'pending' | 'partially_paid' | 'fully_paid' {
+  if (paid > 0 && paid >= total) return 'fully_paid'
+  return paid > 0 ? 'partially_paid' : 'pending'
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100
+
+/**
+ * A supplier payment settles that supplier's received orders, oldest first —
+ * worked out here from the payment itself (an insert-only cash_logs fact).
+ * Orders used to carry amountPaid as an absolute figure pushed by the paying
+ * device, so of two payments made around the same time on two devices the
+ * later push overwrote the earlier: the cash was out, the debt not reduced.
+ */
+async function allocateSupplierPayment(tx: Tx, storeId: number, vendorId: number, amount: number): Promise<void> {
+  const orders = await tx.purchase.findMany({
+    where: { storeId, contactId: vendorId, status: 'received', deletedAt: null },
+    orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }],
+  })
+  let left = round2(amount)
+  for (const order of orders) {
+    if (left <= 0) break
+    const total = Number(order.totalAmount)
+    const paidBefore = Number(order.amountPaid)
+    const due = round2(total - paidBefore)
+    if (due <= 0) continue
+    const part = Math.min(due, left)
+    left = round2(left - part)
+    const paid = round2(paidBefore + part)
+    await tx.purchase.update({ where: { id: order.id }, data: { amountPaid: paid, paymentStatus: paymentStatusOf(paid, total) } })
+  }
+}
+
+// Staff and store-wide configuration are managed in the back office. A till's
+// device key sits on a shared counter PC; through these tables it could mint
+// an admin or rewrite the owner PIN, so they're refused from POS devices.
+const OFFICE_ONLY_TABLES = new Set(['users', 'settings', 'stores', 'charges'])
+const isOfficeDevice = (device: DeviceCtx) => !device.platform || device.platform.endsWith('-office')
+
+// What else a pushed change alters on the server, so the sync:changed event
+// names every table devices should re-pull (they pull only those).
+const ALSO_CHANGES: Record<string, string[]> = {
+  products: ['product_batches', 'product_stocks'],
+  quantity_adjustments: ['product_stocks'],
+  purchases: ['product_stocks', 'product_batches'],
+  cash_logs: ['contacts', 'purchases'],
 }
 
 export async function pushChangesV2(
@@ -1026,12 +1112,19 @@ export async function pushChangesV2(
       results.push({ syncId: change.syncId, status: 'error', error: `Unknown table: ${change.table}` })
       continue
     }
+    if (OFFICE_ONLY_TABLES.has(change.table) && !isOfficeDevice(device)) {
+      results.push({ syncId: change.syncId, status: 'error', error: `${change.table} can only be changed from the back office` })
+      continue
+    }
     try {
       // One transaction per change: a bad change fails alone and the client
       // retries it after the next pull (e.g. once a missing FK has synced).
       const outcome = await prisma.$transaction((tx) => handler(tx, device, change))
       results.push({ syncId: change.syncId, status: outcome.status, serverId: outcome.serverId })
-      if (outcome.status === 'applied') changedTables.add(change.table)
+      if (outcome.status === 'applied') {
+        changedTables.add(change.table)
+        for (const t of ALSO_CHANGES[change.table] ?? []) changedTables.add(t)
+      }
     } catch (err: unknown) {
       results.push({
         syncId: change.syncId,
@@ -1083,11 +1176,22 @@ export async function pushSalesV2(
         if (!sessionId) throw new Error('Cannot resolve sessionSyncId (push pos_sessions first)')
         const contactId = await resolveSyncId(tx, 'contact', sale.contactSyncId)
         const referenceId = await resolveSyncId(tx, 'sale', sale.referenceSyncId)
+        // Voided on the device before it ever reached the server (offline):
+        // kept for the history, but it moved no goods, debt or money — the
+        // void-on-transition below never runs for a sale born cancelled.
+        const bornCancelled = sale.status === 'cancelled'
 
-        const profitAmount = sale.items.reduce(
-          (sum, item) => sum + (item.unitPrice - (item.unitCost ?? 0)) * item.quantity,
-          0
-        )
+        // What each line actually brought in — its own % discount and flat
+        // discount off — less what the goods cost, then the sale-level
+        // discount off the whole. Charges (tax) aren't profit. Returns carry
+        // negative prices and costs, so theirs comes out negative.
+        const profitAmount = sale.items
+          .filter((item) => item.itemType !== 'charge')
+          .reduce((sum, item) => {
+            const qty = Number(item.quantity)
+            const net = Number(item.unitPrice) * qty * (1 - Number(item.discount ?? 0) / 100) - Number(item.flatDiscount ?? 0)
+            return sum + net - Number(item.unitCost ?? 0) * qty
+          }, 0) - Number(sale.discount ?? 0)
 
         const newSale = await tx.sale.create({
           data: {
@@ -1112,6 +1216,8 @@ export async function pushSalesV2(
             status: sale.status as never,
             paymentStatus: sale.paymentStatus as never,
             note: sale.note ?? null,
+            // Tombstoned like a server-side void, so pulls treat it the same.
+            deletedAt: bornCancelled ? new Date() : null,
           },
         })
 
@@ -1136,34 +1242,23 @@ export async function pushSalesV2(
             } as never,
           })
 
-          if (item.itemType !== 'charge' && productId && batchId) {
-            // Clamp at zero instead of going negative; the discrepancy is loud
-            // in logs but must not corrupt stock into negative territory.
-            const stock = await tx.productStock.findUnique({
-              where: { storeId_productId_batchId_location: { storeId: device.storeId, productId, batchId, location: 'shop' } },
-            })
-            if (stock) {
-              // Returns put stock back; sales take it out. By magnitude: a
-              // return line may carry its quantity as negative (older desktop
-              // builds) or positive with a negative price (Android) — either
-              // way the goods come back.
-              const qty = Math.abs(Number(item.quantity))
-              const delta = sale.saleType === 'return' ? qty : -qty
-              const current = Number(stock.quantity)
-              const newQty = Math.max(0, current + delta)
-              if (current + delta < 0) {
-                console.warn(
-                  `[syncV2] Stock discrepancy: store=${device.storeId} product=${productId} batch=${batchId} had ${current}, sale ${sale.invoiceNumber} took ${qty}; clamped to 0`
-                )
-              }
-              await tx.productStock.update({
-                where: { id: stock.id },
-                data: { quantity: newQty },
-              })
-              broadcasts.push(() =>
-                broadcastStockUpdated(device.storeId, { productId, batchId, newQty })
+          if (!bornCancelled && item.itemType !== 'charge' && productId && batchId) {
+            // Returns put stock back; sales take it out. By magnitude: a
+            // return line may carry its quantity as negative (older desktop
+            // builds) or positive with a negative price (Android) — either
+            // way the goods come back. Never below zero (applyStockDelta);
+            // the discrepancy is loud in logs.
+            const qty = Math.abs(Number(item.quantity))
+            const delta = sale.saleType === 'return' ? qty : -qty
+            const stock = await applyStockDelta(tx, { storeId: device.storeId, productId, batchId, location: 'shop' }, delta)
+            if (stock.previous + delta < 0) {
+              console.warn(
+                `[syncV2] Stock discrepancy: store=${device.storeId} product=${productId} batch=${batchId} had ${stock.previous}, sale ${sale.invoiceNumber} took ${qty}; clamped to 0`
               )
             }
+            broadcasts.push(() =>
+              broadcastStockUpdated(device.storeId, { productId, batchId, newQty: stock.current })
+            )
           }
         }
 
@@ -1190,7 +1285,7 @@ export async function pushSalesV2(
         const debtTotal = sale.payments
           .filter((p) => p.paymentMethod === 'Debt')
           .reduce((s, p) => s + p.amount, 0)
-        if (debtTotal !== 0 && contactId) {
+        if (!bornCancelled && debtTotal !== 0 && contactId) {
           // Payment amounts carry their sign (returns are stored with negative
           // amounts), so the increment is applied as-is: a Debt sale raises
           // what the customer owes, a Debt-refunded return lowers it.
@@ -1206,7 +1301,7 @@ export async function pushSalesV2(
           .filter((p) => p.paymentMethod === 'Cash')
           .reduce((s, p) => s + p.amount, 0) - (sale.saleType === 'return' ? 0 : Number(sale.changeAmount ?? 0))
         // A cash refund (negative) left the drawer just the same.
-        if (cashPaid !== 0) {
+        if (!bornCancelled && cashPaid !== 0) {
           await tx.cashLog.create({
             data: {
               storeId: device.storeId,
@@ -1246,7 +1341,8 @@ export async function pushSalesV2(
   for (const fire of broadcasts) fire()
   if (synced.length > 0) {
     broadcastToStore(device.storeId, 'sync:changed', {
-      tables: ['sales', 'product_stocks'],
+      // A debt sale or refund moves the customer's balance too.
+      tables: ['sales', 'product_stocks', 'contacts'],
     })
   }
 

@@ -1,5 +1,7 @@
+import { randomUUID } from 'crypto'
 import { dbQuery, dbExec } from './db.service'
 import { logger } from './logger.service'
+import { enqueueOutbox } from './sync.service'
 import { sendTelegramMessage, sendTelegramDocument, isTelegramConfigured } from './telegram.service'
 import { htmlToPdf } from './pdf.service'
 import { documentPageHtml, fmtDate, THANKS } from './documentLayout'
@@ -147,6 +149,18 @@ function buildReminderMessage(contact: DebtorContact, data: ReminderData): strin
   return lines.join('\n')
 }
 
+/** A journal entry every device syncs — so other back offices skip this contact for the interval. */
+function recordReminderSent(contact: DebtorContact): void {
+  const syncId = randomUUID()
+  const now = new Date().toISOString()
+  dbExec(
+    `INSERT INTO audit_logs (sync_id, action, entity, entity_id, details, user_id, user_name, occurred_at, updated_at)
+     VALUES (?, 'debt_reminder', 'contact', ?, ?, NULL, ?, ?, ?)`,
+    [syncId, contact.sync_id, JSON.stringify({ customer: contact.name, balance: Number(contact.balance) }), 'Telegram', now, now]
+  )
+  enqueueOutbox('audit_logs', syncId, 'upsert')
+}
+
 let running = false // re-entrancy guard, same pattern as telegram.service.ts's pollOnce
 
 export async function runAutoReminderCheck(): Promise<{ sent: number; skipped: number; failed: number }> {
@@ -173,9 +187,16 @@ export async function runAutoReminderCheck(): Promise<{ sent: number; skipped: n
           ? contact.reminder_interval_days
           : config.intervalDays
         const intervalMs = days * 24 * 60 * 60 * 1000
+        // The last reminder from ANY back office: this one's message log, or
+        // a 'debt_reminder' journal entry synced from another (with two
+        // office PCs each one used to remind on its own schedule).
         const lastRows = dbQuery(
-          `SELECT MAX(created_at) as last FROM message_log WHERE contact_id=? AND channel='telegram'`,
-          [contact.id]
+          `SELECT MAX(last) AS last FROM (
+             SELECT MAX(created_at) AS last FROM message_log WHERE contact_id=? AND channel='telegram'
+             UNION ALL
+             SELECT MAX(occurred_at) FROM audit_logs WHERE action='debt_reminder' AND entity_id=?
+           )`,
+          [contact.id, contact.sync_id]
         ) as Array<{ last: string | null }>
         const last = lastRows[0]?.last
         if (last && now - new Date(last).getTime() < intervalMs) {
@@ -204,6 +225,7 @@ export async function runAutoReminderCheck(): Promise<{ sent: number; skipped: n
           `INSERT INTO message_log (contact_id, channel, body, status, error, created_at, trigger) VALUES (?,?,?,?,?,?,?)`,
           [contact.id, 'telegram', body, 'sent', null, new Date().toISOString(), 'auto']
         )
+        recordReminderSent(contact)
         result.sent++
       } catch (err) {
         result.failed++

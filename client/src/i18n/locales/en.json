@@ -177,7 +177,12 @@
     "moreItems_one": "+{{count}} more item",
     "moreItems_other": "+{{count}} more items",
     "restore": "Restore",
-    "scalePluNotFound": "Scale label: no product with code {{plu}}. Put this number in the product's Code / PLU field."
+    "scalePluNotFound": "Scale label: no product with code {{plu}}. Put this number in the product's Code / PLU field.",
+    "cannotSellNoStock": "{{name}}: out of stock — can't be sold. Receive the goods first.",
+    "onlyInStock": "{{name}}: only {{count}} in the shop",
+    "quickAddQty": "How many on hand (stock)",
+    "quickAddQtyHint": "The product enters the system with this stock, then it's sold.",
+    "quickAddReason": "Quick add"
   },
   "customerDisplay": {
     "welcome": "Welcome!",
@@ -569,7 +574,8 @@
     "voidExplain": "Goods go back to stock; the debt and the cash are reversed.",
     "voidReason": "Reason for voiding (required)",
     "sold": "Sold",
-    "canReturn": "Can return"
+    "canReturn": "Can return",
+    "refundNeedsSession": "A refund needs an open till session — this sale was made on another till."
   },
   "session": {
     "failedToOpen": "Failed to open session",
@@ -679,7 +685,8 @@
     "completeSale": "Complete Sale",
     "selectContactForDebt": "Please select a contact for debt payment",
     "insufficientAmount": "Insufficient payment amount",
-    "contactRequiredForDebt": "Contact is required for debt payment"
+    "contactRequiredForDebt": "Contact is required for debt payment",
+    "nonCashOverRemaining": "Card, Click or debt can't exceed what's left ({{amount}}). Change is only given from cash."
   },
   "receipt": {
     "sentToPrinter": "Sent to printer",
@@ -898,7 +905,8 @@
     "action_debt_clear": "Debt deleted",
     "action_shift_close": "Shift closed",
     "action_settings_change": "Setting changed",
-    "action_drawer_open": "Cash drawer opened"
+    "action_drawer_open": "Cash drawer opened",
+    "action_debt_reminder": "Debt reminder sent"
   },
   "labels": {
     "button": "Shelf labels",
@@ -943,5 +951,20 @@
     "stocktakeNet": "Stocktake result ({{count}})",
     "noLosses": "No write-offs in this period",
     "showMore": "Show more ({{count}} left)"
+  },
+  "devices": {
+    "title": "Devices",
+    "hint": "Tills and offices connected to the server. Switch off a lost or replaced device — it can no longer connect.",
+    "empty": "No devices",
+    "revoke": "Switch off",
+    "confirmRevoke": "Yes, switch off",
+    "revoked": "Device switched off",
+    "thisOne": "(this computer)",
+    "lastSeen": "Last seen",
+    "revokedAt": "Switched off",
+    "platform_electron_pos": "Till (computer)",
+    "platform_electron_office": "Office (computer)",
+    "platform_android_pos": "Till (Android)",
+    "platform_android_office": "Office (Android)"
   }
 }

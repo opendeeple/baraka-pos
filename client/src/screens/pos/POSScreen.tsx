@@ -36,7 +36,7 @@ export default function POSScreen() {
   const [calculatorProduct, setCalculatorProduct] = useState<LocalProduct | null>(null)
 
   // Startup sync + periodic refresh
-  const { pullAll, pushPending } = useSync()
+  const { pullAll, pullTables, pushPending } = useSync()
 
   async function handleManualRefresh() {
     await pushPending()
@@ -47,13 +47,13 @@ export default function POSScreen() {
 
   // WebSocket: refresh products on stock/product updates from other terminals.
   // onSyncChanged fires for ANY successful push from ANY device (e.g. a new
-  // product added in Office) — pull it down and reload immediately instead
-  // of waiting for the 5-minute poll or a manual refresh click.
+  // product added in Office) — pull the tables it names and reload
+  // immediately instead of waiting for the 5-minute poll or a manual refresh.
   useWebSocket({
     onStockUpdated: () => loadProducts(),
     onProductUpdated: () => loadProducts(),
     onSyncChanged: async (tables) => {
-      await pullAll()
+      await pullTables(tables)
       loadProducts()
       if (tables.includes('collections')) setCategoryRefreshKey((k) => k + 1)
     },
@@ -181,9 +181,17 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
   }
 
   /** Always adds directly with the given quantity — used by the calculator
-   *  (already-computed kg/box fraction) and the quick-add-on-scan flow. */
+   *  (already-computed kg/box fraction) and the quick-add-on-scan flow.
+   *  Only what's on the shop shelf can be sold: goods enter the system (a
+   *  delivery, or quick-add with its quantity) before they're sold. */
   function addToCart(product: LocalProduct, quantity = 1) {
-    addItem({
+    const managed = product.is_stock_managed !== 0
+    const stock = Number(product.stock ?? 0)
+    if (managed && stock <= 0) {
+      toast.error(t('pos.cannotSellNoStock', { name: product.name }))
+      return
+    }
+    const result = addItem({
       productId: product.id,
       batchId: product.batch_id ?? 0,
       name: product.name,
@@ -196,8 +204,9 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
       discount: 0,
       notes: '',
       isFree: false,
-      maxStock: product.stock ?? 0,
+      maxStock: managed ? stock : undefined,
     })
+    if (result === 'capped') toast.warning(t('pos.onlyInStock', { name: product.name, count: stock }))
   }
 
   function handleOpenApp(app: PosApp) {

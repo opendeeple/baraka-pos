@@ -82,6 +82,7 @@ export function RegisterScreen({ navigation }: Props) {
         unitPrice: p.price,
         unitCost: p.cost,
         discount: 0,
+        maxStock: p.isStockManaged ? p.stock : undefined,
       } as never)
     },
     [addItem]
@@ -90,9 +91,9 @@ export function RegisterScreen({ navigation }: Props) {
   const addProduct = useCallback(
     (p: ProductListItem) => {
       if (!p.batchId) return
-      // Stock is advisory, not blocking (Odoo/OSPOS stance): the shelf is the
-      // source of truth in a mini-market — warn on oversell, let the cashier
-      // decide, and let the sync-side clamp keep the numbers sane.
+      // The shop's rule: goods are entered into the system (received) before
+      // they're sold — only what the shelf holds can go in the cart, same as
+      // the desktop till.
       if (p.isStockManaged) {
         const inCart = cartItems
           .filter((i) => i.productId === p.id && i.batchId === p.batchId)
@@ -100,7 +101,9 @@ export function RegisterScreen({ navigation }: Props) {
         if (inCart + 1 > p.stock) {
           setStockWarning({
             product: p,
-            message: `${p.name}: system shows ${p.stock} in stock${inCart ? ` (${inCart} already in cart)` : ''}. Sell anyway?`,
+            message: p.stock <= 0
+              ? `${p.name} is out of stock — receive the goods before selling.`
+              : `${p.name}: only ${p.stock} in stock${inCart ? ` (${inCart} already in cart)` : ''}.`,
           })
           return
         }
@@ -167,17 +170,7 @@ export function RegisterScreen({ navigation }: Props) {
         onClose={() => setStockWarning(null)}
         title="Stock warning"
         message={stockWarning?.message ?? ''}
-        actions={[
-          { label: 'Cancel', onPress: () => setStockWarning(null) },
-          {
-            label: 'Sell anyway',
-            tone: 'primary',
-            onPress: () => {
-              if (stockWarning) doAdd(stockWarning.product)
-              setStockWarning(null)
-            },
-          },
-        ]}
+        actions={[{ label: 'OK', tone: 'primary', onPress: () => setStockWarning(null) }]}
       />
     </>
   )

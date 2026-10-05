@@ -118,6 +118,43 @@ Stock changes only through documents, and every document says what it is:
   is pushed and pulled insert-only, so every device shows the same journal.
 - `expenses` are pulled too (category and date-only `expenseDate`).
 
+### Audit fixes (2026-10-05)
+
+- **Stock never goes below zero, and concurrent moves don't lose each
+  other.** Every server-side stock change (sales, voids, adjustments,
+  receipts) goes through `applyStockDelta`: the row is locked
+  (`SELECT … FOR UPDATE`), the delta applied, the result floored at 0. The
+  tills also refuse to sell more than the shelf holds (the cart caps at
+  `maxStock`); quick-add enters a product *with* its quantity (a `receipt`
+  adjustment).
+- **A sale voided before it ever reached the server** (offline) arrives with
+  `status='cancelled'`: it's stored tombstoned for history and moves no stock,
+  debt or cash.
+- **Profit** = Σ(line net of its % and flat discount − cost) − sale discount.
+- **Reports** count by `saleTime` (not server arrival) in the store's timezone
+  (`Store.timezone`; the column default `'UTC'` means Asia/Tashkent).
+- **Supplier payments**: `purchases.amountPaid`/`paymentStatus` are no longer
+  accepted from devices. The server allocates each supplier payment — a
+  `cash_logs` row, `source='purchase'`, `cash_out`, contact = vendor — over
+  that vendor's received orders, oldest first.
+- **Back-office-only tables**: `users`, `settings`, `stores`, `charges` are
+  refused from `*-pos` devices. `super_admin` can't be set or changed from any
+  device, and pushed password hashes are ignored.
+- **Telegram chat id** (`contacts.telegramChatId`) syncs: the back office that
+  polls the bot pushes it; pulls send it only when known (null = unknown, so a
+  device's unpushed copy is never wiped).
+- **Pulls wait for pushes**: `product_stocks` (pending sales / adjustments /
+  purchases), `contacts` (pending sales / cash_logs) and `purchases` (pending
+  cash_logs) are skipped while those are still in the outbox — these tables
+  arrive as absolute figures and would overwrite the unsent local change.
+- **Cursor overlap**: each pull re-reads the last 5 s before its cursor (rows
+  committed late with an older `updatedAt`); empty pages never move the cursor.
+- **Targeted pulls**: `sync:changed` names every table a push changed
+  (`ALSO_CHANGES`); tills pull only those instead of all fifteen.
+- **Device auth** verifies the key with bcrypt once per process, then by
+  SHA-256; `lastSeenAt`/`lastPulledAt` are written at most once a minute.
+  Back office → Settings → Devices lists and revokes devices.
+
 ## Client engine (Electron main: `client/electron/services/sync.service.ts`)
 
 - **Outbox** (`sync_queue_local`): pointer rows `{table_name, op, sync_id}`;

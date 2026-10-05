@@ -175,7 +175,12 @@
     "itemCount_other": "{{count}} dona mahsulot",
     "moreItems_other": "yana {{count}} ta mahsulot",
     "restore": "Tiklash",
-    "scalePluNotFound": "Tarozi etiketkasi: {{plu}} kodli mahsulot topilmadi. Mahsulotning Kod/PLU maydoniga shu raqamni yozing."
+    "scalePluNotFound": "Tarozi etiketkasi: {{plu}} kodli mahsulot topilmadi. Mahsulotning Kod/PLU maydoniga shu raqamni yozing.",
+    "cannotSellNoStock": "{{name}}: qoldiq yo'q — sotib bo'lmaydi. Avval yukni qabul qiling.",
+    "onlyInStock": "{{name}}: do'konda faqat {{count}} ta bor",
+    "quickAddQty": "Nechta bor (qoldiq)",
+    "quickAddQtyHint": "Mahsulot tizimga shu qoldiq bilan kiradi, keyin sotiladi.",
+    "quickAddReason": "Tezkor qo'shish"
   },
   "customerDisplay": {
     "welcome": "Xush kelibsiz!",
@@ -564,7 +569,8 @@
     "voidExplain": "Tovar qoldiqqa qaytadi, qarz va kassa summasi bekor qilinadi.",
     "voidReason": "Bekor qilish sababi (majburiy)",
     "sold": "Sotilgan",
-    "canReturn": "Qaytarish mumkin"
+    "canReturn": "Qaytarish mumkin",
+    "refundNeedsSession": "Qaytarish uchun kassada smena ochiq bo'lishi kerak — bu sotuv boshqa kassada qilingan."
   },
   "session": {
     "failedToOpen": "Smenani ochib bo'lmadi",
@@ -674,7 +680,8 @@
     "completeSale": "Sotuvni yakunlash",
     "selectContactForDebt": "Nasiya to'lovi uchun mijozni tanlang",
     "insufficientAmount": "To'lov summasi yetarli emas",
-    "contactRequiredForDebt": "Nasiya to'lovi uchun mijoz kerak"
+    "contactRequiredForDebt": "Nasiya to'lovi uchun mijoz kerak",
+    "nonCashOverRemaining": "Karta, Click yoki nasiya qolgan summadan ({{amount}}) oshmasligi kerak. Ortiqcha summa faqat naqd bilan beriladi."
   },
   "receipt": {
     "sentToPrinter": "Printerga yuborildi",
@@ -893,7 +900,8 @@
     "action_debt_clear": "Qarz o'chirildi",
     "action_shift_close": "Smena yopildi",
     "action_settings_change": "Sozlama o'zgardi",
-    "action_drawer_open": "Kassa qutisi ochildi"
+    "action_drawer_open": "Kassa qutisi ochildi",
+    "action_debt_reminder": "Qarz eslatmasi yuborildi"
   },
   "labels": {
     "button": "Narx etiketkasi",
@@ -938,5 +946,20 @@
     "stocktakeNet": "Inventarizatsiya natijasi ({{count}} marta)",
     "noLosses": "Bu davrda hisobdan chiqarish yo'q",
     "showMore": "Yana ko'rsatish ({{count}} ta qoldi)"
+  },
+  "devices": {
+    "title": "Qurilmalar",
+    "hint": "Serverga ulangan kassa va Office qurilmalari. Yo'qolgan yoki almashtirilgan qurilmani o'chiring — u boshqa ulana olmaydi.",
+    "empty": "Qurilmalar yo'q",
+    "revoke": "O'chirish",
+    "confirmRevoke": "Ha, o'chirish",
+    "revoked": "Qurilma o'chirildi",
+    "thisOne": "(shu kompyuter)",
+    "lastSeen": "Oxirgi ulanish",
+    "revokedAt": "O'chirilgan",
+    "platform_electron_pos": "Kassa (kompyuter)",
+    "platform_electron_office": "Office (kompyuter)",
+    "platform_android_pos": "Kassa (Android)",
+    "platform_android_office": "Office (Android)"
   }
 }

@@ -7,7 +7,7 @@ import { fmtUZS } from '../../lib/currency'
 import { toast } from 'sonner'
 import { Modal, Button, EmptyState, SkeletonRow, Select, DatePicker } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
-import { voidSale as voidSaleOp, refundSale } from '../../lib/salesOps'
+import { voidSale as voidSaleOp, refundSale, REFUND_NEEDS_SESSION } from '../../lib/salesOps'
 
 interface Sale {
   id: number; invoice_number: string; total_amount: number; subtotal: number
@@ -226,7 +226,8 @@ export default function SalesScreen() {
       loadSales()
       setDetail(null)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e))
+      const msg = e instanceof Error ? e.message : String(e)
+      toast.error(msg === REFUND_NEEDS_SESSION ? t('sales.refundNeedsSession') : msg)
     } finally { setProcessingReturn(false) }
   }
 

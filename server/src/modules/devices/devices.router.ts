@@ -32,7 +32,9 @@ router.get('/', async (req: Request, res: Response) => {
   }
 })
 
-router.put('/:id/revoke', async (req: Request, res: Response) => {
+// A lost or replaced terminal: its key stops working at once. POST as well,
+// for the desktop back office (its HTTP bridge sends GET/POST only).
+async function revoke(req: Request, res: Response) {
   try {
     await revokeDevice(req.user!.storeId, Number(req.params.id))
     res.json({ ok: true })
@@ -40,6 +42,8 @@ router.put('/:id/revoke', async (req: Request, res: Response) => {
     const msg = err instanceof Error ? err.message : 'Failed to revoke device'
     res.status(400).json({ error: msg })
   }
-})
+}
+router.put('/:id/revoke', revoke)
+router.post('/:id/revoke', revoke)
 
 export default router

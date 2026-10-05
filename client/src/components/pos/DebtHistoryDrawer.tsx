@@ -98,24 +98,31 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
       // The drawer it lands in: the till's open session (also when paying
       // from the Office on the same PC); card/Click never touch the drawer.
       const current = session ?? (await window.electronAPI.session.current() as { id: number } | null)
-      await window.electronAPI.db.exec(
-        `UPDATE contacts SET balance = ?, updated_at = ? WHERE id = ?`,
-        [newBalance, now, contact.id]
-      )
-      // 'deposit' + contact = a debt repayment — the name Android and the
-      // server use (older desktop rows say 'debt_payment'; both are read).
-      await window.electronAPI.db.exec(
-        `INSERT INTO cash_logs (sync_id, store_id, session_id, transaction_type, amount, source, payment_method, description, reference_id, contact_id, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, 'cash_in', ?, 'deposit', ?, 'Debt repayment', ?, ?, ?, ?, ?)`,
-        [cashLogSyncId, store?.id ?? 1, current?.id ?? null,
-         amt, payMethod, contact.id, contact.id, user?.id ?? 1, now, now]
-      )
+      // One transaction: the balance, the repayment and its outbox row land
+      // together or not at all. The local balance is instant feedback; the
+      // server decrements Contact.balance itself (balance isn't a push-able
+      // field — see CONTACT_FIELDS) when this cash_logs row arrives, and other
+      // devices see the payment once they pull.
+      await window.electronAPI.db.transaction([
+        {
+          sql: `UPDATE contacts SET balance = MAX(0, balance - ?), updated_at = ? WHERE id = ?`,
+          params: [amt, now, contact.id],
+        },
+        // 'deposit' + contact = a debt repayment — the name Android and the
+        // server use (older desktop rows say 'debt_payment'; both are read).
+        {
+          sql: `INSERT INTO cash_logs (sync_id, store_id, session_id, transaction_type, amount, source, payment_method, description, reference_id, contact_id, created_by, created_at, updated_at)
+                VALUES (?, ?, ?, 'cash_in', ?, 'deposit', ?, 'Debt repayment', ?, ?, ?, ?, ?)`,
+          params: [cashLogSyncId, store?.id ?? 1, current?.id ?? null,
+            amt, payMethod, contact.id, contact.id, user?.id ?? 1, now, now],
+        },
+        {
+          sql: `INSERT INTO sync_queue_local (entity_type, table_name, op, payload, sync_id, created_at, status)
+                VALUES ('cash_logs', 'cash_logs', 'upsert', '{}', ?, ?, 'pending')`,
+          params: [cashLogSyncId, now],
+        },
+      ])
       await logAudit('debt_payment', { entity: 'contact', entityId: contact.id, details: { customer: contact.name, amount: amt, method: payMethod, balanceAfter: newBalance } })
-      // The local balance UPDATE above is instant local feedback; the server
-      // is the one that actually decrements Contact.balance (balance isn't a
-      // directly push-able field — see CONTACT_FIELDS) as a side effect of
-      // this cash_logs push, so other devices see the payment once they pull.
-      await window.electronAPI.sync.enqueue('cash_logs', cashLogSyncId, 'upsert')
       window.electronAPI.sync.pushPending().catch(() => {})
       setCurrentBalance(newBalance)
       setShowPay(false)

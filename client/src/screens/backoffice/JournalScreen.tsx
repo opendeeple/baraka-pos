@@ -17,7 +17,7 @@ type Group = 'all' | 'sales' | 'stock' | 'money' | 'products' | 'system'
 const GROUPS: Record<Exclude<Group, 'all'>, string[]> = {
   sales: ['sale_void', 'sale_return'],
   stock: ['stock_receive', 'stock_transfer', 'stocktake', 'writeoff', 'purchase_order', 'purchase_receive'],
-  money: ['expense', 'debt_payment', 'debt_clear', 'supplier_payment', 'shift_close', 'drawer_open'],
+  money: ['expense', 'debt_payment', 'debt_clear', 'debt_reminder', 'supplier_payment', 'shift_close', 'drawer_open'],
   products: ['price_change', 'product_create', 'product_delete'],
   system: ['settings_change'],
 }
@@ -67,6 +67,8 @@ function describe(t: TFunction, e: Entry, d: Record<string, any>): string {
       return `${d.customer}: ${money(d.amount)} (${t(`suppliers.method_${d.method}`, { defaultValue: d.method ?? '' })}) · ${t('journal.debtLeft', { amount: fmtUZS(Number(d.balanceAfter) || 0) })}`
     case 'debt_clear':
       return `${d.customer}: ${money(d.totalDebt)}`
+    case 'debt_reminder':
+      return `${d.customer}: ${money(d.balance)}`
     case 'shift_close':
       return `${t('shift.expected')} ${money(d.expected)} · ${t('shift.counted')} ${money(d.counted)} · ${t('journal.variance')} ${money(d.variance)}`
     case 'settings_change':

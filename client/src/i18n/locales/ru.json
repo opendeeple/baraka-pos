@@ -181,7 +181,12 @@
     "moreItems_many": "+{{count}} товаров",
     "moreItems_other": "+{{count}} товара",
     "restore": "Восстановить",
-    "scalePluNotFound": "Весовая этикетка: товар с кодом {{plu}} не найден. Впишите этот номер в поле «Код / PLU» товара."
+    "scalePluNotFound": "Весовая этикетка: товар с кодом {{plu}} не найден. Впишите этот номер в поле «Код / PLU» товара.",
+    "cannotSellNoStock": "{{name}}: нет остатка — продать нельзя. Сначала примите товар.",
+    "onlyInStock": "{{name}}: в магазине только {{count}}",
+    "quickAddQty": "Сколько есть (остаток)",
+    "quickAddQtyHint": "Товар попадёт в систему с этим остатком, затем продаётся.",
+    "quickAddReason": "Быстрое добавление"
   },
   "customerDisplay": {
     "welcome": "Добро пожаловать!",
@@ -579,7 +584,8 @@
     "voidExplain": "Товар вернётся на остаток, долг и сумма в кассе будут отменены.",
     "voidReason": "Причина отмены (обязательно)",
     "sold": "Продано",
-    "canReturn": "Можно вернуть"
+    "canReturn": "Можно вернуть",
+    "refundNeedsSession": "Для возврата на кассе должна быть открыта смена — эта продажа сделана на другой кассе."
   },
   "session": {
     "failedToOpen": "Не удалось открыть смену",
@@ -689,7 +695,8 @@
     "completeSale": "Завершить продажу",
     "selectContactForDebt": "Выберите клиента для оплаты в долг",
     "insufficientAmount": "Недостаточная сумма оплаты",
-    "contactRequiredForDebt": "Для оплаты в долг нужен клиент"
+    "contactRequiredForDebt": "Для оплаты в долг нужен клиент",
+    "nonCashOverRemaining": "Карта, Click или долг не могут превышать остаток ({{amount}}). Сдача выдаётся только с наличных."
   },
   "receipt": {
     "sentToPrinter": "Отправлено на принтер",
@@ -908,7 +915,8 @@
     "action_debt_clear": "Долг удалён",
     "action_shift_close": "Смена закрыта",
     "action_settings_change": "Настройка изменена",
-    "action_drawer_open": "Денежный ящик открыт"
+    "action_drawer_open": "Денежный ящик открыт",
+    "action_debt_reminder": "Отправлено напоминание о долге"
   },
   "labels": {
     "button": "Ценники",
@@ -953,5 +961,20 @@
     "stocktakeNet": "Итог инвентаризаций ({{count}})",
     "noLosses": "За этот период списаний нет",
     "showMore": "Показать ещё (осталось {{count}})"
+  },
+  "devices": {
+    "title": "Устройства",
+    "hint": "Кассы и офисы, подключённые к серверу. Отключите потерянное или заменённое устройство — оно больше не сможет подключиться.",
+    "empty": "Нет устройств",
+    "revoke": "Отключить",
+    "confirmRevoke": "Да, отключить",
+    "revoked": "Устройство отключено",
+    "thisOne": "(этот компьютер)",
+    "lastSeen": "Последнее подключение",
+    "revokedAt": "Отключено",
+    "platform_electron_pos": "Касса (компьютер)",
+    "platform_electron_office": "Офис (компьютер)",
+    "platform_android_pos": "Касса (Android)",
+    "platform_android_office": "Офис (Android)"
   }
 }

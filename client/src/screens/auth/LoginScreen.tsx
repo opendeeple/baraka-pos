@@ -22,7 +22,6 @@ const OFFICE_ROLES = new Set(['admin', 'manager', 'super_admin'])
 
 interface LoginData {
   token: string
-  syncApiKey?: string
   user: AuthUser
   store: { id: number; name: string; address?: string; phone?: string; salePrefix: string }
 }
@@ -202,7 +201,6 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
       await upsert('cached_user', JSON.stringify(data.user))
       await upsert('cached_store', JSON.stringify(data.store))
     }
-    if (data.syncApiKey) await upsert('sync_api_key', data.syncApiKey)
   }
 
   async function handleLogin(e: React.FormEvent) {

@@ -200,7 +200,8 @@ export const SUPPLIER_DEBT_SQL = `
 
 /**
  * Pays a supplier: the amount settles their received orders oldest first
- * (each order's amount_paid / payment_status, synced with the order). A cash
+ * (each order's amount_paid / payment_status — worked out again on the
+ * server from the payment, and pulled back from there). A cash
  * payment out of the open till is a paid-out in that shift (source
  * 'purchase', counted by the Z report); otherwise it's recorded without a
  * shift — money from the safe or a bank transfer.
@@ -228,11 +229,12 @@ export async function paySupplier(
     const part = Math.min(due, left)
     left = Math.round((left - part) * 100) / 100
     const paid = Math.round((Number(p.amount_paid) + part) * 100) / 100
+    // Local view only: the server settles the orders itself from the payment
+    // (the cash_logs row below), so two devices paying at once both count.
     ops.push({
       sql: `UPDATE purchases SET amount_paid = ?, payment_status = ?, updated_at = ? WHERE id = ?`,
       params: [paid, paid >= Number(p.total_amount) ? 'fully_paid' : 'partially_paid', now, p.id],
     })
-    ops.push(outboxOp(p.sync_id, now))
     orders.push(p.reference_number ?? String(p.id))
   }
   const session = opts.fromTill && method === 'Cash'

@@ -1,5 +1,6 @@
 import { dbQuery, dbExec } from './db.service'
 import { logger } from './logger.service'
+import { enqueueOutbox } from './sync.service'
 
 interface TelegramConfig {
   botToken: string
@@ -61,7 +62,7 @@ export async function sendTelegramDocument(chatId: string, file: Buffer, fileNam
 // Runs entirely client-side (no server deploy needed): short-polls
 // getUpdates every few seconds, looking for a /start <contactSyncId> from a
 // customer who tapped their deep link, and records the resulting chat_id
-// locally. Telegram bots can use either this OR a webhook, never both —
+// (synced with the contact). Telegram bots can use either this OR a webhook, never both —
 // don't register a webhook for this bot while this is running.
 
 let pollOffset = 0
@@ -85,7 +86,13 @@ async function pollOnce(): Promise<void> {
       const chatId = update.message?.chat?.id
       if (text?.startsWith('/start ') && chatId) {
         const contactSyncId = text.slice('/start '.length).trim()
-        dbExec(`UPDATE contacts SET telegram_chat_id=? WHERE sync_id=?`, [String(chatId), contactSyncId])
+        const [contact] = dbQuery(`SELECT telegram_chat_id FROM contacts WHERE sync_id=?`, [contactSyncId]) as Array<{ telegram_chat_id: string | null }>
+        if (contact && contact.telegram_chat_id !== String(chatId)) {
+          dbExec(`UPDATE contacts SET telegram_chat_id=?, updated_at=? WHERE sync_id=?`, [String(chatId), new Date().toISOString(), contactSyncId])
+          // Pushed so every till learns the chat too (it's only learnt here,
+          // by the back office polling the bot).
+          enqueueOutbox('contacts', contactSyncId, 'upsert')
+        }
       }
     }
   } catch (err) {

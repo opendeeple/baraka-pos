@@ -1,13 +1,56 @@
+import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc'
+import timezone from 'dayjs/plugin/timezone'
 import { prisma } from '../../config/database'
+
+dayjs.extend(utc)
+dayjs.extend(timezone)
+
+// Every report counts a sale on the day and at the hour it happened in the
+// shop: by saleTime (the selling device's clock — an offline sale can reach
+// the server hours later, and createdAt is that arrival) and in the store's
+// timezone (a UTC day starts at 05:00 in Tashkent, and the hourly chart was
+// five hours off). Stored timestamps are UTC without a zone.
+//
+// The Store.timezone column defaults to 'UTC' — a value nobody chose — so
+// that default means the shop's own zone.
+const SHOP_TIMEZONE = 'Asia/Tashkent'
+
+function isTimezone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function storeTimezone(storeId: number): Promise<string> {
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { timezone: true } })
+  const tz = store?.timezone
+  return tz && tz !== 'UTC' && isTimezone(tz) ? tz : SHOP_TIMEZONE
+}
+
+/** [start, end) in UTC for the local days `from`..`to` (YYYY-MM-DD) in `tz`. */
+function dayRange(tz: string, from: string, to = from): { start: Date; end: Date } {
+  return {
+    start: dayjs.tz(`${from} 00:00:00`, tz).toDate(),
+    end: dayjs.tz(`${to} 00:00:00`, tz).add(1, 'day').toDate(),
+  }
+}
+
+// Raw SQL compares naive-UTC columns with these: an explicit cast keeps the
+// comparison in UTC whatever the database session's TimeZone is.
+const utcParam = (d: Date) => d.toISOString()
 
 // `dateTo` lets the same aggregation serve both the single-day view and the
 // "Date Range" tab — omit it (or pass the same value as `date`) for a
 // single day.
 export async function getDailySummary(storeId: number, date: string, dateTo?: string) {
-  const startDate = new Date(date + 'T00:00:00.000Z')
-  const endDate = new Date((dateTo ?? date) + 'T23:59:59.999Z')
+  const { start, end } = dayRange(await storeTimezone(storeId), date, dateTo ?? date)
+  const when = { gte: start, lt: end }
 
-  const inRange = { storeId, status: 'completed' as const, createdAt: { gte: startDate, lte: endDate } }
+  const inRange = { storeId, status: 'completed' as const, saleTime: when }
   const [sales, returns, payments, change, expenses, cashLogs] = await Promise.all([
     prisma.sale.aggregate({
       where: { ...inRange, saleType: 'sale' },
@@ -24,20 +67,22 @@ export async function getDailySummary(storeId: number, date: string, dateTo?: st
     // Sales and refunds per method, voided sales excluded.
     prisma.paymentTransaction.groupBy({
       by: ['paymentMethod'],
-      where: { storeId, createdAt: { gte: startDate, lte: endDate }, sale: { status: 'completed' } },
+      where: { storeId, sale: { status: 'completed', saleTime: when } },
       _sum: { amount: true },
     }),
     // Payment rows hold what was handed over; the change went back as cash.
     prisma.sale.aggregate({ where: { ...inRange, saleType: 'sale' }, _sum: { changeAmount: true } }),
 
+    // Expense dates are date-only (UTC midnight of the local day), which
+    // falls inside that local day's range.
     prisma.expense.aggregate({
-      where: { storeId, deletedAt: null, expenseDate: { gte: startDate, lte: endDate } },
+      where: { storeId, deletedAt: null, expenseDate: when },
       _sum: { amount: true },
     }),
 
     prisma.cashLog.findMany({
-      where: { storeId, createdAt: { gte: startDate, lte: endDate } },
-      orderBy: { createdAt: 'asc' },
+      where: { storeId, transactionDate: when },
+      orderBy: { transactionDate: 'asc' },
     }),
   ])
 
@@ -80,8 +125,7 @@ export async function getTopProducts(
   dateTo: string,
   limit = 500
 ) {
-  const startDate = new Date(dateFrom + 'T00:00:00.000Z')
-  const endDate = new Date(dateTo + 'T23:59:59.999Z')
+  const { start, end } = dayRange(await storeTimezone(storeId), dateFrom, dateTo)
 
   // Revenue needs SUM(quantity * unitPrice) per product — a row-level
   // product before summing, which groupBy's _sum can't express (it can only
@@ -99,7 +143,8 @@ export async function getTopProducts(
     JOIN sales s ON s.id = si."saleId"
     JOIN products p ON p.id = si."productId"
     WHERE s."storeId" = ${storeId} AND s.status = 'completed'
-      AND s."createdAt" >= ${startDate} AND s."createdAt" <= ${endDate}
+      AND s."saleTime" >= (${utcParam(start)}::timestamptz AT TIME ZONE 'UTC')
+      AND s."saleTime" < (${utcParam(end)}::timestamptz AT TIME ZONE 'UTC')
       AND si."productId" IS NOT NULL
     GROUP BY si."productId", p.name
     ORDER BY "quantitySold" DESC
@@ -115,6 +160,7 @@ export async function getTopProducts(
 }
 
 export async function getCategorySales(storeId: number, dateFrom: string, dateTo: string) {
+  const { start, end } = dayRange(await storeTimezone(storeId), dateFrom, dateTo)
   const result = await prisma.$queryRaw<Array<{ category: string; revenue: number; qty: number }>>`
     SELECT COALESCE(c.name, 'Uncategorized') as category,
            SUM(CASE WHEN s."saleType" = 'return' THEN -ABS(si.quantity * si."unitPrice") ELSE si.quantity * si."unitPrice" END) as revenue,
@@ -125,8 +171,8 @@ export async function getCategorySales(storeId: number, dateFrom: string, dateTo
     LEFT JOIN collections c ON c.id = p."categoryId"
     WHERE s."storeId" = ${storeId}
       AND s.status = 'completed'
-      AND s."createdAt" >= ${new Date(dateFrom + 'T00:00:00.000Z')}
-      AND s."createdAt" <= ${new Date(dateTo + 'T23:59:59.999Z')}
+      AND s."saleTime" >= (${utcParam(start)}::timestamptz AT TIME ZONE 'UTC')
+      AND s."saleTime" < (${utcParam(end)}::timestamptz AT TIME ZONE 'UTC')
     GROUP BY c.name
     ORDER BY revenue DESC
   `
@@ -138,14 +184,19 @@ export async function getCategorySales(storeId: number, dateFrom: string, dateTo
 }
 
 export async function getHourlySales(storeId: number, date: string) {
+  const tz = await storeTimezone(storeId)
+  const { start, end } = dayRange(tz, date)
+  // The hour on the shop's clock: the naive-UTC saleTime read as UTC, then
+  // shown in the store's zone.
   const result = await prisma.$queryRaw<Array<{ hour: number; revenue: number; cnt: number }>>`
-    SELECT EXTRACT(HOUR FROM "createdAt") as hour,
+    SELECT EXTRACT(HOUR FROM (("saleTime" AT TIME ZONE 'UTC') AT TIME ZONE ${tz})) as hour,
            SUM(CASE WHEN "saleType" = 'return' THEN -ABS("totalAmount") ELSE "totalAmount" END) as revenue,
            COUNT(*) FILTER (WHERE "saleType" = 'sale') as cnt
     FROM sales
     WHERE "storeId" = ${storeId}
       AND status = 'completed'
-      AND DATE("createdAt") = ${date}::date
+      AND "saleTime" >= (${utcParam(start)}::timestamptz AT TIME ZONE 'UTC')
+      AND "saleTime" < (${utcParam(end)}::timestamptz AT TIME ZONE 'UTC')
     GROUP BY hour
     ORDER BY hour
   `

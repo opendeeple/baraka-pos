@@ -17,7 +17,6 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   token: string
-  syncApiKey?: string
   user: AuthUser
   store: {
     id: number

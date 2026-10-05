@@ -148,6 +148,12 @@ function tableLinesHtml(items: DocItem[], layout: ReceiptLayoutConfig): string[]
     `<div style="font-size:${el.fontPx}px;margin-left:${el.shiftPx}px;${l.bold ? 'font-weight:700;' : ''}">${escapeHtml(l.text)}</div>`)
 }
 
+// The app's own former default footer (saved into many receipt templates
+// without anyone choosing it) — reads as the current default instead.
+const OLD_DEFAULT_FOOTER = 'Thank you for shopping with us!'
+const footerText = (footer: string | null | undefined) =>
+  footer == null || footer.trim() === OLD_DEFAULT_FOOTER ? THANKS : footer
+
 const METHOD_LABELS: Record<string, string> = {
   Cash: 'Naqd', Card: 'Karta', Click: 'Click', Debt: 'Qarz', BankTransfer: "O'tkazma",
 }
@@ -222,7 +228,7 @@ export function receiptHtml(doc: ReceiptDoc, layout: ReceiptLayoutConfig): strin
   if (doc.change > 0) lines.push(div('totals', padRow('Qaytim:', fmtMoney(doc.change), W)))
   lines.push(`<div class="divider"></div>`)
   if (doc.storePhone) lines.push(div('storeInfo', centerPad(`Tel: ${doc.storePhone}`, W, scaleOf('storeInfo')), 'font-weight:700;'))
-  const thanks = doc.footer ?? THANKS
+  const thanks = footerText(doc.footer)
   if (thanks) lines.push(div('footer', centerPad(thanks, W, scaleOf('footer')), 'font-weight:700;letter-spacing:0.5px;'))
   // Sale number as plain text where the Code 39 barcode used to be.
   lines.push(div('saleNumber', centerPad(`№ ${doc.invoiceNumber}`, W, scaleOf('saleNumber')), 'font-weight:700;letter-spacing:0.5px;margin-top:4px;'))
@@ -558,7 +564,7 @@ export function registerPrinterIpc() {
       if (d.storePhone) printer.style('b').text(`Tel: ${d.storePhone}`).style('normal')
       printer
         .style('b')
-        .text(d.footer ?? THANKS)
+        .text(footerText(d.footer))
         .text(`№ ${d.invoiceNumber}`)
         .style('normal')
         .cut()
