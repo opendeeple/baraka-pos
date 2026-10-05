@@ -136,16 +136,18 @@ function padRow(left: string, right: string, width: number): string {
 }
 
 // The bordered items table (documentLayout.ts thermalItemsTable) is drawn
-// with plain +/-/| characters inside the same plain <div> primitive as every
+// with box-drawing characters inside the same plain <div> primitive as every
 // other line here — no CSS table/width/flex involved, so it doesn't touch
 // any of the properties already proven to blank the page on this printer.
 // It has its own element style ('table'), and its character width is the
 // calibrated charWidth scaled to that font, so the grid fills the paper.
+// line-height:1 lets each row's │ meet the next row's, so the vertical
+// borders print as solid lines too.
 function tableLinesHtml(items: DocItem[], layout: ReceiptLayoutConfig): string[] {
   const el = layout.elements.table
   const width = Math.floor(layout.charWidth * REFERENCE_FONT_PX / el.fontPx)
   return thermalItemsTable(items, width).map((l) =>
-    `<div style="font-size:${el.fontPx}px;margin-left:${el.shiftPx}px;${l.bold ? 'font-weight:700;' : ''}">${escapeHtml(l.text)}</div>`)
+    `<div style="font-size:${el.fontPx}px;line-height:1;margin-left:${el.shiftPx}px;${l.bold ? 'font-weight:700;' : ''}">${escapeHtml(l.text)}</div>`)
 }
 
 // The app's own former default footer (saved into many receipt templates
@@ -242,7 +244,7 @@ export function receiptHtml(doc: ReceiptDoc, layout: ReceiptLayoutConfig): strin
       white-space: pre-wrap;
       word-break: break-word;
     }
-    .divider { border-top: 1px dashed #000; margin: 4px 0; }
+    .divider { border-top: 1px solid #000; margin: 4px 0; }
   </style></head><body>${lines.join('')}</body></html>`
 }
 
@@ -386,7 +388,7 @@ function shoppingListHtml(items: ShoppingListItem[], layout: ReceiptLayoutConfig
       white-space: pre-wrap;
       word-break: break-word;
     }
-    .divider { border-top: 1px dashed #000; margin: 4px 0; }
+    .divider { border-top: 1px solid #000; margin: 4px 0; }
   </style></head><body>${lines.join('')}</body></html>`
 }
 
@@ -415,7 +417,7 @@ function reportHtml(doc: ReportDoc, layout: ReceiptLayoutConfig): string {
     @page { size: ${layout.paperWidthMm}mm auto; margin: 0; }
     body { margin: 0; padding: 2.5mm ${layout.marginMm}mm; font-family: Consolas, 'Courier New', monospace;
       font-size: ${REFERENCE_FONT_PX}px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-    .divider { border-top: 1px dashed #000; margin: 4px 0; }
+    .divider { border-top: 1px solid #000; margin: 4px 0; }
   </style></head><body>${out.join('')}</body></html>`
 }
 

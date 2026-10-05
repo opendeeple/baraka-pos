@@ -97,6 +97,33 @@ function cell(s: string, w: number, align: 'l' | 'r'): string {
   return align === 'l' ? s + fill : fill + s
 }
 
+/** Offsets of the inner column separators for column widths `ws`. */
+function separators(ws: number[]): Set<number> {
+  const out = new Set<number>()
+  let pos = 0
+  for (const w of ws.slice(0, -1)) { pos += w + 1; out.add(pos) }
+  return out
+}
+
+/**
+ * A solid box-drawing rule between a row with columns `above` and one with
+ * columns `below` (null at the table's top/bottom edge). Box-drawing
+ * characters join into one continuous line, where '-' and '+' printed as a
+ * dotted one on the till printer.
+ */
+function rule(above: number[] | null, below: number[] | null): string {
+  const ws = (above ?? below)!
+  const total = ws.reduce((s, w) => s + w + 1, 1)
+  const up = above ? separators(above) : new Set<number>()
+  const down = below ? separators(below) : new Set<number>()
+  let line = above && below ? '├' : below ? '┌' : '└'
+  for (let pos = 1; pos < total - 1; pos++) {
+    const u = up.has(pos), d = down.has(pos)
+    line += u && d ? '┼' : u ? '┴' : d ? '┬' : '─'
+  }
+  return line + (above && below ? '┤' : below ? '┐' : '┘')
+}
+
 /**
  * The bordered items table at `width` characters, with a Jami row. Every
  * line is exactly `width` wide (barring an oversized number), so it lines up
@@ -109,22 +136,10 @@ export function thermalItemsTable(items: DocItem[], width: number): TextLine[] {
     : Math.max(MIN_NAME_W, width - 5 - NO_W - QTY_W - SUM_W)
   const widths = withPrice ? [NO_W, nameW, QTY_W, PRICE_W, SUM_W] : [NO_W, nameW, QTY_W, SUM_W]
   const aligns: Array<'l' | 'r'> = withPrice ? ['l', 'l', 'r', 'r', 'r'] : ['l', 'l', 'r', 'r']
-  const border = (ws: number[]) => '+' + ws.map((w) => '-'.repeat(w)).join('+') + '+'
   const row = (cells: string[], ws = widths, al = aligns) =>
-    '|' + cells.map((c, i) => cell(c, ws[i], al[i])).join('|') + '|'
+    '│' + cells.map((c, i) => cell(c, ws[i], al[i])).join('│') + '│'
   const pick = (no: string, name: string, qty: string, price: string, sum: string) =>
     withPrice ? [no, name, qty, price, sum] : [no, name, qty, sum]
-
-  const out: TextLine[] = []
-  out.push({ text: border(widths) })
-  out.push({ text: row(pick('№', 'Tovar', 'Soni', 'Narx', 'Summa')), bold: true })
-  out.push({ text: border(widths) })
-  items.forEach((it, i) => {
-    const names = wrapText(it.name, nameW)
-    out.push({ text: row(pick(String(i + 1), names[0], fmtQty(it.qty), fmtMoney(it.price), fmtMoney(lineSum(it)))) })
-    for (const more of names.slice(1)) out.push({ text: row(pick('', more, '', '', '')) })
-    out.push({ text: border(widths) })
-  })
 
   // Jami spans the № and Tovar columns, the sum spans Narx and Summa; a sum
   // too long even for that borrows room from the Jami cell.
@@ -133,8 +148,20 @@ export function thermalItemsTable(items: DocItem[], width: number): TextLine[] {
   const sumW = withPrice ? PRICE_W + 1 + SUM_W : SUM_W
   const borrow = Math.max(0, totalSum.length - sumW)
   const totalWs = [NO_W + 1 + nameW - borrow, QTY_W, sumW + borrow]
+
+  const out: TextLine[] = []
+  out.push({ text: rule(null, widths) })
+  out.push({ text: row(pick('№', 'Tovar', 'Soni', 'Narx', 'Summa')), bold: true })
+  out.push({ text: rule(widths, items.length ? widths : totalWs) })
+  items.forEach((it, i) => {
+    const names = wrapText(it.name, nameW)
+    out.push({ text: row(pick(String(i + 1), names[0], fmtQty(it.qty), fmtMoney(it.price), fmtMoney(lineSum(it)))) })
+    for (const more of names.slice(1)) out.push({ text: row(pick('', more, '', '', '')) })
+    out.push({ text: rule(widths, i === items.length - 1 ? totalWs : widths) })
+  })
+
   out.push({ text: row(['Jami', totalQty, totalSum], totalWs, ['l', 'r', 'r']), bold: true })
-  out.push({ text: border(totalWs) })
+  out.push({ text: rule(totalWs, null) })
   return out
 }
 
