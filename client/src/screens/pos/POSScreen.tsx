@@ -90,7 +90,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
     let sql = `
       SELECT p.id, p.name, p.barcode, p.image_url, p.category_id,
              p.is_stock_managed, p.is_active, p.alert_quantity,
-             p.unit, p.units_per_package,
+             p.unit, p.units_per_package, p.piece_price,
              pb.id as batch_id, pb.price, pb.cost,
              COALESCE(ps.quantity, 0) as stock
       FROM products p
@@ -121,7 +121,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
   /** Exact barcode lookup — used by the HID scanner and by Enter in the search box. Returns whether a product was found and added. */
   async function handleBarcodeScanned(barcode: string): Promise<boolean> {
     const lookup = (where: string, params: unknown[]) => window.electronAPI.db.query(
-      `SELECT p.id, p.name, p.barcode, p.unit, p.units_per_package, pb.id as batch_id, pb.price, pb.cost,
+      `SELECT p.id, p.name, p.barcode, p.unit, p.units_per_package, p.piece_price, pb.id as batch_id, pb.price, pb.cost,
               COALESCE(ps.quantity,0) as stock
        FROM products p
        JOIN product_batches pb ON pb.id = (
@@ -184,7 +184,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
    *  (already-computed kg/box fraction) and the quick-add-on-scan flow.
    *  Only what's on the shop shelf can be sold: goods enter the system (a
    *  delivery, or quick-add with its quantity) before they're sold. */
-  function addToCart(product: LocalProduct, quantity = 1) {
+  function addToCart(product: LocalProduct, quantity = 1, unitPrice = product.price ?? 0) {
     const managed = product.is_stock_managed !== 0
     const stock = Number(product.stock ?? 0)
     if (managed && stock <= 0) {
@@ -199,7 +199,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
       imageUrl: product.image_url,
       quantity,
       freeQuantity: 0,
-      unitPrice: product.price ?? 0,
+      unitPrice,
       unitCost: product.cost ?? 0,
       discount: 0,
       notes: '',
@@ -285,8 +285,8 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
         <UnitCalculatorModal
           product={calculatorProduct}
           onClose={() => setCalculatorProduct(null)}
-          onAdd={(quantity) => {
-            addToCart(calculatorProduct, quantity)
+          onAdd={(lines) => {
+            for (const line of lines) addToCart(calculatorProduct, line.quantity, line.unitPrice)
             setCalculatorProduct(null)
           }}
         />

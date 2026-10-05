@@ -651,6 +651,13 @@ function migrateToV16(db: SchemaDb): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_product_batches_expiry ON product_batches(expiry_date)`)
 }
 
+// Schema v17 — a box product's own per-piece price. Null keeps the old rule
+// (box price ÷ units_per_package); set, loose pieces sell at it while whole
+// boxes still sell at the box price.
+function migrateToV17(db: SchemaDb): void {
+  addColumnIfMissing(db, 'products', 'piece_price', 'REAL')
+}
+
 export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb) => void }> = [
   { version: 2, apply: migrateToV2 },
   { version: 3, apply: migrateToV3 },
@@ -667,6 +674,7 @@ export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb
   { version: 14, apply: migrateToV14 },
   { version: 15, apply: migrateToV15 },
   { version: 16, apply: migrateToV16 },
+  { version: 17, apply: migrateToV17 },
 ]
 
 export const CURRENT_SCHEMA_VERSION = VERSIONED_MIGRATIONS[VERSIONED_MIGRATIONS.length - 1].version

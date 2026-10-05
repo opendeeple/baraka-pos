@@ -489,6 +489,8 @@
     "unitBox": "Karobka",
     "unitsPerPackage": "Karobkada nechta dona",
     "unitsPerPackageHint": "Masalan: 30",
+    "piecePriceLabel": "Dona narxi (UZS)",
+    "piecePriceHint": "Bo'sh qolsa: karobka narxi ÷ dona soni. Butun karobka baribir karobka narxida sotiladi.",
     "trackInventory": "Qoldiqni kuzatish",
     "adjustStock": "Qoldiqni o'zgartirish",
     "newQuantity": "Yangi miqdor",

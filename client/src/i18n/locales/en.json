@@ -494,6 +494,8 @@
     "unitBox": "Box",
     "unitsPerPackage": "Pieces per box",
     "unitsPerPackageHint": "e.g. 30",
+    "piecePriceLabel": "Price per piece (UZS)",
+    "piecePriceHint": "Empty: box price ÷ pieces per box. Whole boxes still sell at the box price.",
     "trackInventory": "Track inventory",
     "adjustStock": "Adjust Stock",
     "newQuantity": "New Quantity",

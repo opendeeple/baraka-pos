@@ -504,6 +504,8 @@
     "unitBox": "Коробка",
     "unitsPerPackage": "Штук в коробке",
     "unitsPerPackageHint": "Например: 30",
+    "piecePriceLabel": "Цена за штуку (UZS)",
+    "piecePriceHint": "Если пусто: цена коробки ÷ штук в коробке. Целые коробки всё равно продаются по цене коробки.",
     "trackInventory": "Учитывать остаток",
     "adjustStock": "Изменить остаток",
     "newQuantity": "Новое количество",

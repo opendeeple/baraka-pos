@@ -4,16 +4,35 @@ import { Modal, Button } from '../ui'
 import { fmtUZS } from '../../lib/currency'
 import { LocalProduct } from './ProductGrid'
 
+/** quantity is in cart-store units (kg fraction for 'kg', box fraction for
+ *  'box'); unitPrice is per kg or per box, like every other cart line. */
+export interface CalculatorLine { quantity: number; unitPrice: number }
+
 interface Props {
   product: LocalProduct
   onClose: () => void
-  /** quantity is already in cart-store units (kg fraction for 'kg', box
-   *  fraction for 'box') — unitPrice stays the product's existing per-kg or
-   *  per-box price, nothing else about the cart model changes. */
-  onAdd: (quantity: number) => void
+  onAdd: (lines: CalculatorLine[]) => void
 }
 
 type Mode = 'amount' | 'money'
+
+/**
+ * Cart lines for `pieces` of a box product. With its own piece price set,
+ * whole boxes sell at the box price and only the leftover pieces at the
+ * piece price (a separate line, priced per box so quantity stays the box
+ * fraction stock moves by). Without one, it's all one line at box price.
+ */
+function boxLines(pieces: number, boxPrice: number, piecesPerBox: number, piecePrice: number | null): CalculatorLine[] {
+  if (!piecePrice) return [{ quantity: pieces / piecesPerBox, unitPrice: boxPrice }]
+  const boxes = Math.floor(pieces / piecesPerBox)
+  const loose = pieces - boxes * piecesPerBox
+  const lines: CalculatorLine[] = []
+  if (boxes > 0) lines.push({ quantity: boxes, unitPrice: boxPrice })
+  if (loose > 0) lines.push({ quantity: loose / piecesPerBox, unitPrice: piecePrice * piecesPerBox })
+  return lines
+}
+
+const linesTotal = (lines: CalculatorLine[]) => lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0)
 
 /**
  * Opened instead of a flat +1 for kg/box-priced products — lets the cashier
@@ -27,6 +46,7 @@ export function UnitCalculatorModal({ product, onClose, onAdd }: Props) {
   const isBox = product.unit === 'box'
   const basePrice = product.price ?? 0
   const piecesPerBox = isBox ? (product.units_per_package || 1) : 1
+  const piecePrice = isBox && Number(product.piece_price) > 0 ? Number(product.piece_price) : null
 
   const [mode, setMode] = useState<Mode>('amount')
   const [amountInput, setAmountInput] = useState('') // grams (kg) or piece count (box)
@@ -34,20 +54,30 @@ export function UnitCalculatorModal({ product, onClose, onAdd }: Props) {
 
   // Everything derives from whichever field the cashier is actively typing —
   // no separate "confirm" step, the preview updates live.
-  const { quantity, computedPrice, computedAmount } = useMemo(() => {
+  const { lines, computedPrice, computedAmount } = useMemo(() => {
     if (mode === 'amount') {
       const amount = parseFloat(amountInput.replace(',', '.')) || 0
-      const qty = isBox ? amount / piecesPerBox : amount / 1000
-      return { quantity: qty, computedPrice: basePrice * qty, computedAmount: amount }
+      const lines = isBox
+        ? boxLines(amount, basePrice, piecesPerBox, piecePrice)
+        : [{ quantity: amount / 1000, unitPrice: basePrice }]
+      return { lines, computedPrice: linesTotal(lines), computedAmount: amount }
     }
     const money = parseFloat(moneyInput.replace(',', '.')) || 0
+    if (isBox && piecePrice) {
+      // Whole boxes the money covers at box price, the rest in loose pieces.
+      const boxes = basePrice > 0 ? Math.floor(money / basePrice) : 0
+      const pieces = boxes * piecesPerBox + (money - boxes * basePrice) / piecePrice
+      const lines = boxLines(pieces, basePrice, piecesPerBox, piecePrice)
+      return { lines, computedPrice: linesTotal(lines), computedAmount: pieces }
+    }
     const qty = basePrice > 0 ? money / basePrice : 0
     const amount = isBox ? qty * piecesPerBox : qty * 1000
-    return { quantity: qty, computedPrice: money, computedAmount: amount }
-  }, [mode, amountInput, moneyInput, basePrice, isBox, piecesPerBox])
+    return { lines: [{ quantity: qty, unitPrice: basePrice }], computedPrice: money, computedAmount: amount }
+  }, [mode, amountInput, moneyInput, basePrice, isBox, piecesPerBox, piecePrice])
 
   const amountLabel = isBox ? t('pos.calcPieces') : t('pos.calcGrams')
-  const canAdd = quantity > 0
+  const addable = lines.filter((l) => l.quantity > 0)
+  const canAdd = addable.length > 0
 
   return (
     <Modal
@@ -58,7 +88,7 @@ export function UnitCalculatorModal({ product, onClose, onAdd }: Props) {
       footer={
         <>
           <Button variant="secondary" className="flex-1" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button className="flex-1" onClick={() => canAdd && onAdd(quantity)} disabled={!canAdd}>
+          <Button className="flex-1" onClick={() => canAdd && onAdd(addable)} disabled={!canAdd}>
             {t('pos.addToCart')}
           </Button>
         </>
@@ -69,6 +99,7 @@ export function UnitCalculatorModal({ product, onClose, onAdd }: Props) {
           {isBox
             ? t('pos.calcBoxBasePrice', { price: fmtUZS(basePrice), pieces: piecesPerBox })
             : t('pos.calcKgBasePrice', { price: fmtUZS(basePrice) })}
+          {piecePrice && <><br />{t('products.pricePerPieceHint', { price: fmtUZS(piecePrice) })}</>}
         </p>
 
         <div className="flex bg-dark-card border border-dark-border rounded-lg p-1 text-sm">

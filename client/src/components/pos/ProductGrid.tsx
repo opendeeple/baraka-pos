@@ -21,6 +21,9 @@ export interface LocalProduct {
   unit?: string
   /** Only meaningful when unit==='box': how many pieces one box contains. */
   units_per_package?: number
+  /** Only meaningful when unit==='box': its own per-piece price; unset means
+   *  box price ÷ units_per_package. */
+  piece_price?: number | null
 }
 
 interface Props {

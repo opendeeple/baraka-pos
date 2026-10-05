@@ -17,7 +17,7 @@ interface Product {
   category_id: number | null; category_name: string | null; product_type: string
   is_stock_managed: number; is_active: number; alert_quantity: number
   batch_id: number | null; price: number; cost: number; stock: number
-  unit: string | null; units_per_package: number | null; image_url: string | null
+  unit: string | null; units_per_package: number | null; piece_price: number | null; image_url: string | null
 }
 
 interface Category { id: number; name: string }
@@ -25,13 +25,13 @@ interface Category { id: number; name: string }
 interface ProductForm {
   name: string; sku: string; barcode: string; category_id: string
   price: string; cost: string; alert_quantity: string; is_stock_managed: boolean; is_active: boolean
-  unit: string; units_per_package: string; image_url: string
+  unit: string; units_per_package: string; piece_price: string; image_url: string
 }
 
 const EMPTY_FORM: ProductForm = {
   name: '', sku: '', barcode: '', category_id: '',
   price: '', cost: '', alert_quantity: '5', is_stock_managed: true, is_active: true,
-  unit: 'piece', units_per_package: '', image_url: '',
+  unit: 'piece', units_per_package: '', piece_price: '', image_url: '',
 }
 
 export default function ProductsScreen() {
@@ -64,7 +64,7 @@ export default function ProductsScreen() {
       SELECT p.id, p.name, p.sku, p.barcode, p.category_id,
              c.name as category_name, p.product_type,
              p.is_stock_managed, p.is_active, p.alert_quantity,
-             p.unit, p.units_per_package, p.image_url,
+             p.unit, p.units_per_package, p.piece_price, p.image_url,
              pb.id as batch_id, pb.price, pb.cost,
              COALESCE(ps.quantity, 0) as stock
       FROM products p
@@ -104,6 +104,7 @@ export default function ProductsScreen() {
       alert_quantity: String(p.alert_quantity), is_stock_managed: Boolean(p.is_stock_managed),
       is_active: Boolean(p.is_active),
       unit: p.unit ?? 'piece', units_per_package: p.units_per_package ? String(p.units_per_package) : '',
+      piece_price: p.piece_price ? String(p.piece_price) : '',
       image_url: p.image_url ?? '' })
     setShowForm(true)
   }
@@ -118,10 +119,11 @@ export default function ProductsScreen() {
       if (editId) {
         const before = products.find((x) => x.id === editId)
         await window.electronAPI.db.exec(
-          `UPDATE products SET name=?,sku=?,barcode=?,category_id=?,is_stock_managed=?,is_active=?,alert_quantity=?,unit=?,units_per_package=?,image_url=?,updated_at=? WHERE id=?`,
+          `UPDATE products SET name=?,sku=?,barcode=?,category_id=?,is_stock_managed=?,is_active=?,alert_quantity=?,unit=?,units_per_package=?,piece_price=?,image_url=?,updated_at=? WHERE id=?`,
           [form.name, form.sku || null, form.barcode || null, form.category_id || null,
            form.is_stock_managed ? 1 : 0, form.is_active ? 1 : 0, Number(form.alert_quantity) || 0,
            form.unit, form.unit === 'box' ? (Number(form.units_per_package) || null) : null,
+           form.unit === 'box' ? (Number(form.piece_price) || null) : null,
            form.image_url || null, now, editId])
         // Only the selling price is edited here; the cost price follows what
         // deliveries actually cost (weighted average on every receipt).
@@ -144,11 +146,12 @@ export default function ProductsScreen() {
         const productSyncId = uuidv4()
         const batchSyncId = uuidv4()
         await window.electronAPI.db.exec(
-          `INSERT INTO products (sync_id,name,sku,barcode,category_id,is_stock_managed,alert_quantity,is_active,product_type,unit,units_per_package,image_url,created_at,updated_at)
-           VALUES (?,?,?,?,?,?,?,1,'simple',?,?,?,?,?)`,
+          `INSERT INTO products (sync_id,name,sku,barcode,category_id,is_stock_managed,alert_quantity,is_active,product_type,unit,units_per_package,piece_price,image_url,created_at,updated_at)
+           VALUES (?,?,?,?,?,?,?,1,'simple',?,?,?,?,?,?)`,
           [productSyncId, form.name, form.sku || null, form.barcode || null, form.category_id || null,
            form.is_stock_managed ? 1 : 0, Number(form.alert_quantity) || 0,
            form.unit, form.unit === 'box' ? (Number(form.units_per_package) || null) : null,
+           form.unit === 'box' ? (Number(form.piece_price) || null) : null,
            form.image_url || null, now, now])
         const rows = await window.electronAPI.db.query(`SELECT last_insert_rowid() as id`, []) as Array<{id:number}>
         const pid = rows[0].id
@@ -336,7 +339,7 @@ export default function ProductsScreen() {
                     }
                     type="number" value={form.price} onChange={(e) => f('price', e.target.value)}
                   />
-                  {form.unit === 'box' && Number(form.units_per_package) > 0 && Number(form.price) > 0 && (
+                  {form.unit === 'box' && !Number(form.piece_price) && Number(form.units_per_package) > 0 && Number(form.price) > 0 && (
                     <p className="text-xs text-gray-500 mt-1">
                       {t('products.pricePerPieceHint', { price: fmtUZS(Number(form.price) / Number(form.units_per_package)) })}
                     </p>
@@ -386,6 +389,20 @@ export default function ProductsScreen() {
                     onChange={(e) => f('units_per_package', e.target.value)}
                     placeholder={t('products.unitsPerPackageHint')}
                   />
+                )}
+                {form.unit === 'box' && (
+                  <div>
+                    <Input
+                      label={t('products.piecePriceLabel')}
+                      type="number"
+                      value={form.piece_price}
+                      onChange={(e) => f('piece_price', e.target.value)}
+                      placeholder={Number(form.units_per_package) > 0 && Number(form.price) > 0
+                        ? fmtUZS(Number(form.price) / Number(form.units_per_package))
+                        : ''}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">{t('products.piecePriceHint')}</p>
+                  </div>
                 )}
                 <div className="col-span-2 flex items-center gap-6">
                   <label className="flex items-center gap-3 cursor-pointer">

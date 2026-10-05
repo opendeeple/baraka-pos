@@ -36,6 +36,12 @@ interface CartStore {
   loadHeldCarts: () => void
 }
 
+/** Quantity of the same product+batch on every line except `skipIdx`. */
+function otherLinesQty(items: CartItem[], skipIdx: number, item: Pick<CartItem, 'productId' | 'batchId'>): number {
+  return items.reduce((sum, i, idx) =>
+    idx !== skipIdx && i.productId === item.productId && i.batchId === item.batchId ? sum + i.quantity : sum, 0)
+}
+
 export const useCartStore = create<CartStore>((set, get) => ({
   items: [],
   charges: [],
@@ -62,15 +68,18 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
   // maxStock (the shop shelf's quantity, unset for products that aren't
   // stock-managed) caps every line: nothing is sold that isn't in the system.
+  // One product can sit on several lines at different prices (a box product's
+  // whole boxes and its loose pieces), so the cap counts all of them.
   addItem: (newItem) => {
     let capped = false
     set((state) => {
       const existingIdx = state.items.findIndex(
-        (i) => i.productId === newItem.productId && i.batchId === newItem.batchId
+        (i) => i.productId === newItem.productId && i.batchId === newItem.batchId && i.unitPrice === newItem.unitPrice
       )
       const max = newItem.maxStock
+      const room = max != null ? max - otherLinesQty(state.items, existingIdx, newItem) : undefined
       const wanted = (existingIdx >= 0 ? state.items[existingIdx].quantity : 0) + newItem.quantity
-      const quantity = max != null && wanted > max ? max : wanted
+      const quantity = room != null && wanted > room ? Math.max(0, room) : wanted
       capped = quantity < wanted
       if (existingIdx >= 0) {
         const items = [...state.items]
@@ -95,9 +104,12 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
   setQuantity: (index, qty) => {
     if (qty <= 0) { get().removeItem(index); return false }
-    const max = get().items[index]?.maxStock
-    const capped = max != null && qty > max
-    get().updateItem(index, { quantity: capped ? max : qty })
+    const { items } = get()
+    const item = items[index]
+    const max = item?.maxStock
+    const room = max != null ? max - otherLinesQty(items, index, item) : undefined
+    const capped = room != null && qty > room
+    get().updateItem(index, { quantity: capped ? Math.max(0, room) : qty })
     return capped
   },
 
