@@ -2,6 +2,7 @@ import { ipcMain, app } from 'electron'
 import { randomUUID } from 'crypto'
 import { dbQuery, dbExec, dbTransaction } from '../services/db.service'
 import { enqueueOutbox, flushOutbox } from '../services/sync.service'
+import { buildSessionReport } from '../services/sessionReport.service'
 
 export function registerSessionIpc(isTraining = false) {
   ipcMain.handle('session:open', (_event, openingBalance: number) => {
@@ -32,25 +33,12 @@ export function registerSessionIpc(isTraining = false) {
     return session[0]
   })
 
+  // X report (mid-shift) and the close screen read the same figures the close stores.
+  ipcMain.handle('session:report', (_event, sessionId: number) => buildSessionReport(sessionId))
+
   ipcMain.handle('session:close', (_event, closingData: { sessionId: number; closingBalanceActual: number }) => {
     const now = new Date().toISOString()
-    const session = dbQuery(
-      `SELECT * FROM pos_sessions WHERE id=?`,
-      [closingData.sessionId]
-    )[0] as { id: number; opening_balance: number }
-
-    // Expected cash = opening + cash sales − cash refunds ± drawer movements
-    const cashRow = dbQuery(
-      `SELECT COALESCE(SUM(amount), 0) as total FROM payment_transactions WHERE session_id=? AND payment_method='Cash' AND transaction_type IN ('sale','return')`,
-      [closingData.sessionId]
-    )[0] as { total: number }
-    const movementRow = dbQuery(
-      `SELECT COALESCE(SUM(CASE WHEN transaction_type='cash_in' THEN amount ELSE -amount END), 0) as total
-       FROM cash_logs WHERE session_id=? AND source IN ('deposit','withdrawal')`,
-      [closingData.sessionId]
-    )[0] as { total: number }
-
-    const theoretical = Number(session.opening_balance) + Number(cashRow.total) + Number(movementRow.total)
+    const theoretical = buildSessionReport(closingData.sessionId).expectedCash
     const variance = closingData.closingBalanceActual - theoretical
 
     dbExec(

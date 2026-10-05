@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Plus, Receipt, Calculator, X } from 'lucide-react'
+import { Plus, Receipt } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { useAuthStore } from '../../store/auth.store'
 import { fmtUZS } from '../../lib/currency'
 import { Modal, Button, Input, EmptyState, PageHeader, Select, DatePicker, PinConfirmModal } from '../../components/ui'
+import { logAudit } from '../../lib/audit'
 
 interface Expense {
   id: number; expense_date: string; category: string; description: string
@@ -35,7 +36,6 @@ export default function ExpensesScreen() {
   const [ownerPin, setOwnerPin] = useState('')
   const [pendingOwnerConfirm, setPendingOwnerConfirm] = useState(false)
   const [catFilter, setCatFilter] = useState('')
-  const [showEstimate, setShowEstimate] = useState(false)
   const { user, store } = useAuthStore()
 
   useEffect(() => { loadExpenses() }, [dateFrom, dateTo, catFilter])
@@ -82,15 +82,19 @@ export default function ExpensesScreen() {
       )
       await window.electronAPI.sync.enqueue('expenses', syncId, 'upsert')
       if (form.payment_method === 'Cash') {
-        // The cash leaving the drawer is its own synced fact (pushed as a cash_out).
+        // The cash leaving the drawer is its own synced fact (pushed as a
+        // cash_out), tied to this till's open session so the shift's
+        // expected cash accounts for it.
+        const current = await window.electronAPI.session.current() as { id: number } | null
         const cashLogSyncId = uuidv4()
         await window.electronAPI.db.exec(
-          `INSERT INTO cash_logs (sync_id, store_id, transaction_type, amount, source, description, created_by, created_at, updated_at)
-           VALUES (?, ?, 'expense', ?, 'expense', ?, ?, ?, ?)`,
-          [cashLogSyncId, store?.id ?? 1, Number(form.amount) * -1, form.description || form.category, user?.id ?? 1, now, now]
+          `INSERT INTO cash_logs (sync_id, store_id, session_id, transaction_type, amount, source, payment_method, description, created_by, created_at, updated_at)
+           VALUES (?, ?, ?, 'expense', ?, 'expense', 'Cash', ?, ?, ?, ?)`,
+          [cashLogSyncId, store?.id ?? 1, current?.id ?? null, Number(form.amount) * -1, form.description || form.category, user?.id ?? 1, now, now]
         )
         await window.electronAPI.sync.enqueue('cash_logs', cashLogSyncId, 'upsert')
       }
+      await logAudit('expense', { entity: 'expense', entityId: syncId, details: { category: form.category, amount: Number(form.amount), method: form.payment_method, description: form.description } })
       window.electronAPI.sync.pushPending().catch(() => {})
       setShowForm(false)
       setForm({ expense_date: new Date().toISOString().split('T')[0], category: 'Supplies', description: '', amount: '', payment_method: 'Cash', reference: '' })
@@ -104,13 +108,10 @@ export default function ExpensesScreen() {
     <BackOfficeLayout>
       <PageHeader
         title={t('nav.expenses')}
-        subtitle={<>{t('common.total')}: <span className="text-red-400 font-semibold">UZS {fmtUZS(totalExpenses)}</span></>}
-        actions={
-          <>
-            <Button variant="secondary" icon={Calculator} onClick={() => setShowEstimate(true)}>{t('expenses.purchaseEstimate')}</Button>
-            <Button icon={Plus} onClick={() => setShowForm(true)}>{t('expenses.addExpense')}</Button>
-          </>
-        }
+        subtitle={<>{t('pageHints.expenses')} · {t('common.total')}: <span className="text-red-400 font-semibold">UZS {fmtUZS(totalExpenses)}</span></>}
+        // Buying goods isn't an expense (it's stock, paid to a supplier) —
+        // orders live only in "Buyurtma va qabul".
+        actions={<Button icon={Plus} onClick={() => setShowForm(true)}>{t('expenses.addExpense')}</Button>}
       />
 
       <div className="shrink-0 px-6 py-3 border-b border-dark-border flex items-center gap-2">
@@ -208,138 +209,6 @@ export default function ExpensesScreen() {
         />
       )}
 
-      {showEstimate && <PurchaseEstimateModal onClose={() => setShowEstimate(false)} />}
     </BackOfficeLayout>
-  )
-}
-
-interface EstimateProduct { id: number; name: string; cost: number }
-
-/**
- * A freeform "how much would this cost me" draft — pick any products, any
- * quantities, see a running total from the stored cost price (tannarx).
- * Nothing here ever touches the database: it's local component state only,
- * gone the moment the modal closes. Printing reuses the same
- * printer:printShoppingList path the restock estimate uses, since both are
- * "name/qty/cost list -> printed total", just built differently.
- */
-function PurchaseEstimateModal({ onClose }: { onClose: () => void }) {
-  const { t } = useTranslation()
-  const [products, setProducts] = useState<EstimateProduct[]>([])
-  const [lines, setLines] = useState<Array<{ id: string; productId: string; qty: string }>>([
-    { id: crypto.randomUUID(), productId: '', qty: '1' },
-  ])
-  const [printing, setPrinting] = useState(false)
-
-  useEffect(() => {
-    window.electronAPI.db.query(
-      `SELECT p.id, p.name, COALESCE(pb.cost, 0) as cost
-       FROM products p
-       LEFT JOIN product_batches pb ON pb.id = (
-         SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
-       )
-       WHERE p.deleted_at IS NULL
-       ORDER BY p.name`,
-      []
-    ).then((rows) => setProducts(rows as EstimateProduct[]))
-  }, [])
-
-  function addLine() {
-    setLines((prev) => [...prev, { id: crypto.randomUUID(), productId: '', qty: '1' }])
-  }
-  function removeLine(id: string) {
-    setLines((prev) => prev.filter((l) => l.id !== id))
-  }
-  function setLine(id: string, key: 'productId' | 'qty', value: string) {
-    setLines((prev) => prev.map((l) => (l.id === id ? { ...l, [key]: value } : l)))
-  }
-
-  const resolved = lines
-    .map((l) => {
-      const p = products.find((pr) => String(pr.id) === l.productId)
-      const qty = Number(l.qty) || 0
-      return p && qty > 0 ? { name: p.name, qty, cost: p.cost } : null
-    })
-    .filter((x): x is { name: string; qty: number; cost: number } => x !== null)
-
-  const total = resolved.reduce((s, it) => s + it.qty * it.cost, 0)
-
-  async function print() {
-    if (!resolved.length) return
-    setPrinting(true)
-    try {
-      const res = await window.electronAPI.printer.printShoppingList(resolved)
-      if (res.success) { toast.success(t('expenses.estimatePrinted')); onClose() }
-      else toast.error(res.error || t('expenses.estimateFailed'))
-    } finally { setPrinting(false) }
-  }
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={t('expenses.purchaseEstimate')}
-      maxWidth="max-w-2xl"
-      // The total and action buttons live in this footer slot (pinned below
-      // children, outside the scrollable list — see Modal.tsx) rather than
-      // scrolling with the line list: on the touchscreen till this is used
-      // from, "Chop etish" has to stay reachable without hunting for it
-      // after adding several products.
-      footer={
-        <div className="w-full space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-400">{t('expenses.estimateTotal')}</span>
-            <span className="text-white text-lg font-bold">UZS {fmtUZS(total)}</span>
-          </div>
-          <div className="flex gap-3">
-            <Button variant="secondary" className="flex-1" onClick={onClose}>{t('common.close')}</Button>
-            <Button className="flex-1" onClick={print} loading={printing} disabled={!resolved.length}>
-              {t('expenses.printEstimate')}
-            </Button>
-          </div>
-        </div>
-      }
-    >
-      <div className="p-5 space-y-4">
-        <p className="text-sm text-gray-400">{t('expenses.purchaseEstimateHint')}</p>
-        {/* Bounded + scrollable so the title/total/buttons around it stay
-            reachable on a touchscreen no matter how many lines are added.
-            Select's own dropdown is portaled to <body> (see Select.tsx)
-            specifically so this scroll container doesn't clip it. */}
-        <div className="space-y-3 max-h-[42vh] overflow-y-auto pr-1">
-          {lines.map((l) => {
-            const p = products.find((pr) => String(pr.id) === l.productId)
-            return (
-              <div key={l.id} className="bg-dark-card border border-dark-border rounded-xl p-3 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Select
-                    className="flex-1"
-                    value={l.productId}
-                    onChange={(v) => setLine(l.id, 'productId', v)}
-                    options={[{ value: '', label: '—' }, ...products.map((pr) => ({ value: String(pr.id), label: pr.name }))]}
-                  />
-                  <button onClick={() => removeLine(l.id)} className="text-gray-500 hover:text-red-400 shrink-0 p-1.5">
-                    <X size={16} />
-                  </button>
-                </div>
-                <div className="flex items-center gap-3">
-                  <label className="text-xs text-gray-400 shrink-0">{t('warehouse.quantity')}</label>
-                  <Input
-                    type="number" min={0} step="any"
-                    className="w-24"
-                    value={l.qty}
-                    onChange={(e) => setLine(l.id, 'qty', e.target.value)}
-                  />
-                  <span className="flex-1 text-right text-sm text-white font-medium">
-                    {p ? `UZS ${fmtUZS((Number(l.qty) || 0) * p.cost)}` : '—'}
-                  </span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-        <Button variant="secondary" icon={Plus} onClick={addLine} className="w-full">{t('expenses.addLine')}</Button>
-      </div>
-    </Modal>
   )
 }

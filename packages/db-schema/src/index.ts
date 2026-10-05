@@ -544,6 +544,113 @@ function migrateToV11(db: SchemaDb): void {
   addColumnIfMissing(db, 'users', 'badge_code', 'TEXT')
 }
 
+// Schema v12 — "delete a paid-off debt". A debtor's history (debt sales +
+// repayments) now stays visible, and they stay in the debtors list, after
+// their balance reaches 0 — until staff clear it, which the UI only allows
+// once fully paid. Clearing never deletes sales or cash_logs (financial
+// records the server and reports depend on); it records a cut-off, and debt
+// history queries only show rows newer than the contact's latest cleared_at.
+// Synced both ways since v13 (see below). Every contact already at 0 gets a
+// local cut-off now, so this update doesn't bring back every debt paid off
+// before it — the server seeds the same baseline for devices that pull later.
+function migrateToV12(db: SchemaDb): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS debt_clearances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contact_id INTEGER NOT NULL,
+    cleared_at TEXT NOT NULL,
+    cleared_by INTEGER,
+    total_debt REAL,
+    total_paid REAL
+  )`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_debt_clearances_contact ON debt_clearances(contact_id)`)
+  db.exec(`INSERT INTO debt_clearances (contact_id, cleared_at)
+    SELECT id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now') FROM contacts WHERE balance <= 0`)
+}
+
+// Schema v13 — debt_clearances join sync v2 (pushed when a debt is deleted,
+// pulled from every other device) so a deleted debt is gone everywhere.
+// Separate from v12 because some machines already ran v12 without these.
+// The v12 baseline rows get a sync_id too but are never enqueued — each
+// device's own baseline stays local.
+function migrateToV13(db: SchemaDb): void {
+  addColumnIfMissing(db, 'debt_clearances', 'sync_id', 'TEXT')
+  addColumnIfMissing(db, 'debt_clearances', 'server_id', 'INTEGER')
+  addColumnIfMissing(db, 'debt_clearances', 'updated_at', 'TEXT')
+  db.exec(`UPDATE debt_clearances SET sync_id = ${SQL_UUID4} WHERE sync_id IS NULL`)
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_debt_clearances_sync_id ON debt_clearances(sync_id)`)
+  // Debt repayments now arrive from other devices; history looks them up by contact.
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_cash_logs_contact ON cash_logs(contact_id)`)
+}
+
+// Schema v14 — purchase orders as a receiving workflow: an order waits
+// ('pending') until its delivery is checked line by line and received into
+// the shop or the warehouse. Synced both ways (sync v2 purchases pull), so
+// an order placed on one device can be received on another.
+function migrateToV14(db: SchemaDb): void {
+  addColumnIfMissing(db, 'purchases', 'received_location', 'TEXT')
+  addColumnIfMissing(db, 'purchases', 'received_at', 'TEXT')
+  addColumnIfMissing(db, 'purchases', 'received_by', 'INTEGER')
+  // Minted per local receipt; compared with the server's on pull to detect
+  // a receipt that lost a race to another device (see upsertPurchase).
+  addColumnIfMissing(db, 'purchases', 'receipt_id', 'TEXT')
+  addColumnIfMissing(db, 'purchase_items', 'received_quantity', 'REAL')
+  addColumnIfMissing(db, 'purchase_items', 'discrepancy_note', 'TEXT')
+}
+
+// Schema v15 — integrity round:
+// - cash_logs.payment_method: a debt repayment or supplier payment can be by
+//   card/Click; only cash belongs in the drawer's expected total.
+// - quantity_adjustments.kind: which document moved the stock (receipt,
+//   purchase, transfer, stocktake, writeoff, sale_void) — stock never changes
+//   any other way.
+// - purchases.amount_paid / payment_status: what's been paid to the supplier.
+// - settings.sync_id: store-wide settings now sync (device-specific ones don't).
+// - audit_logs: who did what and why (voids, refunds, stocktakes, write-offs,
+//   price changes, deletions, cash movements), synced insert-only.
+// - stock rows that point at no product (the pull used to store unresolved
+//   links as NULL) or duplicate a product+batch+location are dropped; reads
+//   already used the newest row of each, so nothing visible changes.
+function migrateToV15(db: SchemaDb): void {
+  addColumnIfMissing(db, 'cash_logs', 'payment_method', 'TEXT')
+  addColumnIfMissing(db, 'quantity_adjustments', 'kind', 'TEXT')
+  addColumnIfMissing(db, 'purchases', 'amount_paid', 'REAL DEFAULT 0')
+  addColumnIfMissing(db, 'purchases', 'payment_status', "TEXT DEFAULT 'pending'")
+  addColumnIfMissing(db, 'settings', 'sync_id', 'TEXT')
+  db.exec(`UPDATE settings SET sync_id = ${SQL_UUID4} WHERE sync_id IS NULL`)
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_settings_sync_id ON settings(sync_id)`)
+  // The store's own details (name/address/phone on every receipt) are edited
+  // in Settings and now push too.
+  addColumnIfMissing(db, 'stores', 'sync_id', 'TEXT')
+  db.exec(`CREATE TABLE IF NOT EXISTS audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sync_id TEXT UNIQUE,
+    server_id INTEGER,
+    action TEXT NOT NULL,
+    entity TEXT,
+    entity_id TEXT,
+    details TEXT,
+    user_id INTEGER,
+    user_name TEXT,
+    occurred_at TEXT NOT NULL,
+    updated_at TEXT
+  )`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_occurred ON audit_logs(occurred_at)`)
+  db.exec(`DELETE FROM product_stocks
+    WHERE product_id IS NULL OR batch_id IS NULL OR product_id NOT IN (SELECT id FROM products)`)
+  db.exec(`DELETE FROM product_stocks
+    WHERE id NOT IN (SELECT MAX(id) FROM product_stocks GROUP BY product_id, batch_id, location)`)
+}
+
+// Schema v16 — suppliers and shelf life: a delivery line can carry the expiry
+// date printed on the goods (the batch keeps the nearest one on hand, for
+// "expiring soon" alerts), and suppliers (contacts of type 'vendor') are
+// paid against their received orders (purchases.amount_paid, since v15).
+function migrateToV16(db: SchemaDb): void {
+  addColumnIfMissing(db, 'purchase_items', 'expiry_date', 'TEXT')
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_purchases_vendor ON purchases(vendor_id)`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_product_batches_expiry ON product_batches(expiry_date)`)
+}
+
 export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb) => void }> = [
   { version: 2, apply: migrateToV2 },
   { version: 3, apply: migrateToV3 },
@@ -555,6 +662,11 @@ export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb
   { version: 9, apply: migrateToV9 },
   { version: 10, apply: migrateToV10 },
   { version: 11, apply: migrateToV11 },
+  { version: 12, apply: migrateToV12 },
+  { version: 13, apply: migrateToV13 },
+  { version: 14, apply: migrateToV14 },
+  { version: 15, apply: migrateToV15 },
+  { version: 16, apply: migrateToV16 },
 ]
 
 export const CURRENT_SCHEMA_VERSION = VERSIONED_MIGRATIONS[VERSIONED_MIGRATIONS.length - 1].version

@@ -7,18 +7,28 @@ export async function getDailySummary(storeId: number, date: string, dateTo?: st
   const startDate = new Date(date + 'T00:00:00.000Z')
   const endDate = new Date((dateTo ?? date) + 'T23:59:59.999Z')
 
-  const [sales, payments, expenses, cashLogs] = await Promise.all([
+  const inRange = { storeId, status: 'completed' as const, createdAt: { gte: startDate, lte: endDate } }
+  const [sales, returns, payments, change, expenses, cashLogs] = await Promise.all([
     prisma.sale.aggregate({
-      where: { storeId, status: 'completed', createdAt: { gte: startDate, lte: endDate } },
+      where: { ...inRange, saleType: 'sale' },
       _sum: { totalAmount: true, profitAmount: true, discount: true },
       _count: { id: true },
     }),
+    // Returns net out of revenue whatever sign their totals were written
+    // with (Android: negative; older desktop builds: positive).
+    prisma.sale.findMany({
+      where: { ...inRange, saleType: 'return' },
+      select: { totalAmount: true, profitAmount: true },
+    }),
 
+    // Sales and refunds per method, voided sales excluded.
     prisma.paymentTransaction.groupBy({
       by: ['paymentMethod'],
-      where: { storeId, transactionType: 'sale', createdAt: { gte: startDate, lte: endDate } },
+      where: { storeId, createdAt: { gte: startDate, lte: endDate }, sale: { status: 'completed' } },
       _sum: { amount: true },
     }),
+    // Payment rows hold what was handed over; the change went back as cash.
+    prisma.sale.aggregate({ where: { ...inRange, saleType: 'sale' }, _sum: { changeAmount: true } }),
 
     prisma.expense.aggregate({
       where: { storeId, deletedAt: null, expenseDate: { gte: startDate, lte: endDate } },
@@ -31,9 +41,12 @@ export async function getDailySummary(storeId: number, date: string, dateTo?: st
     }),
   ])
 
-  const totalRevenue = Number(sales._sum.totalAmount ?? 0)
-  const totalProfit = Number(sales._sum.profitAmount ?? 0)
+  const returnedTotal = returns.reduce((s, r) => s + Math.abs(Number(r.totalAmount)), 0)
+  const returnedProfit = returns.reduce((s, r) => s + Math.abs(Number(r.profitAmount)), 0)
+  const totalRevenue = Number(sales._sum.totalAmount ?? 0) - returnedTotal
+  const totalProfit = Number(sales._sum.profitAmount ?? 0) - returnedProfit
   const totalExpenses = Number(expenses._sum.amount ?? 0)
+  const changeGiven = Number(change._sum.changeAmount ?? 0)
 
   return {
     date,
@@ -45,7 +58,7 @@ export async function getDailySummary(storeId: number, date: string, dateTo?: st
     totalExpenses,
     paymentBreakdown: payments.map((p) => ({
       method: p.paymentMethod,
-      total: Number(p._sum.amount ?? 0),
+      total: Number(p._sum.amount ?? 0) - (p.paymentMethod === 'Cash' ? changeGiven : 0),
     })),
     cashFlow: cashLogs.map((l) => ({
       type: l.transactionType,
@@ -79,9 +92,9 @@ export async function getTopProducts(
   // quantity, and vice versa for one bulk sale of the same product.
   const rows = await prisma.$queryRaw<Array<{ productId: number; name: string; quantitySold: number; revenue: number; saleCount: number }>>`
     SELECT si."productId" as "productId", p.name as name,
-           SUM(si.quantity) as "quantitySold",
-           SUM(si.quantity * si."unitPrice") as revenue,
-           COUNT(DISTINCT si."saleId") as "saleCount"
+           SUM(CASE WHEN s."saleType" = 'return' THEN -ABS(si.quantity) ELSE si.quantity END) as "quantitySold",
+           SUM(CASE WHEN s."saleType" = 'return' THEN -ABS(si.quantity * si."unitPrice") ELSE si.quantity * si."unitPrice" END) as revenue,
+           COUNT(DISTINCT CASE WHEN s."saleType" = 'sale' THEN si."saleId" END) as "saleCount"
     FROM sale_items si
     JOIN sales s ON s.id = si."saleId"
     JOIN products p ON p.id = si."productId"
@@ -104,8 +117,8 @@ export async function getTopProducts(
 export async function getCategorySales(storeId: number, dateFrom: string, dateTo: string) {
   const result = await prisma.$queryRaw<Array<{ category: string; revenue: number; qty: number }>>`
     SELECT COALESCE(c.name, 'Uncategorized') as category,
-           SUM(si."quantity" * si."unitPrice") as revenue,
-           SUM(si."quantity") as qty
+           SUM(CASE WHEN s."saleType" = 'return' THEN -ABS(si.quantity * si."unitPrice") ELSE si.quantity * si."unitPrice" END) as revenue,
+           SUM(CASE WHEN s."saleType" = 'return' THEN -ABS(si.quantity) ELSE si.quantity END) as qty
     FROM sale_items si
     JOIN sales s ON s.id = si."saleId"
     JOIN products p ON p.id = si."productId"
@@ -127,8 +140,8 @@ export async function getCategorySales(storeId: number, dateFrom: string, dateTo
 export async function getHourlySales(storeId: number, date: string) {
   const result = await prisma.$queryRaw<Array<{ hour: number; revenue: number; cnt: number }>>`
     SELECT EXTRACT(HOUR FROM "createdAt") as hour,
-           SUM("totalAmount") as revenue,
-           COUNT(*) as cnt
+           SUM(CASE WHEN "saleType" = 'return' THEN -ABS("totalAmount") ELSE "totalAmount" END) as revenue,
+           COUNT(*) FILTER (WHERE "saleType" = 'sale') as cnt
     FROM sales
     WHERE "storeId" = ${storeId}
       AND status = 'completed'

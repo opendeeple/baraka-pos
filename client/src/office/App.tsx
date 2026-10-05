@@ -22,6 +22,8 @@ const ExpensesScreen = lazy(() => import('../screens/backoffice/ExpensesScreen')
 const ReportsScreen = lazy(() => import('../screens/backoffice/ReportsScreen'))
 const EmployeesScreen = lazy(() => import('../screens/backoffice/EmployeesScreen'))
 const SettingsScreen = lazy(() => import('../screens/backoffice/SettingsScreen'))
+const SuppliersScreen = lazy(() => import('../screens/backoffice/SuppliersScreen'))
+const JournalScreen = lazy(() => import('../screens/backoffice/JournalScreen'))
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -42,6 +44,8 @@ const backofficeRoutes = [
   { path: '/backoffice/reports', element: <ReportsScreen /> },
   { path: '/backoffice/employees', element: <EmployeesScreen /> },
   { path: '/backoffice/settings', element: <SettingsScreen /> },
+  { path: '/backoffice/suppliers', element: <SuppliersScreen /> },
+  { path: '/backoffice/journal', element: <JournalScreen /> },
 ]
 
 export default function App() {

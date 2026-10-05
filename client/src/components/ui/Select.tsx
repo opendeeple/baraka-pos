@@ -74,10 +74,17 @@ export function Select({ value, onChange, options, placeholder, className = '' }
         : { top: r.bottom + 4, left: r.left, width: r.width }
     )
     const close = () => setOpen(false)
-    window.addEventListener('scroll', close, true)
+    // Capture-phase scroll also fires for the options list's own scrolling —
+    // on a touchscreen, swiping through a long list closed it mid-swipe, so
+    // only scrolling *outside* the dropdown closes it.
+    const closeOnOutsideScroll = (e: Event) => {
+      if (dropdownRef.current?.contains(e.target as Node)) return
+      close()
+    }
+    window.addEventListener('scroll', closeOnOutsideScroll, true)
     window.addEventListener('resize', close)
     return () => {
-      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('scroll', closeOnOutsideScroll, true)
       window.removeEventListener('resize', close)
     }
   }, [open])

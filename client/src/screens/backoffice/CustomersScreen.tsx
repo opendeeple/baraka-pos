@@ -71,8 +71,9 @@ export default function CustomersScreen() {
 
   function openCustomer(c: Customer) { setSelected(c); loadCustomerDetail(c.id) }
 
+  // The debt panel stays open after a repayment (so a now fully paid debt
+  // can be deleted right there); this only refreshes the numbers behind it.
   async function refreshAfterDebtPayment() {
-    setShowDebtPanel(false)
     await loadCustomers()
     if (!selected) return
     const [row] = await window.electronAPI.db.query(
@@ -115,6 +116,7 @@ export default function CustomersScreen() {
     <BackOfficeLayout>
       <PageHeader
         title={t('nav.customers')}
+        subtitle={t('pageHints.customers')}
         actions={
           <Button icon={Plus} onClick={() => { setEditId(null); setForm({ name: '', phone: '', email: '', address: '' }); setShowForm(true) }}>
             {t('customers.newCustomer')}
@@ -272,6 +274,7 @@ export default function CustomersScreen() {
               contact={selected}
               onClose={() => setShowDebtPanel(false)}
               onPaymentComplete={refreshAfterDebtPayment}
+              onCleared={() => { setShowDebtPanel(false); refreshAfterDebtPayment() }}
             />
           </div>
         </Modal>

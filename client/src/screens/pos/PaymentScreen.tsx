@@ -249,6 +249,11 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
         window.electronAPI.printer.openCashDrawer().catch(console.error)
       }
       window.electronAPI.sync.pushPending().catch(console.error)
+      // Tells the debtor what they just took and their new total debt —
+      // read from the committed rows, so it must run after the transaction.
+      if (effectiveHasDebt && debtContact) {
+        window.electronAPI.notify.debtSale(syncId).catch(console.error)
+      }
 
       const chargeDisplay = charges.map((c) => ({
         name: c.name,
@@ -567,8 +572,10 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
             )}
           </div>
         ) : (
-          /* Normal numpad for Cash / Card / Click */
-          <div className="flex-1 p-4 overflow-hidden">
+          /* Normal numpad for Cash / Card / Click — scrolls instead of
+             clipping its last row when the window is short (a 768px
+             touchscreen minus the taskbar cut off "+ Add"). */
+          <div className="flex-1 min-h-0 p-4 overflow-y-auto">
             <NumPad
               value={amountInput}
               onChange={setAmountInput}

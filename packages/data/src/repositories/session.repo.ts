@@ -117,21 +117,31 @@ export function createSessionRepository(db: DbAdapter, uuid: () => string, enque
         }))
     },
 
-    /** Opening + cash sales − cash refunds + paid-in − paid-out. */
+    /**
+     * Opening + cash sales − change given − cash refunds + paid-in − paid-out.
+     * Same rules as the desktop's sessionReport.service: payment rows hold what
+     * the customer handed over (the change went back out of the drawer), a
+     * voided sale moves no money, and a repayment by card/Click isn't cash.
+     */
     expectedCash(sessionId: number): number {
       const session = db.get<LocalSession>(`SELECT * FROM pos_sessions WHERE id=?`, [sessionId])
       if (!session) return 0
       const salesCash = db.get<{ total: number }>(
-        `SELECT COALESCE(SUM(amount), 0) as total FROM payment_transactions
-         WHERE session_id=? AND payment_method='Cash' AND transaction_type IN ('sale','return')`,
+        `SELECT COALESCE(SUM(pt.amount), 0) as total FROM payment_transactions pt JOIN sales s ON s.id = pt.sale_id
+         WHERE pt.session_id=? AND pt.payment_method='Cash' AND pt.transaction_type IN ('sale','return') AND s.status != 'cancelled'`,
+        [sessionId]
+      )
+      const change = db.get<{ total: number }>(
+        `SELECT COALESCE(SUM(change_amount), 0) as total FROM sales
+         WHERE session_id=? AND status != 'cancelled' AND COALESCE(sale_type,'sale') = 'sale'`,
         [sessionId]
       )
       const movements = db.get<{ total: number }>(
-        `SELECT COALESCE(SUM(CASE WHEN transaction_type='cash_in' THEN amount ELSE -amount END), 0) as total
-         FROM cash_logs WHERE session_id=? AND source IN ('deposit','withdrawal')`,
+        `SELECT COALESCE(SUM(CASE WHEN source='withdrawal' THEN -ABS(amount) ELSE ABS(amount) END), 0) as total
+         FROM cash_logs WHERE session_id=? AND source IN ('deposit','withdrawal') AND COALESCE(payment_method,'Cash') = 'Cash'`,
         [sessionId]
       )
-      return Number(session.opening_balance) + Number(salesCash?.total ?? 0) + Number(movements?.total ?? 0)
+      return Number(session.opening_balance) + Number(salesCash?.total ?? 0) - Number(change?.total ?? 0) + Number(movements?.total ?? 0)
     },
 
     close(sessionId: number, closingBalanceActual: number): LocalSession {

@@ -1,70 +1,65 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { useSessionStore } from '../../store/session.store'
+import { useAuthStore } from '../../store/auth.store'
 import { fmtUZS } from '../../lib/currency'
+import { cashFlowRows, methodLabel, shiftReportDoc } from '../../lib/shiftReport'
+import { logAudit } from '../../lib/audit'
 import { NumPad } from '../../components/pos/NumPad'
-import { ArrowLeft, TrendingUp, ShoppingBag, Banknote, CreditCard, Smartphone } from 'lucide-react'
+import { ArrowLeft, TrendingUp, ShoppingBag, Printer, RotateCcw } from 'lucide-react'
+import type { SessionReport } from '../../types/electron'
 
-interface SessionSummary {
-  totalSales: number
-  totalCash: number
-  totalCard: number
-  totalOther: number
-  saleCount: number
-  theoreticalCash: number
-  openingBalance: number
-}
-
+/**
+ * Closing the till: the full shift report (sales, refunds, per payment
+ * method, every cash movement in and out of the drawer) next to the cash
+ * count. The expected figure comes from the same main-process report the
+ * close stores, so the screen, the stored variance and the printed Z report
+ * never disagree. X prints the same report mid-shift without closing.
+ */
 export default function CloseSessionScreen() {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { session, clearSession } = useSessionStore()
+  const { store } = useAuthStore()
   const [actualCash, setActualCash] = useState('0')
-  const [summary, setSummary] = useState<SessionSummary | null>(null)
+  const [report, setReport] = useState<SessionReport | null>(null)
   const [loading, setLoading] = useState(false)
+  const [printingX, setPrintingX] = useState(false)
 
   useEffect(() => {
-    loadSummary()
-  }, [])
+    if (session) window.electronAPI.session.report(session.id).then(setReport)
+  }, [session?.id])
 
-  async function loadSummary() {
+  async function printX() {
     if (!session) return
-    const salesRows = await window.electronAPI.db.query(
-      `SELECT COUNT(*) as cnt, COALESCE(SUM(total_amount),0) as total FROM sales WHERE session_id=? AND status='completed'`,
-      [session.id]
-    ) as Array<{ cnt: number; total: number }>
-
-    const cashRow = await window.electronAPI.db.query(
-      `SELECT COALESCE(SUM(amount),0) as cash FROM payment_transactions WHERE session_id=? AND payment_method='Cash' AND transaction_type='sale'`,
-      [session.id]
-    ) as Array<{ cash: number }>
-
-    const cardRow = await window.electronAPI.db.query(
-      `SELECT COALESCE(SUM(amount),0) as card FROM payment_transactions WHERE session_id=? AND payment_method='Card' AND transaction_type='sale'`,
-      [session.id]
-    ) as Array<{ card: number }>
-
-    const opening = session.opening_balance
-    setSummary({
-      saleCount: salesRows[0].cnt,
-      totalSales: salesRows[0].total,
-      totalCash: cashRow[0].cash,
-      totalCard: cardRow[0].card,
-      totalOther: salesRows[0].total - cashRow[0].cash - cardRow[0].card,
-      theoreticalCash: opening + cashRow[0].cash,
-      openingBalance: opening,
-    })
+    setPrintingX(true)
+    try {
+      const fresh = await window.electronAPI.session.report(session.id)
+      setReport(fresh)
+      const res = await window.electronAPI.printer.printReport(shiftReportDoc(t, fresh, 'X', store?.name ?? ''))
+      if (!res.success) toast.error(res.error ?? t('shift.printFailed'))
+    } finally { setPrintingX(false) }
   }
 
   async function handleClose() {
     if (!session) return
     setLoading(true)
     try {
-      await window.electronAPI.session.close({
-        sessionId: session.id,
-        closingBalanceActual: Number(actualCash),
-      })
+      const counted = Number(actualCash)
+      await window.electronAPI.session.close({ sessionId: session.id, closingBalanceActual: counted })
+      if (report) {
+        await logAudit('shift_close', {
+          entity: 'session', entityId: session.id,
+          details: { expected: report.expectedCash, counted, variance: counted - report.expectedCash, sales: report.salesTotal },
+        })
+      }
+      // Z report after the close, from the stored figures; a printer problem
+      // must not keep the till from closing.
+      window.electronAPI.session.report(session.id)
+        .then((final) => window.electronAPI.printer.printReport(shiftReportDoc(t, final, 'Z', store?.name ?? '', counted)))
+        .catch(() => {})
       clearSession()
       navigate('/session/open')
     } finally {
@@ -72,87 +67,62 @@ export default function CloseSessionScreen() {
     }
   }
 
-  const variance = summary ? Number(actualCash) - summary.theoreticalCash : 0
+  const variance = report ? Number(actualCash) - report.expectedCash : 0
   const variancePositive = variance >= 0
 
   return (
-    <div className="min-h-screen bg-dark flex">
-      {/* Left panel — summary */}
-      <div className="flex flex-col w-[420px] shrink-0 bg-dark-surface border-r border-dark-border overflow-y-auto">
-        {/* Header */}
-        <div className="p-6 border-b border-dark-border flex items-center gap-3">
+    <div className="h-screen bg-dark flex overflow-hidden">
+      {/* Left panel — shift report */}
+      <div className="flex flex-col w-[440px] shrink-0 bg-dark-surface border-r border-dark-border">
+        <div className="p-5 border-b border-dark-border flex items-center gap-3 shrink-0">
           <button
             onClick={() => navigate('/pos')}
-            className="w-9 h-9 rounded-lg border border-dark-border flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+            className="w-10 h-10 rounded-lg border border-dark-border flex items-center justify-center text-gray-400 hover:text-white transition-colors"
           >
             <ArrowLeft size={18} />
           </button>
-          <div>
+          <div className="flex-1">
             <h1 className="text-white font-bold text-lg leading-tight">{t('session.closeRegister')}</h1>
             <p className="text-xs text-gray-500">{t('session.sessionSummary')}</p>
           </div>
+          <button
+            onClick={printX}
+            disabled={printingX || !report}
+            className="flex items-center gap-1.5 h-10 px-3 rounded-lg border border-dark-border text-gray-300 hover:text-white text-xs disabled:opacity-40"
+          >
+            <Printer size={14} /> {t('shift.printX')}
+          </button>
         </div>
 
-        {summary ? (
-          <div className="p-6 space-y-4 flex-1">
-            {/* KPI cards */}
+        {report ? (
+          <div className="p-5 space-y-4 flex-1 min-h-0 overflow-y-auto">
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-dark-card rounded-2xl p-4 border border-dark-border">
-                <div className="flex items-center gap-2 mb-2">
-                  <ShoppingBag size={14} className="text-primary" />
-                  <span className="text-xs text-gray-500 uppercase tracking-wider">{t('session.transactions')}</span>
-                </div>
-                <div className="text-2xl font-bold text-white">{summary.saleCount}</div>
-              </div>
-              <div className="bg-dark-card rounded-2xl p-4 border border-dark-border">
-                <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp size={14} className="text-green-400" />
-                  <span className="text-xs text-gray-500 uppercase tracking-wider">{t('session.totalSales')}</span>
-                </div>
-                <div className="text-lg font-bold text-white leading-tight">{fmtUZS(summary.totalSales)}</div>
-                <div className="text-xs text-gray-500">UZS</div>
-              </div>
+              <Kpi icon={<ShoppingBag size={14} className="text-primary" />} label={t('shift.saleCount')} value={String(report.saleCount)} />
+              <Kpi icon={<TrendingUp size={14} className="text-green-400" />} label={t('shift.salesTotal')} value={fmtUZS(report.salesTotal)} />
             </div>
+            {(report.returnCount > 0 || report.cancelledCount > 0) && (
+              <p className="flex items-center gap-2 text-xs text-gray-400">
+                <RotateCcw size={13} /> {t('shift.returnsAndVoids', { returns: report.returnCount, voids: report.cancelledCount })}
+              </p>
+            )}
 
-            {/* Payment breakdown */}
-            <div className="bg-dark-card rounded-2xl border border-dark-border overflow-hidden">
-              <div className="px-4 py-3 border-b border-dark-border">
-                <span className="text-xs text-gray-500 uppercase tracking-wider">{t('session.paymentBreakdown')}</span>
-              </div>
-              <div className="divide-y divide-dark-border">
-                <PayRow icon={<Banknote size={15} className="text-green-400" />} label={t('payment.methodCash')} value={summary.totalCash} />
-                <PayRow icon={<CreditCard size={15} className="text-blue-400" />} label={t('payment.methodCard')} value={summary.totalCard} />
-                <PayRow icon={<Smartphone size={15} className="text-purple-400" />} label={t('session.other')} value={summary.totalOther} />
-              </div>
-            </div>
+            <Section title={t('shift.byMethod')}>
+              {report.byMethod.length === 0 && <Row label="—" value="" />}
+              {report.byMethod.map((m) => <Row key={m.method} label={methodLabel(t, m.method)} value={`${fmtUZS(m.amount)} UZS`} />)}
+            </Section>
 
-            {/* Cash reconciliation */}
-            <div className="bg-dark-card rounded-2xl border border-dark-border overflow-hidden">
-              <div className="px-4 py-3 border-b border-dark-border">
-                <span className="text-xs text-gray-500 uppercase tracking-wider">{t('session.cashReconciliation')}</span>
-              </div>
-              <div className="p-4 space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">{t('session.openingBalance')}</span>
-                  <span className="text-white">{fmtUZS(summary.openingBalance)} UZS</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">{t('session.plusCashSales')}</span>
-                  <span className="text-white">{fmtUZS(summary.totalCash)} UZS</span>
-                </div>
-                <div className="flex justify-between text-sm font-semibold border-t border-dark-border pt-3">
-                  <span className="text-gray-300">{t('session.expectedInDrawer')}</span>
-                  <span className="text-white">{fmtUZS(summary.theoreticalCash)} UZS</span>
-                </div>
-              </div>
-            </div>
+            <Section title={t('shift.cashFlow')}>
+              {cashFlowRows(t, report).map((row) => (
+                <Row key={row.label} label={`${row.sign ? row.sign + ' ' : ''}${row.label}`} value={`${fmtUZS(row.amount)} UZS`} />
+              ))}
+              <Row label={t('shift.expected')} value={`${fmtUZS(report.expectedCash)} UZS`} strong />
+            </Section>
 
-            {/* Variance */}
             {Number(actualCash) > 0 && (
               <div className={`rounded-2xl p-4 border ${variancePositive ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
                 <div className="flex justify-between items-center">
                   <span className={`text-sm font-semibold ${variancePositive ? 'text-green-400' : 'text-red-400'}`}>
-                    {t('session.variance')} {variancePositive ? t('session.over') : t('session.short')}
+                    {variancePositive ? t('shift.over') : t('shift.short')}
                   </span>
                   <span className={`text-lg font-bold ${variancePositive ? 'text-green-400' : 'text-red-400'}`}>
                     {variancePositive ? '+' : ''}{fmtUZS(variance)} UZS
@@ -162,23 +132,16 @@ export default function CloseSessionScreen() {
             )}
           </div>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
-            {t('session.loadingSummary')}
-          </div>
+          <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">{t('session.loadingSummary')}</div>
         )}
       </div>
 
-      {/* Right panel — actual cash numpad */}
-      <div className="flex-1 flex flex-col items-center justify-center p-10">
+      {/* Right panel — counted cash */}
+      <div className="flex-1 min-w-0 overflow-y-auto flex flex-col items-center justify-center p-8">
         <div className="w-full max-w-sm">
           <h2 className="text-xl font-bold text-white mb-1">{t('session.countActualCash')}</h2>
           <p className="text-gray-500 text-sm mb-6">{t('session.enterActualCashHint')}</p>
-
-          <NumPad
-            value={actualCash}
-            onChange={setActualCash}
-          />
-
+          <NumPad value={actualCash} onChange={setActualCash} />
           <div className="mt-6 flex gap-3">
             <button
               onClick={() => navigate('/pos')}
@@ -188,26 +151,47 @@ export default function CloseSessionScreen() {
             </button>
             <button
               onClick={handleClose}
-              disabled={loading}
+              disabled={loading || !report}
               className="flex-1 bg-red-600 hover:bg-red-700 active:scale-[0.98] disabled:opacity-50 text-white font-bold py-4 rounded-2xl text-sm transition-all"
             >
               {loading ? t('session.closing') : t('session.closeRegister')}
             </button>
           </div>
+          <p className="text-xs text-gray-500 text-center mt-3">{t('shift.zPrintsOnClose')}</p>
         </div>
       </div>
     </div>
   )
 }
 
-function PayRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function Kpi({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between px-4 py-3">
-      <div className="flex items-center gap-2">
+    <div className="bg-dark-card rounded-2xl p-4 border border-dark-border">
+      <div className="flex items-center gap-2 mb-2">
         {icon}
-        <span className="text-sm text-gray-300">{label}</span>
+        <span className="text-xs text-gray-500 uppercase tracking-wider">{label}</span>
       </div>
-      <span className="text-sm font-medium text-white">{fmtUZS(value)} UZS</span>
+      <div className="text-lg font-bold text-white leading-tight">{value}</div>
+    </div>
+  )
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-dark-card rounded-2xl border border-dark-border overflow-hidden">
+      <div className="px-4 py-3 border-b border-dark-border">
+        <span className="text-xs text-gray-500 uppercase tracking-wider">{title}</span>
+      </div>
+      <div className="px-4 py-2 divide-y divide-dark-border/60">{children}</div>
+    </div>
+  )
+}
+
+function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className={`flex justify-between py-2 text-sm ${strong ? 'font-semibold' : ''}`}>
+      <span className={strong ? 'text-gray-200' : 'text-gray-400'}>{label}</span>
+      <span className="text-white">{value}</span>
     </div>
   )
 }

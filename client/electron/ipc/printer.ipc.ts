@@ -339,6 +339,9 @@ function printOnWindowsPrinter(deviceName: string, doc: ReceiptDoc, layout: Rece
 
 export interface ShoppingListItem { name: string; qty: number; cost: number }
 
+/** A purchase order prints as a titled, numbered list ("BUYURTMA", ZK-…). */
+export interface ShoppingListMeta { title?: string; reference?: string }
+
 // A restock shopping list: which low-stock products need buying and a rough
 // estimate of what it'll cost, based on the product's stored cost price
 // (tannarx). Nothing here is persisted anywhere — it exists only for this
@@ -347,7 +350,7 @@ export interface ShoppingListItem { name: string; qty: number; cost: number }
 // Reuses the exact same monospace/table primitives as receiptHtml (no CSS
 // text-align/width/flex — see the notes on those above) so it prints
 // correctly on the same hardware without a second round of trial and error.
-function shoppingListHtml(items: ShoppingListItem[], layout: ReceiptLayoutConfig): string {
+function shoppingListHtml(items: ShoppingListItem[], layout: ReceiptLayoutConfig, meta: ShoppingListMeta = {}): string {
   const W = layout.charWidth
   const esc = escapeHtml
   const els = layout.elements
@@ -359,9 +362,10 @@ function shoppingListHtml(items: ShoppingListItem[], layout: ReceiptLayoutConfig
 
   const total = items.reduce((s, it) => s + it.qty * it.cost, 0)
   const lines: string[] = []
-  lines.push(div('storeName', centerPad("XARID RO'YXATI", W, scaleOf('storeName')), 'font-weight:700;letter-spacing:0.5px;'))
+  lines.push(div('storeName', centerPad(meta.title ?? "XARID RO'YXATI", W, scaleOf('storeName')), 'font-weight:700;letter-spacing:0.5px;'))
   lines.push(div('storeInfo', centerPad('(taxminiy, tannarx boyicha)', W, scaleOf('storeInfo')), 'font-weight:700;'))
   lines.push(`<div class="divider"></div>`)
+  if (meta.reference) lines.push(div('invoiceInfo', `No: ${meta.reference}`, 'font-weight:700;'))
   lines.push(div('invoiceInfo', new Date().toLocaleString().slice(0, 19)))
   lines.push(`<div class="divider"></div>`)
   lines.push(div('items', tableBorder(W)))
@@ -390,7 +394,69 @@ function shoppingListHtml(items: ShoppingListItem[], layout: ReceiptLayoutConfig
   </style></head><body>${lines.join('')}</body></html>`
 }
 
+/** A label/value report (X/Z shift reports, stocktake results) on the receipt printer. */
+export type ReportLine = { label: string; value?: string; bold?: boolean } | { divider: true }
+export interface ReportDoc { title: string; subtitle?: string; lines: ReportLine[] }
+
+function reportHtml(doc: ReportDoc, layout: ReceiptLayoutConfig): string {
+  const W = layout.charWidth
+  const esc = escapeHtml
+  const els = layout.elements
+  const scaleOf = (k: ReceiptElementKey) => els[k].fontPx / REFERENCE_FONT_PX
+  const div = (k: ReceiptElementKey, text: string, extraCss = '') =>
+    `<div style="font-size:${els[k].fontPx}px;margin-left:${els[k].shiftPx}px;${extraCss}">${esc(text)}</div>`
+  const out: string[] = []
+  out.push(div('storeName', centerPad(doc.title, W, scaleOf('storeName')), 'font-weight:700;'))
+  if (doc.subtitle) out.push(div('storeInfo', centerPad(doc.subtitle, W, scaleOf('storeInfo'))))
+  out.push(div('invoiceInfo', new Date().toLocaleString().slice(0, 19)))
+  out.push(`<div class="divider"></div>`)
+  for (const line of doc.lines) {
+    if ('divider' in line) { out.push(`<div class="divider"></div>`); continue }
+    const text = line.value === undefined ? line.label : padRow(line.label, line.value, W)
+    out.push(div('totals', text, line.bold ? 'font-weight:700;' : ''))
+  }
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    @page { size: ${layout.paperWidthMm}mm auto; margin: 0; }
+    body { margin: 0; padding: 2.5mm ${layout.marginMm}mm; font-family: Consolas, 'Courier New', monospace;
+      font-size: ${REFERENCE_FONT_PX}px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+    .divider { border-top: 1px dashed #000; margin: 4px 0; }
+  </style></head><body>${out.join('')}</body></html>`
+}
+
 export function registerPrinterIpc() {
+  ipcMain.handle('printer:printReport', async (_event, docArg: unknown) => {
+    try {
+      const config = getPrinterConfig()
+      const reason = unconfiguredReason(config)
+      if (reason) return { success: false, error: reason }
+      const doc = docArg as ReportDoc
+      const layout = getReceiptLayoutConfig()
+      if (config.type === 'windows') {
+        return await silentPrintHtml(config.name, reportHtml(doc, layout), layout.paperWidthMm)
+      }
+      const { Printer, USB, Network } = await import('escpos' as never) as never as EscposModule
+      const device = config.type === 'usb'
+        ? new USB(config.vendorId, config.productId)
+        : new Network(config.host, Number(config.port) || 9100)
+      const printer = new Printer(device)
+      printer.font('a').align('ct').style('b').text(doc.title).style('normal')
+      if (doc.subtitle) printer.text(doc.subtitle)
+      printer.text(new Date().toLocaleString().slice(0, 19)).drawLine().align('lt')
+      for (const line of doc.lines) {
+        if ('divider' in line) { printer.drawLine(); continue }
+        if (line.value === undefined) { printer.style(line.bold ? 'b' : 'normal').text(line.label).style('normal'); continue }
+        printer.tableCustom([
+          { text: line.label, width: 0.62, style: line.bold ? 'b' : undefined },
+          { text: line.value, width: 0.38, align: 'RIGHT', style: line.bold ? 'b' : undefined },
+        ])
+      }
+      printer.drawLine().cut().close()
+      return { success: true }
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : 'Print failed' }
+    }
+  })
+
   ipcMain.handle('printer:print', async (_event, receiptData: unknown) => {
     try {
       const config = getPrinterConfig()
@@ -495,16 +561,17 @@ export function registerPrinterIpc() {
   // receipt printer as sales, so it prints on the same paper the owner
   // already carries around, but built from ShoppingListItem[] the caller
   // computes fresh each time, not a stored ReceiptDoc.
-  ipcMain.handle('printer:printShoppingList', async (_event, items: unknown) => {
+  ipcMain.handle('printer:printShoppingList', async (_event, items: unknown, metaArg?: unknown) => {
     try {
       const config = getPrinterConfig()
       const reason = unconfiguredReason(config)
       if (reason) return { success: false, error: reason }
       const list = items as ShoppingListItem[]
+      const meta = (metaArg ?? {}) as ShoppingListMeta
       const layout = getReceiptLayoutConfig()
 
       if (config.type === 'windows') {
-        return await silentPrintHtml(config.name, shoppingListHtml(list, layout), layout.paperWidthMm)
+        return await silentPrintHtml(config.name, shoppingListHtml(list, layout, meta), layout.paperWidthMm)
       }
 
       const { Printer, USB, Network } = await import('escpos' as never) as never as EscposModule
@@ -520,10 +587,13 @@ export function registerPrinterIpc() {
         .font('a')
         .align('ct')
         .style('b')
-        .text("XARID RO'YXATI (taxminiy)")
+        .text(`${meta.title ?? "XARID RO'YXATI"} (taxminiy)`)
         .style('normal')
         .drawLine()
         .align('lt')
+      if (meta.reference) printer.style('b').text(`No: ${meta.reference}`).style('normal')
+      printer
+        .text(new Date().toLocaleString().slice(0, 19))
         .tableCustom([
           { text: '#', width: 0.06 },
           { text: 'Nomi', width: 0.5 },

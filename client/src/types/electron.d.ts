@@ -1,3 +1,28 @@
+export type ReportLine = { label: string; value?: string; bold?: boolean } | { divider: true }
+export interface ReportDoc { title: string; subtitle?: string; lines: ReportLine[] }
+
+export interface SessionReport {
+  sessionId: number
+  terminalId: string | null
+  openedAt: string | null
+  closedAt: string | null
+  openingBalance: number
+  saleCount: number
+  salesTotal: number
+  returnCount: number
+  cancelledCount: number
+  byMethod: Array<{ method: string; amount: number }>
+  cashSales: number
+  cashRefunds: number
+  debtRepaymentsCash: number
+  deposits: number
+  withdrawals: number
+  expensesCash: number
+  supplierPaymentsCash: number
+  expectedCash: number
+  closingBalanceActual: number | null
+}
+
 interface MiniAppState {
   id: string
   canGoBack?: boolean
@@ -28,8 +53,10 @@ export interface ElectronAPI {
     receiptHtml: (receiptData: unknown) => Promise<{ html: string; paperWidthMm: number }>
     /** Prints an employee badge page through the system print dialog. */
     printBadge: (html: string) => Promise<{ success: boolean; error?: string }>
-    /** Prints a restock shopping list (name/needed qty/cost) on the receipt printer. Nothing here is saved — built fresh from the caller's numbers each print. */
-    printShoppingList: (items: Array<{ name: string; qty: number; cost: number }>) => Promise<{ success: boolean; error?: string }>
+    /** Prints a name/qty/estimated-cost list on the receipt printer; `meta` titles and numbers it (a purchase order prints as "BUYURTMA", No: ZK-…). */
+    printShoppingList: (items: Array<{ name: string; qty: number; cost: number }>, meta?: { title?: string; reference?: string }) => Promise<{ success: boolean; error?: string }>
+    /** Label/value report on the receipt printer (X/Z shift reports, stocktake results). */
+    printReport: (doc: ReportDoc) => Promise<{ success: boolean; error?: string }>
     openCashDrawer: () => Promise<{ success: boolean; error?: string }>
     testPrint: () => Promise<{ success: boolean; message?: string }>
     listPrinters: () => Promise<unknown[]>
@@ -39,6 +66,8 @@ export interface ElectronAPI {
     open: (openingBalance: number) => Promise<unknown>
     close: (closingData: { sessionId: number; closingBalanceActual: number }) => Promise<unknown>
     current: () => Promise<unknown | null>
+    /** Everything the X/Z report shows; expectedCash is exactly what the close stores. */
+    report: (sessionId: number) => Promise<SessionReport>
   }
   sync: {
     pushPending: () => Promise<{ synced: number; errors: number; dead: number }>
@@ -86,6 +115,14 @@ export interface ElectronAPI {
   sms: {
     send: (phoneNumber: string, text: string) => Promise<{ success: boolean; error?: string }>
     status: () => Promise<boolean>
+  }
+  notify: {
+    /** Messages the sale's contact what they just took on credit + their new total debt (Telegram, else SMS). Never throws on a send failure — it's logged to message_log instead. */
+    debtSale: (saleSyncId: string) => Promise<
+      | { status: 'sent'; channel: 'telegram' | 'sms' }
+      | { status: 'skipped'; reason: string }
+      | { status: 'failed'; channel: 'telegram' | 'sms'; error: string }
+    >
   }
   app: {
     isTraining: () => Promise<boolean>

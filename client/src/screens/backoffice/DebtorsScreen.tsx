@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, Users2, MessageCircle, CheckCircle2, XCircle } from 'lucide-react'
+import { Search, Users2, MessageCircle, CheckCircle2, XCircle, History } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
-import { PageHeader, EmptyState, SkeletonRow, Select } from '../../components/ui'
+import { OPEN_DEBT_CONDITION } from '../../lib/debt'
+import { PageHeader, EmptyState, SkeletonRow, Select, Modal } from '../../components/ui'
 import { SendMessageModal } from '../../components/backoffice/SendMessageModal'
+import { DebtHistoryPanel } from '../../components/pos/DebtHistoryDrawer'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 
 interface Debtor {
@@ -27,6 +29,7 @@ export default function DebtorsScreen() {
   const [sortBy, setSortBy] = useState<SortBy>('balance_desc')
   const [loading, setLoading] = useState(true)
   const [messageTarget, setMessageTarget] = useState<Debtor | null>(null)
+  const [historyTarget, setHistoryTarget] = useState<Debtor | null>(null)
   const debouncedSearch = useDebouncedValue(search)
 
   useEffect(() => { loadDebtors() }, [debouncedSearch, sortBy])
@@ -42,7 +45,7 @@ export default function DebtorsScreen() {
       SELECT c.id, c.server_id, c.name, c.phone, c.balance, c.telegram_chat_id, c.reminder_interval_days,
              (SELECT MAX(s.created_at) FROM sales s WHERE s.contact_id = c.id) as last_sale_at
       FROM contacts c
-      WHERE c.type IN ('customer','both') AND c.deleted_at IS NULL AND c.balance > 0`
+      WHERE c.type IN ('customer','both') AND c.deleted_at IS NULL AND ${OPEN_DEBT_CONDITION}`
     const params: unknown[] = []
     if (debouncedSearch.trim()) {
       sql += ` AND (c.name LIKE ? OR c.phone LIKE ?)`
@@ -74,7 +77,7 @@ export default function DebtorsScreen() {
     <BackOfficeLayout>
       <PageHeader
         title={t('nav.debtors')}
-        subtitle={<>{t('common.total')}: <span className="text-red-400 font-semibold">UZS {fmtUZS(totalDebt)}</span></>}
+        subtitle={<>{t('pageHints.debtors')} · {t('common.total')}: <span className="text-red-400 font-semibold">UZS {fmtUZS(totalDebt)}</span></>}
       />
 
       <div className="shrink-0 px-6 py-3 border-b border-dark-border flex items-center gap-2">
@@ -111,7 +114,11 @@ export default function DebtorsScreen() {
                 <td className="px-4 py-3 text-gray-400 text-sm">
                   {d.last_sale_at ? new Date(d.last_sale_at).toLocaleDateString() : '—'}
                 </td>
-                <td className="px-4 py-3 text-red-400 text-sm font-semibold">UZS {fmtUZS(Number(d.balance))}</td>
+                <td className="px-4 py-3 text-sm font-semibold">
+                  {Number(d.balance) > 0
+                    ? <span className="text-red-400">UZS {fmtUZS(Number(d.balance))}</span>
+                    : <span className="inline-flex items-center gap-1.5 text-green-400 text-xs"><CheckCircle2 size={13} /> {t('debt.paidBadge')}</span>}
+                </td>
                 <td className="px-4 py-3">
                   {d.telegram_chat_id ? (
                     <span className="inline-flex items-center gap-1.5 text-xs text-green-400">
@@ -134,12 +141,20 @@ export default function DebtorsScreen() {
                   />
                 </td>
                 <td className="px-4 py-3">
-                  <button
-                    onClick={() => setMessageTarget(d)}
-                    className="flex items-center gap-1.5 text-xs text-primary hover:underline"
-                  >
-                    <MessageCircle size={13} /> {t('notifications.sendMessage')}
-                  </button>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => setHistoryTarget(d)}
+                      className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+                    >
+                      <History size={13} /> {t('debt.history')}
+                    </button>
+                    <button
+                      onClick={() => setMessageTarget(d)}
+                      className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+                    >
+                      <MessageCircle size={13} /> {t('notifications.sendMessage')}
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -154,9 +169,22 @@ export default function DebtorsScreen() {
         <SendMessageModal
           contactId={messageTarget.id}
           contactName={messageTarget.name}
-          hasDebt
+          hasDebt={Number(messageTarget.balance) > 0}
           onClose={() => setMessageTarget(null)}
         />
+      )}
+
+      {historyTarget && (
+        <Modal open onClose={() => setHistoryTarget(null)} maxWidth="max-w-sm">
+          <div className="flex flex-col h-[34rem]">
+            <DebtHistoryPanel
+              contact={historyTarget}
+              onClose={() => setHistoryTarget(null)}
+              onPaymentComplete={() => loadDebtors(true)}
+              onCleared={() => { setHistoryTarget(null); loadDebtors(true) }}
+            />
+          </div>
+        </Modal>
       )}
     </BackOfficeLayout>
   )

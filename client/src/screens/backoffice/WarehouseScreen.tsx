@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { v4 as uuidv4 } from 'uuid'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
-import { Search, Warehouse as WarehouseIcon, ArrowRightLeft, PackagePlus } from 'lucide-react'
+import { Search, Warehouse as WarehouseIcon, ArrowRightLeft, PackagePlus, Store, ClipboardCheck, PackageMinus, CalendarClock } from 'lucide-react'
+import { loadExpiring, EXPIRING_DAYS, type ExpiringRow } from '../../lib/expiry'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
+import type { StockLocation } from '../../lib/purchases'
+import { moveStock, stockAt, stockOnHand, averageCost } from '../../lib/stock'
+import { logAudit } from '../../lib/audit'
+import { StocktakeModal } from '../../components/backoffice/StocktakeModal'
+import { WriteOffModal } from '../../components/backoffice/WriteOffModal'
+import { PendingOrderPicker, loadPendingOrders, type PendingOrder } from '../../components/backoffice/PendingOrderPicker'
+import { ReceivePurchaseModal } from '../../components/backoffice/ReceivePurchaseModal'
 import { Modal, Button, Input, PageHeader, EmptyState, SkeletonRow, Select } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 
@@ -27,11 +34,11 @@ interface PickerProduct { id: number; name: string; batch_id: number | null; war
 type Valuation = 'cost' | 'price'
 
 /**
- * Warehouse stock, separate from shop-floor stock (product_stocks.location).
- * Receiving and transfer both go through the same quantity_adjustments delta
- * mechanism ProductsScreen's manual stock-adjust already uses — it's the
- * only path a client-side stock change reaches the server (see
- * packages/sync-engine's quantity_adjustments CHANGE_BUILDER).
+ * Stock in the shop and the warehouse, and every way it may change outside a
+ * sale: receiving a delivery, moving goods to the shop, a stocktake (count
+ * and record the differences), and writing off damaged/expired/lost goods.
+ * All of them are documents (lib/stock.ts moveStock) — nothing here lets a
+ * quantity simply be typed in.
  */
 export default function WarehouseScreen() {
   const { t } = useTranslation()
@@ -47,7 +54,22 @@ export default function WarehouseScreen() {
   const [showReceivePicker, setShowReceivePicker] = useState(false)
   const [showTransferPicker, setShowTransferPicker] = useState(false)
   const [allProducts, setAllProducts] = useState<PickerProduct[]>([])
+  const [pendingOrders, setPendingOrders] = useState<PendingOrder[] | null>(null)
+  const [receivingOrder, setReceivingOrder] = useState<PendingOrder | null>(null)
+  const [showStocktake, setShowStocktake] = useState(false)
+  const [showWriteOff, setShowWriteOff] = useState(false)
+  const [expiring, setExpiring] = useState<ExpiringRow[]>([])
   const debouncedSearch = useDebouncedValue(search)
+  useEffect(() => { loadExpiring().then(setExpiring) }, [rows])
+
+  // A delivery usually belongs to an order: while any are waiting, receiving
+  // starts by picking one (checked line by line); otherwise straight to the
+  // manual receive.
+  async function startReceive() {
+    const orders = await loadPendingOrders()
+    if (orders.length) setPendingOrders(orders)
+    else setShowReceivePicker(true)
+  }
 
   useEffect(() => { loadCategories(); loadAllProducts() }, [])
   useEffect(() => { loadRows() }, [debouncedSearch, catFilter])
@@ -129,89 +151,37 @@ export default function WarehouseScreen() {
     return rows
   }, [rows, locationFilter])
 
-  async function receive(productId: number, batchId: number, qty: number, reason: string, newCost?: number) {
-    const now = new Date().toISOString()
-    // ORDER BY id DESC LIMIT 1 matches loadRows()'s display query exactly —
-    // without it, a pre-existing duplicate stock row for the same
-    // product+batch+location could get updated while the DISPLAYED row
-    // (the newest one) stays unchanged, making the transfer look like it
-    // did nothing.
-    let stock = (await window.electronAPI.db.query(
-      `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='warehouse' ORDER BY id DESC LIMIT 1`,
-      [productId, batchId]
-    ) as Array<{ id: number; quantity: number }>)[0]
-    if (!stock) {
-      await window.electronAPI.db.exec(
-        `INSERT INTO product_stocks (sync_id,product_id,batch_id,location,quantity,updated_at) VALUES (?,?,?,'warehouse',0,?)`,
-        [uuidv4(), productId, batchId, now]
-      )
-      stock = (await window.electronAPI.db.query(
-        `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='warehouse' ORDER BY id DESC LIMIT 1`,
-        [productId, batchId]
-      ) as Array<{ id: number; quantity: number }>)[0]
+  // A delivery without an order. `location` is asked every time — goods can
+  // go straight onto the shop floor (sellable at once) or into the warehouse.
+  // The cost price becomes the weighted average of what's on hand and what
+  // this delivery cost, not simply the latest price.
+  async function receive(productId: number, batchId: number, qty: number, reason: string, location: StockLocation, newCost?: number) {
+    const onHand = await stockOnHand(productId, batchId)
+    await moveStock({ productId, batchId, location, delta: qty, kind: 'receipt', reason })
+    if (newCost !== undefined && newCost > 0) {
+      const [batch] = await window.electronAPI.db.query(`SELECT cost, sync_id FROM product_batches WHERE id=?`, [batchId]) as Array<{ cost: number; sync_id: string | null }>
+      const cost = averageCost(onHand, Number(batch?.cost ?? 0), qty, newCost)
+      if (cost !== Number(batch?.cost ?? 0)) {
+        await window.electronAPI.db.exec(`UPDATE product_batches SET cost=?, updated_at=? WHERE id=?`, [cost, new Date().toISOString(), batchId])
+        if (batch?.sync_id) await window.electronAPI.sync.enqueue('product_batches', batch.sync_id, 'upsert')
+      }
     }
-    const previous = Number(stock.quantity)
-    const adjusted = previous + qty
-    await window.electronAPI.db.exec(`UPDATE product_stocks SET quantity=?,updated_at=? WHERE id=?`, [adjusted, now, stock.id])
-    const adjSyncId = uuidv4()
-    await window.electronAPI.db.exec(
-      `INSERT INTO quantity_adjustments (sync_id,batch_id,stock_id,previous_quantity,adjusted_quantity,reason,location,created_at,updated_at) VALUES (?,?,?,?,?,?,'warehouse',?,?)`,
-      [adjSyncId, batchId, stock.id, previous, adjusted, reason || null, now, now]
-    )
-    await window.electronAPI.sync.enqueue('quantity_adjustments', adjSyncId, 'upsert')
-
-    // Same reasoning as the Purchases receive flow: refresh the stored cost
-    // price to what was actually paid for this batch, so it doesn't go
-    // stale. Past sales are unaffected — their margin was already
-    // snapshotted onto sale_items.unit_cost at sale time.
-    if (newCost !== undefined && newCost >= 0) {
-      await window.electronAPI.db.exec(`UPDATE product_batches SET cost=?,updated_at=? WHERE id=?`, [newCost, now, batchId])
-      const batchRow = (await window.electronAPI.db.query(`SELECT sync_id FROM product_batches WHERE id=?`, [batchId]) as Array<{ sync_id: string | null }>)[0]
-      if (batchRow?.sync_id) await window.electronAPI.sync.enqueue('product_batches', batchRow.sync_id, 'upsert')
-    }
+    await logAudit('stock_receive', { entity: 'product', entityId: productId, details: { product: await productName(productId), qty, location, reason, unitCost: newCost ?? null } })
     window.electronAPI.sync.pushPending().catch(() => {})
   }
 
+  // The journal syncs to other devices, where this device's product ids mean
+  // nothing — entries carry the name.
+  async function productName(productId: number): Promise<string | null> {
+    const [p] = await window.electronAPI.db.query(`SELECT name FROM products WHERE id=?`, [productId]) as Array<{ name: string }>
+    return p?.name ?? null
+  }
+
   async function transferToShop(productId: number, batchId: number, qty: number) {
-    const now = new Date().toISOString()
-
-    const whRow = (await window.electronAPI.db.query(
-      `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='warehouse' ORDER BY id DESC LIMIT 1`,
-      [productId, batchId]
-    ) as Array<{ id: number; quantity: number }>)[0]
-    if (!whRow || Number(whRow.quantity) < qty) throw new Error(t('warehouse.notEnoughStock'))
-
-    let shopRow = (await window.electronAPI.db.query(
-      `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' ORDER BY id DESC LIMIT 1`,
-      [productId, batchId]
-    ) as Array<{ id: number; quantity: number }>)[0]
-    if (!shopRow) {
-      await window.electronAPI.db.exec(
-        `INSERT INTO product_stocks (sync_id,product_id,batch_id,location,quantity,updated_at) VALUES (?,?,?,'shop',0,?)`,
-        [uuidv4(), productId, batchId, now]
-      )
-      shopRow = (await window.electronAPI.db.query(
-        `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' ORDER BY id DESC LIMIT 1`,
-        [productId, batchId]
-      ) as Array<{ id: number; quantity: number }>)[0]
-    }
-
-    const whPrev = Number(whRow.quantity), whNew = whPrev - qty
-    const shopPrev = Number(shopRow.quantity), shopNew = shopPrev + qty
-    await window.electronAPI.db.exec(`UPDATE product_stocks SET quantity=?,updated_at=? WHERE id=?`, [whNew, now, whRow.id])
-    await window.electronAPI.db.exec(`UPDATE product_stocks SET quantity=?,updated_at=? WHERE id=?`, [shopNew, now, shopRow.id])
-
-    const adj1 = uuidv4(), adj2 = uuidv4()
-    await window.electronAPI.db.exec(
-      `INSERT INTO quantity_adjustments (sync_id,batch_id,stock_id,previous_quantity,adjusted_quantity,reason,location,created_at,updated_at) VALUES (?,?,?,?,?,?,'warehouse',?,?)`,
-      [adj1, batchId, whRow.id, whPrev, whNew, t('warehouse.transferReasonOut'), now, now]
-    )
-    await window.electronAPI.db.exec(
-      `INSERT INTO quantity_adjustments (sync_id,batch_id,stock_id,previous_quantity,adjusted_quantity,reason,location,created_at,updated_at) VALUES (?,?,?,?,?,?,'shop',?,?)`,
-      [adj2, batchId, shopRow.id, shopPrev, shopNew, t('warehouse.transferReasonIn'), now, now]
-    )
-    await window.electronAPI.sync.enqueue('quantity_adjustments', adj1, 'upsert')
-    await window.electronAPI.sync.enqueue('quantity_adjustments', adj2, 'upsert')
+    if ((await stockAt(productId, batchId, 'warehouse')) < qty) throw new Error(t('warehouse.notEnoughStock'))
+    await moveStock({ productId, batchId, location: 'warehouse', delta: -qty, kind: 'transfer', reason: t('warehouse.transferReasonOut') })
+    await moveStock({ productId, batchId, location: 'shop', delta: qty, kind: 'transfer', reason: t('warehouse.transferReasonIn') })
+    await logAudit('stock_transfer', { entity: 'product', entityId: productId, details: { product: await productName(productId), qty, from: 'warehouse', to: 'shop' } })
     window.electronAPI.sync.pushPending().catch(() => {})
   }
 
@@ -219,13 +189,20 @@ export default function WarehouseScreen() {
     <BackOfficeLayout>
       <PageHeader
         title={t('nav.warehouse')}
+        subtitle={t('pageHints.warehouse')}
         actions={
           <>
-            <Button variant="secondary" icon={PackagePlus} onClick={() => setShowReceivePicker(true)}>
+            <Button variant="secondary" icon={PackagePlus} onClick={startReceive}>
               {t('warehouse.receive')}
             </Button>
             <Button variant="secondary" icon={ArrowRightLeft} onClick={() => setShowTransferPicker(true)}>
               {t('warehouse.transfer')}
+            </Button>
+            <Button variant="secondary" icon={ClipboardCheck} onClick={() => setShowStocktake(true)}>
+              {t('stocktake.title')}
+            </Button>
+            <Button variant="secondary" icon={PackageMinus} onClick={() => setShowWriteOff(true)}>
+              {t('writeoff.title')}
             </Button>
           </>
         }
@@ -248,6 +225,24 @@ export default function WarehouseScreen() {
           <p className="text-green-400 text-xs">UZS {fmtUZS(totals.totalValue)}</p>
         </div>
       </div>
+
+      {expiring.length > 0 && (
+        <div className="shrink-0 mx-6 mt-3 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="flex items-center gap-2 text-sm text-red-300 font-semibold">
+              <CalendarClock size={16} /> {t('dashboard.expiringCount', { count: expiring.length, days: EXPIRING_DAYS })}
+            </p>
+            <Button size="sm" variant="secondary" icon={PackageMinus} onClick={() => setShowWriteOff(true)}>{t('writeoff.title')}</Button>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {expiring.slice(0, 8).map((r) => (
+              <span key={r.batch_id} className={`text-xs px-2.5 py-1 rounded-full ${r.days_left < 0 ? 'bg-red-500/20 text-red-300' : 'bg-yellow-500/15 text-yellow-300'}`}>
+                {r.name} · {r.stock} · {r.days_left < 0 ? t('warehouse.expiredShort') : t('dashboard.daysLeft', { count: r.days_left })}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="shrink-0 px-6 py-3 border-b border-dark-border flex items-center gap-2">
         <div className="relative max-w-xs flex-1">
@@ -327,8 +322,8 @@ export default function WarehouseScreen() {
           product={{ id: receiveTarget.id, name: receiveTarget.name, batch_id: receiveTarget.batch_id, warehouse_qty: receiveTarget.warehouse_qty, cost: receiveTarget.cost }}
           products={allProducts}
           onClose={() => setReceiveTarget(null)}
-          onConfirm={async (productId, batchId, qty, reason, cost) => {
-            await receive(productId, batchId, qty, reason, cost)
+          onConfirm={async (productId, batchId, qty, reason, location, cost) => {
+            await receive(productId, batchId, qty, reason, location, cost)
             setReceiveTarget(null)
             loadRows(); loadAllProducts()
           }}
@@ -339,11 +334,33 @@ export default function WarehouseScreen() {
           product={null}
           products={allProducts}
           onClose={() => setShowReceivePicker(false)}
-          onConfirm={async (productId, batchId, qty, reason, cost) => {
-            await receive(productId, batchId, qty, reason, cost)
+          onConfirm={async (productId, batchId, qty, reason, location, cost) => {
+            await receive(productId, batchId, qty, reason, location, cost)
             setShowReceivePicker(false)
             loadRows(); loadAllProducts()
           }}
+        />
+      )}
+      {showStocktake && (
+        <StocktakeModal onClose={() => setShowStocktake(false)} onDone={() => { setShowStocktake(false); loadRows(); loadAllProducts() }} />
+      )}
+      {showWriteOff && (
+        <WriteOffModal onClose={() => setShowWriteOff(false)} onDone={() => { setShowWriteOff(false); loadRows(); loadAllProducts() }} />
+      )}
+      {pendingOrders && (
+        <PendingOrderPicker
+          orders={pendingOrders}
+          onClose={() => setPendingOrders(null)}
+          onPick={(o) => { setPendingOrders(null); setReceivingOrder(o) }}
+          onWithoutOrder={() => { setPendingOrders(null); setShowReceivePicker(true) }}
+        />
+      )}
+      {receivingOrder && (
+        <ReceivePurchaseModal
+          purchaseId={receivingOrder.id}
+          reference={receivingOrder.reference_number}
+          onClose={() => setReceivingOrder(null)}
+          onReceived={() => { setReceivingOrder(null); loadRows(); loadAllProducts() }}
         />
       )}
       {transferTarget && (
@@ -384,13 +401,15 @@ function ReceiveModal({ product, products, onClose, onConfirm }: {
   product: ModalProduct | null
   products: PickerProduct[]
   onClose: () => void
-  onConfirm: (productId: number, batchId: number, qty: number, reason: string, cost?: number) => Promise<void>
+  onConfirm: (productId: number, batchId: number, qty: number, reason: string, location: StockLocation, cost?: number) => Promise<void>
 }) {
   const { t } = useTranslation()
   const [pickedId, setPickedId] = useState(product ? String(product.id) : '')
   const [qty, setQty] = useState('')
   const [reason, setReason] = useState('')
   const [cost, setCost] = useState(product ? String(product.cost ?? '') : '')
+  // No default on purpose: each delivery's destination is chosen explicitly.
+  const [location, setLocation] = useState<StockLocation | null>(null)
   const [saving, setSaving] = useState(false)
 
   const picked = product ?? products.find((p) => String(p.id) === pickedId) ?? null
@@ -404,12 +423,12 @@ function ReceiveModal({ product, products, onClose, onConfirm }: {
 
   async function confirm() {
     const n = Number(qty)
-    if (!n || n <= 0 || !picked?.batch_id) return
+    if (!n || n <= 0 || !picked?.batch_id || !location) return
     setSaving(true)
     try {
       const costNum = cost.trim() === '' ? undefined : Number(cost)
-      await onConfirm(picked.id, picked.batch_id, n, reason, costNum)
-      toast.success(t('warehouse.received'))
+      await onConfirm(picked.id, picked.batch_id, n, reason, location, costNum)
+      toast.success(t('purchases.receivedInto', { place: location === 'shop' ? t('purchases.toShop') : t('purchases.toWarehouse') }))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
     } finally { setSaving(false) }
@@ -424,11 +443,28 @@ function ReceiveModal({ product, products, onClose, onConfirm }: {
       footer={
         <>
           <Button variant="secondary" className="flex-1" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button className="flex-1" onClick={confirm} loading={saving} disabled={!picked?.batch_id || !qty || Number(qty) <= 0}>{t('common.save')}</Button>
+          <Button className="flex-1" onClick={confirm} loading={saving} disabled={!picked?.batch_id || !qty || Number(qty) <= 0 || !location}>{t('common.save')}</Button>
         </>
       }
     >
       <div className="p-5 space-y-4">
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block">{t('purchases.whereToReceive')}</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(['shop', 'warehouse'] as const).map((loc) => (
+              <button
+                key={loc}
+                onClick={() => setLocation(loc)}
+                className={`flex items-center justify-center gap-2 h-11 rounded-lg border text-sm font-medium transition-colors ${
+                  location === loc ? 'bg-primary/15 border-primary text-primary' : 'border-dark-border text-gray-300 hover:text-white'
+                }`}
+              >
+                {loc === 'shop' ? <Store size={15} /> : <WarehouseIcon size={15} />}
+                {loc === 'shop' ? t('purchases.toShop') : t('purchases.toWarehouse')}
+              </button>
+            ))}
+          </div>
+        </div>
         {!product && (
           <div>
             <label className="text-xs text-gray-400 mb-1 block">{t('common.name')}</label>

@@ -36,6 +36,88 @@ mounted for the transition; remove it once the Electron fleet has updated.
 After any accepted push the server emits `sync:changed {tables}` to the store's
 socket room so peers pull promptly.
 
+### Debt history across devices (2026-10)
+
+Every device shows the same debtor statement (debt sales, repayments, deleted
+debts), so three tables travel beyond their origin device:
+
+- `sales` — Electron now pulls it too (Android always did). A sale the device
+  already has is never overwritten except for a void (`status='cancelled'`);
+  a voided sale (server tombstone) is kept locally as cancelled, not deleted.
+  `createdAt` is served as the sale's own time (`saleTime`).
+- `cash_logs` — pull serves **only customer repayments** (cash-in `deposit`
+  with a contact; desktop pushes its `debt_payment` rows as `deposit`).
+  Insert-only on the client: a device's own rows are never rewritten, and
+  rows from other terminals carry no local session, so they never enter this
+  terminal's drawer totals. `createdAt` is served as `transactionDate`.
+- `debt_clearances` — "delete a paid-off debt" is a per-contact cut-off
+  (`clearedAt`); debt history shows only rows newer than the latest one.
+  Pushed insert-only, pulled insert-only. The server migration seeds one for
+  every contact already at 0 balance with debt history, so devices pulling
+  old sales don't resurface long-paid debts.
+
+Pull order: contacts before all three. Electron skips `cash_logs` /
+`debt_clearances` quietly if an older server answers "Unknown table".
+
+### Purchase orders and receiving (2026-10)
+
+An order is created `pending` (server `draft`) with its lines, printed as an
+order slip, and later received line by line into `shop` or `warehouse`.
+
+- `purchases` pull carries the lines (`items`, with `productSyncId` /
+  `batchSyncId` / `receivedQuantity` / `discrepancyNote`); the client upserts
+  them, adopting server line syncIds by batch for lines pushed by older
+  builds. A purchase with a pending or dead outbox row is never overwritten.
+- **The server puts received goods into stock**, exactly once, when a push
+  moves a purchase into `received` *with* a `receivedLocation`
+  (`applyPurchaseReceipt`: stock increment + audit `QuantityAdjustment` +
+  batch cost). Older builds send no location and push their own
+  `quantity_adjustments`, so for them `received` stays a plain flag.
+- A received purchase never reopens. If two devices receive the same order,
+  only the first receipt applies; each receipt carries a device-minted
+  `receiptId`, and a device that sees a different `receiptId` on pull takes
+  back the stock it had added locally.
+- The receiving device updates its own stock optimistically (no
+  `quantity_adjustments`); peers get the server's figures through
+  `product_stocks` after the push's `sync:changed` broadcast.
+- Receiving ends with the supplier's invoice: per line the real unit price
+  (`unitCost`) and an optional `expiryDate`. The server stores both on the
+  line, uses the real price for the weighted-average batch cost, and keeps
+  the batch's **nearest** expiry among goods on hand (an earlier date on
+  stock already there wins). The header's `totalAmount` becomes what arrived
+  at the invoice prices — what the supplier is owed.
+- Suppliers are contacts of type `vendor` (`contactSyncId` on the order).
+  Paying one settles their received orders oldest first: each order's
+  `amountPaid` / `paymentStatus` push with the order (LWW), and the money is
+  a `cash_logs` cash-out with source `purchase` (in the till's shift when
+  paid from the drawer). What's owed is always computed from the orders,
+  never kept as a running balance.
+
+### Integrity round (2026-10)
+
+Stock changes only through documents, and every document says what it is:
+
+- `quantity_adjustments.kind` — `receipt` (delivery without an order),
+  `purchase` (server, on receipt), `transfer`, `stocktake`, `writeoff`,
+  `sale_void` (server, when a sale turns `cancelled`). There is no free
+  "set quantity" anywhere in the apps.
+- A **void** is pushed as the sale with `status='cancelled'`; on that
+  transition the server undoes it once (`voidSaleEffects`): stock back to the
+  shop shelf, the debt off the customer, the cash back out with a cash log.
+- **Returns** use the Android convention on every client: negative amounts,
+  positive quantities, negative unit prices. The server applies `abs()` to
+  quantities, so older desktop returns (negative quantities) also add stock.
+- Cash in the drawer is the tendered amount minus change, everywhere
+  (server cash logs, reports, the shift's expected cash).
+- Store-wide settings (`SHARED_SETTING_KEYS` in `@baraka/shared`: receipt
+  text, Telegram/SMS, reminders, owner PIN, scale barcodes), `charges`
+  on/off and the store's name/address/phone are pushed and pulled; device
+  settings (printer, paper layout, language) stay local.
+- `audit_logs` — the journal (voids with reasons, refunds, stocktakes,
+  write-offs, price changes, deletions, supplier payments, shift closes) —
+  is pushed and pulled insert-only, so every device shows the same journal.
+- `expenses` are pulled too (category and date-only `expenseDate`).
+
 ## Client engine (Electron main: `client/electron/services/sync.service.ts`)
 
 - **Outbox** (`sync_queue_local`): pointer rows `{table_name, op, sync_id}`;

@@ -10,11 +10,13 @@ const PULL_TABLES: SyncV2PullTable[] = [
   'products', 'product_batches', 'product_stocks', 'contacts', 'collections',
   'collection_product', 'charges', 'settings', 'stores', 'users',
   'pos_sessions', 'expenses', 'purchases', 'quantity_adjustments', 'sales',
+  'cash_logs', 'debt_clearances', 'audit_logs',
 ]
 
 const PUSH_TABLES = [
   'contacts', 'products', 'product_batches', 'collections', 'expenses', 'purchases',
-  'pos_sessions', 'quantity_adjustments', 'users', 'cash_logs',
+  'pos_sessions', 'quantity_adjustments', 'users', 'cash_logs', 'debt_clearances',
+  'settings', 'charges', 'audit_logs', 'stores',
 ] as const
 
 router.get('/health', (_req: Request, res: Response) => {

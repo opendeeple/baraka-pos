@@ -45,7 +45,12 @@ interface DebtorContact {
 // Lists the sales that carried a debt portion (payment_transactions with
 // method 'Debt') rather than the customer's whole purchase history — this
 // is what the owner asked for: "which purchases were taken on credit",
-// not every past receipt regardless of how it was paid.
+// not every past receipt regardless of how it was paid. Below them, the
+// repayments made so far and what's left — the same statement the debt
+// history panel shows. Both only count rows newer than the contact's last
+// cleared (deleted) debt, see debt_clearances in schema v12.
+const LIST_LIMIT = 10
+
 function buildReminderMessage(contact: DebtorContact): string {
   const storeRows = dbQuery(`SELECT name FROM stores LIMIT 1`) as Array<{ name: string }>
   const storeName = storeRows[0]?.name ?? ''
@@ -55,22 +60,42 @@ function buildReminderMessage(contact: DebtorContact): string {
     `Iltimos, imkon qadar tezroq to'lashingizni so'raymiz.`, '',
     `Qarzga olingan xaridlar:`,
   ]
+  const since = `COALESCE((SELECT MAX(cleared_at) FROM debt_clearances WHERE contact_id = ?), '')`
   const debtSales = dbQuery(
     `SELECT s.invoice_number, s.sale_date, SUM(pt.amount) as amount
      FROM sales s
      JOIN payment_transactions pt ON pt.sale_id = s.id AND pt.payment_method = 'Debt'
-     WHERE s.contact_id = ? AND s.status != 'cancelled'
+     WHERE s.contact_id = ? AND s.status != 'cancelled' AND s.created_at > ${since}
      GROUP BY s.id
-     ORDER BY s.created_at DESC
-     LIMIT 10`,
-    [contact.id]
+     ORDER BY s.created_at DESC`,
+    [contact.id, contact.id]
   ) as Array<{ invoice_number: string; sale_date: string; amount: number }>
   if (debtSales.length === 0) {
     lines.push("Ma'lumot topilmadi.")
   } else {
-    for (const s of debtSales) lines.push(`${s.sale_date} — ${s.invoice_number} — UZS ${fmt(Number(s.amount))}`)
+    for (const s of debtSales.slice(0, LIST_LIMIT)) lines.push(`${s.sale_date} - ${s.invoice_number} - UZS ${fmt(Number(s.amount))}`)
+    if (debtSales.length > LIST_LIMIT) lines.push(`... va yana ${debtSales.length - LIST_LIMIT} ta`)
+    lines.push(`Jami qarz: UZS ${fmt(debtSales.reduce((sum, s) => sum + Number(s.amount), 0))}`)
   }
-  lines.push('', 'Rahmat!')
+
+  // Same repayment match as client/src/lib/debt.ts REPAYMENT_FOR_CONTACT:
+  // desktop 'debt_payment' rows plus 'deposit' ones pulled from other devices.
+  const repayments = dbQuery(
+    `SELECT created_at, amount FROM cash_logs
+     WHERE transaction_type = 'cash_in' AND source IN ('debt_payment', 'deposit')
+       AND (contact_id = ? OR (contact_id IS NULL AND source = 'debt_payment' AND reference_id = ?))
+       AND created_at > ${since}
+     ORDER BY created_at DESC`,
+    [contact.id, contact.id, contact.id]
+  ) as Array<{ created_at: string; amount: number }>
+  if (repayments.length > 0) {
+    lines.push('', "To'lovlar:")
+    for (const p of repayments.slice(0, LIST_LIMIT)) lines.push(`${p.created_at.slice(0, 10)} - UZS ${fmt(Number(p.amount))}`)
+    if (repayments.length > LIST_LIMIT) lines.push(`... va yana ${repayments.length - LIST_LIMIT} ta`)
+    lines.push(`Jami to'langan: UZS ${fmt(repayments.reduce((sum, p) => sum + Number(p.amount), 0))}`)
+  }
+
+  lines.push('', `Qolgan qarz: UZS ${fmt(Number(contact.balance))}`, '', 'Rahmat!')
   return lines.join('\n')
 }
 

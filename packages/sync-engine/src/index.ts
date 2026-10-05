@@ -1,7 +1,7 @@
 // Platform-agnostic sync protocol v2 client engine, shared by Electron
 // (better-sqlite3 in the main process) and the Android apps (expo-sqlite sync
 // API). All platform concerns are injected via SyncEngineDeps.
-import { DEFAULT_SERVER_URL } from '@baraka/shared'
+import { DEFAULT_SERVER_URL, SHARED_SETTING_KEYS } from '@baraka/shared'
 
 // ---------------------------------------------------------------------------
 // Injected dependencies
@@ -41,7 +41,14 @@ export interface FlushResult {
 export const PULL_TABLE_ORDER = [
   'stores', 'collections', 'contacts', 'products', 'product_batches',
   'product_stocks', 'charges', 'settings', 'users', 'pos_sessions', 'sales',
+  'purchases', 'cash_logs', 'debt_clearances', 'expenses', 'audit_logs',
 ] as const
+
+// Insert-only facts: a pulled row that already exists locally (usually this
+// device's own, pulled back) is left exactly as it is. cash_logs especially:
+// the server stores desktop 'debt_payment' rows as 'deposit', and rewriting
+// a local row's source would pull it into session cash totals.
+const INSERT_ONLY_PULL = new Set(['cash_logs', 'debt_clearances', 'audit_logs'])
 
 const INVOICE_LEASE_COUNT = 500
 const MAX_ATTEMPTS = 10
@@ -53,7 +60,12 @@ const RESERVED_SETTINGS = new Set([
   'cached_store', 'printer_config', 'device_id', 'device_key',
   'invoice_prefix', 'invoice_range_start', 'invoice_range_end', 'invoice_range_next',
   'v2_backfill_done', 'active_shift', 'pending_shift_ends',
+  // Per device: the paper calibration belongs to this till's printer, the
+  // language to whoever uses this screen.
+  'receipt_layout', 'app_language',
 ])
+
+const SHARED_SETTINGS = new Set(SHARED_SETTING_KEYS)
 const RESERVED_SETTINGS_PREFIXES = ['last_sync_', 'sync_cursor_']
 
 // Pulled records carry *SyncId fields for their FKs; the local row must store
@@ -80,6 +92,18 @@ const PULL_FK_MAP: Record<string, Record<string, { table: string; localColumn: s
     sessionSyncId: { table: 'pos_sessions', localColumn: 'session_id' },
     referenceSyncId: { table: 'sales', localColumn: 'reference_id' },
   },
+  // A repayment taken on another terminal has no local session (session_id
+  // stays NULL), so it never enters this device's drawer totals.
+  cash_logs: {
+    contactSyncId: { table: 'contacts', localColumn: 'contact_id' },
+    sessionSyncId: { table: 'pos_sessions', localColumn: 'session_id' },
+  },
+  debt_clearances: {
+    contactSyncId: { table: 'contacts', localColumn: 'contact_id' },
+  },
+  expenses: {
+    sessionSyncId: { table: 'pos_sessions', localColumn: 'session_id' },
+  },
 }
 
 /** v1-pulled tables eligible for the one-time orphan sweep after a full pull. */
@@ -90,7 +114,8 @@ const SWEEP_TABLES = new Set(['products', 'product_batches', 'product_stocks', '
 // flush first — products reference them via categorySyncId/brandSyncId.
 const FLUSH_PRIORITY: Record<string, number> = {
   collections: 0, contacts: 1, users: 1, products: 2, product_batches: 3, pos_sessions: 4,
-  quantity_adjustments: 5, expenses: 6, purchases: 7, cash_logs: 8, sales: 99,
+  settings: 1, charges: 1, stores: 1,
+  quantity_adjustments: 5, expenses: 6, purchases: 7, cash_logs: 8, debt_clearances: 9, audit_logs: 10, sales: 99,
 }
 
 // When a pulled tombstone hard-deletes a row by sync_id, also delete rows in
@@ -334,6 +359,111 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     }
   }
 
+  /**
+   * Purchase orders travel with their lines (received quantities included),
+   * so an order placed on one device can be received on another. A device's
+   * own unsent edit — an order created or received offline — wins until its
+   * push lands; the next pull then brings the server's settled copy.
+   */
+  function upsertPurchase(record: Record<string, unknown>, syncId: string, serverId: number): void {
+    // 'dead' too: a dead-lettered receipt is retried on the next app start,
+    // and overwriting it meanwhile would show the order as waiting again.
+    if (db.get(`SELECT 1 AS x FROM sync_queue_local WHERE sync_id=? AND status IN ('pending','dead')`, [syncId])) return
+    const existing = db.get<{ id: number; receipt_id: string | null; received_location: string | null }>(
+      `SELECT id, receipt_id, received_location FROM purchases WHERE sync_id=?`, [syncId]
+    )
+    if (record.deletedAt) {
+      if (existing) db.run(`UPDATE purchases SET deleted_at=?, server_id=? WHERE id=?`, [coerceSqlValue(record.deletedAt), serverId, existing.id])
+      return
+    }
+
+    // This device received the order too, but the server applied another
+    // device's receipt (a different receiptId): the goods this device added
+    // to its own stock when receiving were never counted — take them back.
+    // The winning receipt's stock arrives through the product_stocks pull.
+    if (existing?.receipt_id && record.receiptId && record.receiptId !== existing.receipt_id && existing.received_location) {
+      const mine = db.all<{ product_id: number; batch_id: number | null; received_quantity: number | null }>(
+        `SELECT product_id, batch_id, received_quantity FROM purchase_items WHERE purchase_id=?`, [existing.id]
+      )
+      for (const item of mine) {
+        if (!item.batch_id || !item.received_quantity) continue
+        db.run(
+          `UPDATE product_stocks SET quantity = quantity - ?, updated_at = ?
+           WHERE id = (SELECT id FROM product_stocks WHERE product_id=? AND batch_id=? AND location=? ORDER BY id DESC LIMIT 1)`,
+          [Number(item.received_quantity), new Date().toISOString(), item.product_id, item.batch_id, existing.received_location]
+        )
+      }
+      log(`[syncV2] purchase ${syncId}: receipt lost to another device, local stock reverted`)
+    }
+
+    // Local convention: an open order is 'pending' (the server calls it 'draft').
+    const status = record.status === 'draft' || !record.status ? 'pending' : String(record.status)
+    const header = [
+      lookupIdBySyncId('contacts', record.contactSyncId), record.referenceNo ?? null, record.note ?? null,
+      coerceSqlValue(record.totalAmount ?? 0), status, coerceSqlValue(record.updatedAt),
+      record.receivedLocation ?? null, coerceSqlValue(record.receivedAt), record.receiptId ?? null,
+      coerceSqlValue(record.amountPaid ?? 0), (record.paymentStatus as string) ?? 'pending', serverId,
+    ]
+    let purchaseId: number
+    if (existing) {
+      db.run(
+        `UPDATE purchases SET vendor_id=?, reference_number=?, note=?, total_amount=?, status=?, updated_at=?,
+           received_location=?, received_at=?, receipt_id=?, amount_paid=?, payment_status=?, server_id=? WHERE id=?`,
+        [...header, existing.id]
+      )
+      purchaseId = existing.id
+    } else {
+      db.run(
+        `INSERT INTO purchases (vendor_id, reference_number, note, total_amount, status, updated_at,
+           received_location, received_at, receipt_id, amount_paid, payment_status, server_id, sync_id, store_id, created_by, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [...header, syncId, coerceSqlValue(record.storeId), coerceSqlValue(record.createdBy), coerceSqlValue(record.createdAt)]
+      )
+      purchaseId = db.get<{ id: number }>(`SELECT id FROM purchases WHERE sync_id=?`, [syncId])!.id
+    }
+
+    const items = Array.isArray(record.items) ? (record.items as Array<Record<string, unknown>>) : []
+    const serverItemIds = new Set(items.map((i) => i.syncId as string).filter(Boolean))
+    for (const item of items) {
+      const batchId = lookupIdBySyncId('product_batches', item.batchSyncId)
+      const productId = lookupIdBySyncId('products', item.productSyncId)
+        ?? (batchId ? db.get<{ product_id: number }>(`SELECT product_id FROM product_batches WHERE id=?`, [batchId])?.product_id ?? null : null)
+      if (!productId) continue // purchase_items.product_id is NOT NULL
+      const itemSyncId = item.syncId as string
+      // Lines pushed by older builds have no sync_id locally (or one the
+      // server never saw) — adopt the server's by matching the batch.
+      let local = db.get<{ id: number }>(`SELECT id FROM purchase_items WHERE sync_id=?`, [itemSyncId])
+      if (!local && batchId) {
+        local = db
+          .all<{ id: number; sync_id: string | null }>(
+            `SELECT id, sync_id FROM purchase_items WHERE purchase_id=? AND batch_id=? ORDER BY id`, [purchaseId, batchId]
+          )
+          .find((c) => !c.sync_id || !serverItemIds.has(c.sync_id))
+      }
+      const qty = Number(item.quantity ?? 0)
+      const cost = Number(item.unitCost ?? 0)
+      const values = [
+        productId, batchId, qty, cost, qty * cost,
+        item.receivedQuantity == null ? null : Number(item.receivedQuantity),
+        item.discrepancyNote ?? null, item.expiryDate ? String(coerceSqlValue(item.expiryDate)).slice(0, 10) : null, itemSyncId,
+      ]
+      if (local) {
+        db.run(
+          `UPDATE purchase_items SET product_id=?, batch_id=?, quantity=?, unit_cost=?, total_cost=?,
+             received_quantity=?, discrepancy_note=?, expiry_date=?, sync_id=? WHERE id=?`,
+          [...values, local.id]
+        )
+      } else {
+        db.run(
+          `INSERT INTO purchase_items (product_id, batch_id, quantity, unit_cost, total_cost,
+             received_quantity, discrepancy_note, expiry_date, sync_id, purchase_id, created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          [...values, purchaseId, coerceSqlValue(item.createdAt)]
+        )
+      }
+    }
+  }
+
   function upsertStore(record: Record<string, unknown>): void {
     const updated = db.run(
       `UPDATE stores SET name=?, address=?, phone=?, sale_prefix=?, current_sale_number=?, updated_at=?, server_id=? WHERE server_id=? OR id=?`,
@@ -396,6 +526,35 @@ export function createSyncEngine(deps: SyncEngineDeps) {
           [syncId, serverId, syncId, syncId]
         )
 
+        if (table === 'purchases') {
+          upsertPurchase(record, syncId, serverId)
+          continue
+        }
+
+        // A voided sale is tombstoned server-side. Keep it (and its items and
+        // payments) as cancelled instead of deleting it: sale history and
+        // debt statements still show it, and reports already skip cancelled.
+        if (table === 'sales' && record.deletedAt) {
+          db.run(
+            `UPDATE sales SET status='cancelled', deleted_at=?, server_id=?, sync_status='synced' WHERE sync_id=?`,
+            [coerceSqlValue(record.deletedAt), serverId, syncId]
+          )
+          continue
+        }
+
+        // Sales are immutable facts apart from a void. One this device already
+        // has (usually its own, pulled back) keeps its local row: a full
+        // overwrite would swap local conventions (time-only sale_time, local
+        // created_at, a local 'refunded' flag) for the server's copy.
+        if (table === 'sales' && db.get(`SELECT 1 AS x FROM sales WHERE sync_id=?`, [syncId])) {
+          db.run(
+            `UPDATE sales SET server_id=?, sync_status='synced'${record.status === 'cancelled' ? ", status='cancelled'" : ''} WHERE sync_id=?`,
+            [serverId, syncId]
+          )
+          upsertSaleChildren(record, syncId)
+          continue
+        }
+
         // Tombstone: the row is gone on the server. Cascade to children that
         // reference this row's *local* id — products.id is a plain INTEGER
         // PRIMARY KEY (not AUTOINCREMENT), so SQLite recycles a freed id for
@@ -431,8 +590,42 @@ export function createSyncEngine(deps: SyncEngineDeps) {
           if (Object.values(fkMap).some((m) => m.localColumn === col)) continue
           if (localCols.has(col)) entries.push([col, coerceSqlValue(v)])
         }
+        // contact_id is NOT NULL there; a clearance for a contact deleted on
+        // this device has nothing left to apply to.
+        if (table === 'debt_clearances' && !entries.some(([k, v]) => k === 'contact_id' && v != null)) continue
+        if (table === 'product_stocks') {
+          const pid = entries.find(([k]) => k === 'product_id')?.[1]
+          const bid = entries.find(([k]) => k === 'batch_id')?.[1]
+          // Stock of a product/batch this device doesn't have (deleted, or
+          // never synced) has nothing to attach to — storing it with NULL
+          // links only left orphan rows behind.
+          if (pid == null || bid == null) continue
+          const loc = (entries.find(([k]) => k === 'location')?.[1] as string | undefined) ?? 'shop'
+          // One row per product+batch+location. A row this device created
+          // itself (its own sync_id) is the same stock: it adopts the
+          // server's identity instead of becoming a duplicate next to it.
+          if (!db.get(`SELECT 1 AS x FROM product_stocks WHERE sync_id=?`, [syncId])) {
+            db.run(
+              `UPDATE product_stocks SET sync_id=? WHERE id = (
+                 SELECT MAX(id) FROM product_stocks WHERE product_id=? AND batch_id=? AND COALESCE(location,'shop')=?)`,
+              [syncId, pid, bid, loc]
+            )
+          }
+          db.run(
+            `DELETE FROM product_stocks WHERE product_id=? AND batch_id=? AND COALESCE(location,'shop')=? AND sync_id<>?`,
+            [pid, bid, loc, syncId]
+          )
+        }
         entries.push(['sync_id', syncId])
         entries.push(['server_id', serverId])
+        if (table === 'expenses') {
+          // Devices keep expense_date date-only and call the category
+          // `category`; servers before the 2026-10 mapping sent `source` and a
+          // full timestamp — normalised either way.
+          const date = entries.find(([k]) => k === 'expense_date')
+          if (date && typeof date[1] === 'string') date[1] = date[1].slice(0, 10)
+          if (!entries.some(([k]) => k === 'category') && typeof record.source === 'string') entries.push(['category', record.source])
+        }
         if (table === 'sales') {
           // A sale present in a pull is on the server by definition.
           entries.push(['sync_status', 'synced'])
@@ -447,7 +640,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         const updates = keys.filter((k) => k !== 'sync_id').map((k) => `${k}=excluded.${k}`).join(', ')
         db.run(
           `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})
-           ON CONFLICT(sync_id) DO UPDATE SET ${updates}`,
+           ON CONFLICT(sync_id) DO ${INSERT_ONLY_PULL.has(table) ? 'NOTHING' : `UPDATE SET ${updates}`}`,
           values
         )
 
@@ -730,7 +923,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       const p = db.get<any>(`SELECT * FROM purchases WHERE sync_id=?`, [sync_id])
       if (!p) return null
       const items = db.all<any>(
-        `SELECT pi.*, b.sync_id AS batch_sync_id, pr.name AS product_name FROM purchase_items pi
+        `SELECT pi.*, b.sync_id AS batch_sync_id, pr.sync_id AS product_sync_id, pr.name AS product_name FROM purchase_items pi
          LEFT JOIN product_batches b ON b.id = pi.batch_id
          LEFT JOIN products pr ON pr.id = pi.product_id
          WHERE pi.purchase_id=?`,
@@ -741,13 +934,28 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         contactSyncId: syncIdForLocalId('contacts', p.vendor_id),
         referenceNo: p.reference_number, totalAmount: p.total_amount ?? 0,
         status: statusMap[p.status] ?? 'draft', note: p.note, createdBy: p.created_by,
+        // Present once received through the checklist: the server then puts
+        // the goods into stock itself (once), so no quantity_adjustments.
+        receivedLocation: p.received_location ?? undefined,
+        receivedAt: p.received_at ?? undefined,
+        receivedBy: p.received_by ?? undefined,
+        receiptId: p.receipt_id ?? undefined,
+        // What's been paid to the supplier so far (Yetkazib beruvchilar).
+        amountPaid: p.amount_paid ?? 0,
+        paymentStatus: p.payment_status ?? 'pending',
         items: items.map((i) => ({
           syncId: i.sync_id ?? undefined,
           batchSyncId: i.batch_sync_id,
+          productSyncId: i.product_sync_id,
           description: i.product_name ?? '',
           quantity: i.quantity ?? 0,
           unitPrice: i.unit_cost ?? 0,
           unitCost: i.unit_cost ?? 0,
+          receivedQuantity: i.received_quantity ?? undefined,
+          discrepancyNote: i.discrepancy_note ?? undefined,
+          // Read by the server when it applies the receipt: the expiry date
+          // written on this delivery (see applyPurchaseReceipt).
+          expiryDate: i.expiry_date ?? undefined,
         })),
         _updatedAt: p.updated_at,
       }
@@ -764,10 +972,25 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         transactionType: c.transaction_type === 'cash_out' || Number(c.amount) < 0 ? 'cash_out' : 'cash_in',
         amount: Math.abs(Number(c.amount) || 0),
         source: c.source,
+        paymentMethod: c.payment_method ?? undefined,
         description: c.description,
         transactionDate: c.created_at,
         createdBy: c.created_by,
         _updatedAt: c.updated_at ?? c.created_at,
+      }
+    },
+    debt_clearances: ({ sync_id }) => {
+      const d = db.get<any>(`SELECT * FROM debt_clearances WHERE sync_id=?`, [sync_id])
+      if (!d) return null
+      const contactSyncId = syncIdForLocalId('contacts', d.contact_id)
+      if (!contactSyncId) return null // retried once the contact has synced
+      return {
+        contactSyncId,
+        clearedAt: d.cleared_at,
+        clearedBy: d.cleared_by,
+        totalDebt: d.total_debt ?? 0,
+        totalPaid: d.total_paid ?? 0,
+        _updatedAt: d.updated_at ?? d.cleared_at,
       }
     },
     quantity_adjustments: (row) => {
@@ -779,7 +1002,8 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         return {
           productSyncId, batchSyncId,
           previousQuantity: inline.previousQuantity, adjustedQuantity: inline.adjustedQuantity,
-          reason: inline.reason, location: inline.location || 'shop', _updatedAt: new Date().toISOString(),
+          reason: inline.reason, location: inline.location || 'shop', kind: inline.kind ?? 'receipt',
+          _updatedAt: new Date().toISOString(),
         }
       }
       const a = db.get<any>(`SELECT * FROM quantity_adjustments WHERE sync_id=?`, [row.sync_id])
@@ -791,8 +1015,35 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       return {
         productSyncId, batchSyncId,
         previousQuantity: a.previous_quantity, adjustedQuantity: a.adjusted_quantity,
-        reason: a.reason, createdBy: a.created_by, location: a.location || 'shop',
+        reason: a.reason, createdBy: a.created_by, location: a.location || 'shop', kind: a.kind ?? undefined,
         _updatedAt: a.updated_at ?? a.created_at,
+      }
+    },
+    settings: ({ sync_id }) => {
+      const s = db.get<any>(`SELECT * FROM settings WHERE sync_id=?`, [sync_id])
+      if (!s || !SHARED_SETTINGS.has(s.meta_key)) return null
+      return { metaKey: s.meta_key, metaValue: s.meta_value ?? '', _updatedAt: s.updated_at ?? new Date().toISOString() }
+    },
+    stores: ({ sync_id }) => {
+      const s = db.get<any>(`SELECT * FROM stores WHERE sync_id=?`, [sync_id])
+      if (!s) return null
+      return { name: s.name, address: s.address, phone: s.phone, _updatedAt: s.updated_at ?? new Date().toISOString() }
+    },
+    charges: ({ sync_id }) => {
+      const c = db.get<any>(`SELECT * FROM charges WHERE sync_id=?`, [sync_id])
+      if (!c) return null
+      return {
+        name: c.name, chargeType: c.charge_type ?? undefined, rateType: c.rate_type ?? undefined,
+        rateValue: Number(c.rate_value ?? 0), isActive: Boolean(c.is_active), isDefault: Boolean(c.is_default),
+        _updatedAt: c.updated_at ?? new Date().toISOString(),
+      }
+    },
+    audit_logs: ({ sync_id }) => {
+      const a = db.get<any>(`SELECT * FROM audit_logs WHERE sync_id=?`, [sync_id])
+      if (!a) return null
+      return {
+        action: a.action, entity: a.entity, entityId: a.entity_id, details: a.details,
+        userId: a.user_id, userName: a.user_name, occurredAt: a.occurred_at, _updatedAt: a.occurred_at,
       }
     },
   }
@@ -811,7 +1062,10 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     const payments = db.all<any>(`SELECT * FROM payment_transactions WHERE sale_id=?`, [sale.id])
 
     const sessionSyncId = syncIdForLocalId('pos_sessions', sale.session_id)
-    if (!sessionSyncId) return null // session must exist locally; retried otherwise
+    // Session must exist locally; retried otherwise. Exception: a sale pulled
+    // from another terminal has no local session, but the server already has
+    // it — a re-push of it only carries a void, which never needs the session.
+    if (!sessionSyncId && !sale.server_id) return null
 
     const saleDate =
       sale.sale_time && String(sale.sale_time).includes('T')
@@ -936,7 +1190,8 @@ export function createSyncEngine(deps: SyncEngineDeps) {
               errors++
             } else if (result.status === 'applied' || result.status === 'skipped-stale') {
               markSynced(row.id)
-              if (result.serverId && row.table_name !== 'quantity_adjustments') {
+              // (settings has no server_id column; quantity_adjustments' stays local.)
+              if (result.serverId && row.table_name !== 'quantity_adjustments' && row.table_name !== 'settings') {
                 db.run(`UPDATE ${row.table_name} SET server_id=? WHERE sync_id=?`, [
                   result.serverId, row.sync_id,
                 ])

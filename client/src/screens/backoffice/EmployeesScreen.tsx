@@ -176,7 +176,7 @@ export default function EmployeesScreen() {
         <div className="flex items-center gap-6">
           <div>
             <h1 className="text-white font-bold text-xl">{t('nav.employees')}</h1>
-            <p className="text-gray-500 text-xs mt-0.5">{t('employees.staffMembers', { count: employees.length })}</p>
+            <p className="text-gray-500 text-xs mt-0.5">{t('pageHints.employees')} · {t('employees.staffMembers', { count: employees.length })}</p>
           </div>
           <div className="flex gap-1 p-1 bg-dark-card border border-dark-border rounded-xl">
             {([

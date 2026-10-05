@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
-import { Plus, Search, Edit2, Trash2, Tags } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Search, Edit2, Trash2, Tags, ArrowLeft } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
@@ -23,6 +24,7 @@ const EMPTY_FORM: CategoryForm = { name: '', description: '' }
 
 export default function CategoriesScreen() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [categories, setCategories] = useState<Category[]>([])
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -124,7 +126,11 @@ export default function CategoriesScreen() {
     <BackOfficeLayout>
       <PageHeader
         title={t('nav.categories')}
-        actions={<Button icon={Plus} onClick={openCreate}>{t('categories.addCategory')}</Button>}
+        subtitle={t('pageHints.categories')}
+        actions={<>
+          <Button variant="secondary" icon={ArrowLeft} onClick={() => navigate('/backoffice/products')}>{t('nav.products')}</Button>
+          <Button icon={Plus} onClick={openCreate}>{t('categories.addCategory')}</Button>
+        </>}
       />
 
       <div className="shrink-0 px-6 py-3 border-b border-dark-border flex gap-3">

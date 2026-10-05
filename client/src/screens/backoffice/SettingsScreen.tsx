@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Save, Printer, TestTube2, RefreshCw, Globe, Maximize, Minimize, Send, BellRing, Banknote } from 'lucide-react'
+import {
+  Save, Printer, TestTube2, RefreshCw, Globe, Maximize, Minimize, Send, BellRing, Banknote, Scale, Store, Receipt, Monitor,
+  type LucideIcon,
+} from 'lucide-react'
+import { DEFAULT_SCALE_CONFIG, SCALE_SETTING_KEY, parseScaleBarcode, readScaleConfig, type ScaleConfig } from '../../lib/scaleBarcode'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 import { toast } from 'sonner'
 import { Select } from '../../components/ui/Select'
 import { PinConfirmModal } from '../../components/ui/PinConfirmModal'
 import { LANGUAGES, setAppLanguage, type AppLanguage } from '../../i18n'
+import { SYNC_TABLES, pullSyncTable } from '../../hooks/useSync'
+import { SHARED_SETTING_KEYS } from '@baraka/shared'
+import { v4 as uuidv4 } from 'uuid'
+import { logAudit } from '../../lib/audit'
 
 interface StoreSetting { meta_key: string; meta_value: string }
 
@@ -30,6 +38,10 @@ interface SmsConfig {
 interface AutoReminderConfig {
   enabled: boolean
   intervalDays: number
+}
+
+interface DebtSaleNotifyConfig {
+  enabled: boolean
 }
 
 interface ReceiptSettings {
@@ -84,6 +96,14 @@ const DEFAULT_LAYOUT: ReceiptLayout = {
 
 interface ChargeRow { id: number; name: string; rate_type: string; rate_value: number; is_active: number }
 
+type SettingsTab = 'store' | 'receipt' | 'messages' | 'scale' | 'screen'
+
+const SETTINGS_TABS: Array<[SettingsTab, LucideIcon]> = [
+  ['store', Store], ['receipt', Receipt], ['messages', Send], ['scale', Scale], ['screen', Monitor],
+]
+
+const splitPrefixes = (s: string) => s.split(/[\s,;]+/).map((p) => p.trim()).filter((p) => /^\d{1,3}$/.test(p))
+
 const SECTION_CLS = 'bg-dark-surface border border-dark-border rounded-2xl p-5 space-y-4'
 const LABEL_CLS = 'text-xs text-gray-400 mb-1 block'
 const INPUT_CLS = 'w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary'
@@ -101,6 +121,8 @@ export default function SettingsScreen() {
   const [sms, setSms] = useState<SmsConfig>({ host: '', token: '' })
   const [autoReminder, setAutoReminder] = useState<AutoReminderConfig>({ enabled: false, intervalDays: 3 })
   const [runningReminders, setRunningReminders] = useState(false)
+  // Default on — matches debtNotify.service.ts's DEFAULT_CONFIG.
+  const [debtSaleNotify, setDebtSaleNotify] = useState<DebtSaleNotifyConfig>({ enabled: true })
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [storeName, setStoreName] = useState('')
   const [storeAddress, setStoreAddress] = useState('')
@@ -114,6 +136,10 @@ export default function SettingsScreen() {
   const [ownerPin, setOwnerPin] = useState('')
   const [openingDrawer, setOpeningDrawer] = useState(false)
   const [pendingDrawerConfirm, setPendingDrawerConfirm] = useState(false)
+  const [tab, setTab] = useState<SettingsTab>('store')
+  const [scale, setScale] = useState<ScaleConfig>(DEFAULT_SCALE_CONFIG)
+  const [scalePrefixes, setScalePrefixes] = useState(DEFAULT_SCALE_CONFIG.prefixes.join(', '))
+  const [scaleTest, setScaleTest] = useState('')
   const { t, i18n } = useTranslation()
 
   useEffect(() => { loadSettings() }, [])
@@ -169,6 +195,12 @@ export default function SettingsScreen() {
     if (map.auto_reminder_config) {
       try { setAutoReminder({ enabled: false, intervalDays: 3, ...JSON.parse(map.auto_reminder_config) }) } catch {}
     }
+    if (map.debt_sale_notify_config) {
+      try { setDebtSaleNotify({ enabled: true, ...JSON.parse(map.debt_sale_notify_config) }) } catch {}
+    }
+    const scaleCfg = readScaleConfig(map[SCALE_SETTING_KEY])
+    setScale(scaleCfg)
+    setScalePrefixes(scaleCfg.prefixes.join(', '))
 
     const storeRow = await window.electronAPI.db.query(`SELECT name, address, phone FROM stores LIMIT 1`, []) as Array<{name:string;address:string;phone:string}>
     if (storeRow[0]) {
@@ -182,13 +214,23 @@ export default function SettingsScreen() {
     ) as ChargeRow[])
   }
 
+  // Store-wide keys (SHARED_SETTING_KEYS) sync to every device; the rest
+  // (printer, paper layout) belong to this till only. Unchanged values aren't
+  // re-sent, so Save doesn't flood the outbox or the journal.
   async function saveSetting(key: string, value: string) {
     const now = new Date().toISOString()
-    const existing = await window.electronAPI.db.query(`SELECT id FROM settings WHERE meta_key=?`, [key]) as Array<{id:number}>
-    if (existing.length) {
-      await window.electronAPI.db.exec(`UPDATE settings SET meta_value=?,updated_at=? WHERE meta_key=?`, [value, now, key])
+    const [existing] = await window.electronAPI.db.query(`SELECT id, meta_value, sync_id FROM settings WHERE meta_key=?`, [key]) as Array<{ id: number; meta_value: string; sync_id: string | null }>
+    if (existing && existing.meta_value === value) return
+    const syncId = existing?.sync_id ?? uuidv4()
+    if (existing) {
+      await window.electronAPI.db.exec(`UPDATE settings SET meta_value=?, updated_at=?, sync_id=? WHERE meta_key=?`, [value, now, syncId, key])
     } else {
-      await window.electronAPI.db.exec(`INSERT INTO settings (meta_key,meta_value,created_at,updated_at) VALUES (?,?,?,?)`, [key, value, now, now])
+      await window.electronAPI.db.exec(`INSERT INTO settings (meta_key,meta_value,created_at,updated_at,sync_id) VALUES (?,?,?,?,?)`, [key, value, now, now, syncId])
+    }
+    if (SHARED_SETTING_KEYS.includes(key)) {
+      await window.electronAPI.sync.enqueue('settings', syncId, 'upsert')
+      // Secrets (tokens, PIN) are never written into the journal.
+      await logAudit('settings_change', { entity: 'setting', entityId: key })
     }
   }
 
@@ -203,7 +245,18 @@ export default function SettingsScreen() {
       await saveSetting('telegram_config', JSON.stringify(telegram))
       await saveSetting('sms_config', JSON.stringify(sms))
       await saveSetting('auto_reminder_config', JSON.stringify(autoReminder))
-      await window.electronAPI.db.exec(`UPDATE stores SET name=?,address=?,phone=?,updated_at=? WHERE id=1`, [storeName, storeAddress, storePhone, now])
+      await saveSetting('debt_sale_notify_config', JSON.stringify(debtSaleNotify))
+      const prefixes = splitPrefixes(scalePrefixes)
+      await saveSetting(SCALE_SETTING_KEY, JSON.stringify({ ...scale, prefixes: prefixes.length ? prefixes : DEFAULT_SCALE_CONFIG.prefixes }))
+      // The store's name/address/phone print on every till's receipts.
+      const [st] = await window.electronAPI.db.query(`SELECT id, name, address, phone, sync_id FROM stores ORDER BY id LIMIT 1`, []) as Array<{ id: number; name: string; address: string | null; phone: string | null; sync_id: string | null }>
+      if (st && (st.name !== storeName || (st.address ?? '') !== storeAddress || (st.phone ?? '') !== storePhone)) {
+        const syncId = st.sync_id ?? uuidv4()
+        await window.electronAPI.db.exec(`UPDATE stores SET name=?,address=?,phone=?,updated_at=?,sync_id=? WHERE id=?`, [storeName, storeAddress, storePhone, now, syncId, st.id])
+        await window.electronAPI.sync.enqueue('stores', syncId, 'upsert')
+      }
+      window.electronAPI.sync.pushPending().catch(() => {})
+      toast.success(t('settings.saved'))
     } finally { setSaving(false) }
   }
 
@@ -239,8 +292,10 @@ export default function SettingsScreen() {
     setOpeningDrawer(true)
     try {
       const r = await window.electronAPI.printer.openCashDrawer()
-      if (r.success) toast.success(t('settings.drawerOpened'))
-      else toast.error(r.error || t('settings.drawerFailed'))
+      if (r.success) {
+        toast.success(t('settings.drawerOpened'))
+        await logAudit('drawer_open', { entity: 'drawer' })
+      } else toast.error(r.error || t('settings.drawerFailed'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
     } finally {
@@ -251,18 +306,28 @@ export default function SettingsScreen() {
   async function syncNow() {
     setSyncing(true)
     try {
-      const tables = ['products', 'product_batches', 'product_stocks', 'collections', 'contacts', 'charges', 'settings', 'users']
-      const results = await Promise.allSettled(tables.map((t) => window.electronAPI.sync.pullLatest(t)))
-      const failed = results.filter((r) => r.status === 'rejected').length
-      if (failed === 0) toast.success('Sync complete')
-      else if (failed < tables.length) toast.warning(`Synced ${tables.length - failed}/${tables.length} tables`)
-      else toast.error('Sync failed')
+      // One at a time, in SYNC_TABLES order: sales, repayments and debt
+      // clearances resolve their contact while being written, so contacts
+      // must land first.
+      let failed = 0
+      for (const table of SYNC_TABLES) {
+        try { await pullSyncTable(table) } catch { failed++ }
+      }
+      if (failed === 0) toast.success(t('settings.syncDone'))
+      else if (failed < SYNC_TABLES.length) toast.warning(t('settings.syncPartial', { ok: SYNC_TABLES.length - failed, total: SYNC_TABLES.length }))
+      else toast.error(t('settings.syncFailed'))
       await loadSettings()
     } finally { setSyncing(false) }
   }
 
+  // Switching a service charge on/off applies on every till, not just this one.
   async function toggleCharge(id: number, active: number) {
     await window.electronAPI.db.exec(`UPDATE charges SET is_active=?,updated_at=? WHERE id=?`, [active ? 0 : 1, new Date().toISOString(), id])
+    const [row] = await window.electronAPI.db.query(`SELECT sync_id FROM charges WHERE id=?`, [id]) as Array<{ sync_id: string | null }>
+    if (row?.sync_id) {
+      await window.electronAPI.sync.enqueue('charges', row.sync_id, 'upsert')
+      window.electronAPI.sync.pushPending().catch(() => {})
+    }
     loadSettings()
   }
 
@@ -279,7 +344,10 @@ export default function SettingsScreen() {
   return (
     <BackOfficeLayout>
       <div className="shrink-0 px-6 py-4 border-b border-dark-border bg-dark-surface flex items-center justify-between">
-        <h1 className="text-lg font-bold text-white">{t('nav.settings')}</h1>
+        <div>
+          <h1 className="text-lg font-bold text-white">{t('nav.settings')}</h1>
+          <p className="text-xs text-gray-500 mt-0.5">{t('pageHints.settings')}</p>
+        </div>
         <div className="flex gap-2">
           <button onClick={syncNow} disabled={syncing}
             className="flex items-center gap-2 border border-dark-border text-gray-300 hover:text-white px-4 py-2 rounded-xl text-sm transition-colors">
@@ -292,7 +360,19 @@ export default function SettingsScreen() {
         </div>
       </div>
 
+      <div className="shrink-0 px-6 pt-3 border-b border-dark-border bg-dark-surface flex gap-1">
+        {SETTINGS_TABS.map(([key, Icon]) => (
+          <button key={key} onClick={() => setTab(key)}
+            className={`flex items-center gap-2 px-4 h-11 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === key ? 'border-primary text-primary' : 'border-transparent text-gray-400 hover:text-white'
+            }`}>
+            <Icon size={15} /> {t(`settings.tab_${key}`)}
+          </button>
+        ))}
+      </div>
+
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {tab === 'screen' && (<>
         {/* Language */}
         <div className={SECTION_CLS}>
           <h2 className="text-white font-semibold text-sm flex items-center gap-2"><Globe size={15} /> {t('settings.language')}</h2>
@@ -329,7 +409,9 @@ export default function SettingsScreen() {
               : <><Maximize size={14} /> {t('posSettings.enterFullscreen')}</>}
           </button>
         </div>
+        </>)}
 
+        {tab === 'store' && (<>
         {/* Store Info */}
         <div className={SECTION_CLS}>
           <h2 className="text-white font-semibold text-sm">{t('settings.storeInformation')}</h2>
@@ -361,6 +443,34 @@ export default function SettingsScreen() {
           </div>
         </div>
 
+        {/* Taxes & Charges */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm">{t('settings.chargesTitle')}</h2>
+          <p className="text-xs text-gray-500 -mt-2">{t('settings.chargesHint')}</p>
+          {charges.length === 0 ? (
+            <p className="text-gray-600 text-sm">{t('settings.noCharges')}</p>
+          ) : (
+            <div className="space-y-2">
+              {charges.map((c) => (
+                <div key={c.id} className="flex items-center justify-between py-2 border-b border-dark-border/50 last:border-0">
+                  <div>
+                    <p className="text-white text-sm">{c.name}</p>
+                    <p className="text-gray-500 text-xs">
+                      {c.rate_type === 'percentage' ? `${Number(c.rate_value)}%` : `UZS ${fmtUZS(Number(c.rate_value))}`}
+                    </p>
+                  </div>
+                  <button onClick={() => toggleCharge(c.id, c.is_active)}
+                    className={`w-11 h-6 rounded-full transition-colors relative ${c.is_active ? 'bg-primary' : 'bg-dark-border'}`}>
+                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform ${c.is_active ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        </>)}
+
+        {tab === 'messages' && (<>
         {/* Telegram messaging — runs client-side (this app polls Telegram
             directly, no server involved yet); see notifications.* keys. */}
         <div className={SECTION_CLS}>
@@ -451,10 +561,69 @@ export default function SettingsScreen() {
           </div>
         </div>
 
+        {/* Instant debt-sale message — sent by debtNotify.service.ts right
+            after a POS sale with a Debt payment (Telegram, else SMS). */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm flex items-center gap-2"><Send size={15} /> {t('settings.debtSaleNotify')}</h2>
+          <p className="text-xs text-gray-500">{t('settings.debtSaleNotifyHint')}</p>
+          <label className="flex items-center gap-2 text-sm text-gray-300">
+            <input
+              type="checkbox"
+              checked={debtSaleNotify.enabled}
+              onChange={(e) => setDebtSaleNotify({ enabled: e.target.checked })}
+              className="w-4 h-4"
+            />
+            {t('settings.debtSaleNotifyEnabled')}
+          </label>
+        </div>
+        </>)}
+
+        {tab === 'scale' && (
+          <div className={SECTION_CLS}>
+            <h2 className="text-white font-semibold text-sm flex items-center gap-2"><Scale size={15} /> {t('settings.scaleTitle')}</h2>
+            <p className="text-xs text-gray-500 -mt-2">{t('settings.scaleHint')}</p>
+            <label className="flex items-center gap-2 text-sm text-gray-300">
+              <input type="checkbox" className="w-4 h-4" checked={scale.enabled}
+                onChange={(e) => setScale((s) => ({ ...s, enabled: e.target.checked }))} />
+              {t('settings.scaleEnabled')}
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className={LABEL_CLS}>{t('settings.scalePrefixes')}</label>
+                <input value={scalePrefixes} onChange={(e) => setScalePrefixes(e.target.value)} placeholder="20, 21, 22" className={INPUT_CLS} />
+              </div>
+              <div>
+                <label className={LABEL_CLS}>{t('settings.scalePluLength')}</label>
+                <Select value={String(scale.pluLength)} onChange={(v) => setScale((s) => ({ ...s, pluLength: Number(v) }))}
+                  options={[4, 5, 6].map((n) => ({ value: String(n), label: String(n) }))} />
+              </div>
+              <div>
+                <label className={LABEL_CLS}>{t('settings.scaleWeightUnit')}</label>
+                <Select value={String(scale.weightDecimals)} onChange={(v) => setScale((s) => ({ ...s, weightDecimals: Number(v) }))}
+                  options={[{ value: '3', label: t('settings.scaleGrams') }, { value: '2', label: t('settings.scaleTensOfGrams') }]} />
+              </div>
+            </div>
+            <div className="bg-dark-card rounded-xl p-3 space-y-2">
+              <label className={LABEL_CLS}>{t('settings.scaleTest')}</label>
+              <input value={scaleTest} onChange={(e) => setScaleTest(e.target.value.trim())} placeholder="2200123012504" className={INPUT_CLS} />
+              {scaleTest && (() => {
+                const parsed = parseScaleBarcode(scaleTest, { ...scale, enabled: true, prefixes: splitPrefixes(scalePrefixes) })
+                return (
+                  <p className={`text-sm ${parsed ? 'text-green-400' : 'text-red-400'}`}>
+                    {parsed ? t('settings.scaleDecoded', { plu: parsed.plu, kg: parsed.weightKg }) : t('settings.scaleNotDecoded')}
+                  </p>
+                )
+              })()}
+            </div>
+            <p className="text-xs text-gray-500">{t('settings.scalePluHint')}</p>
+          </div>
+        )}
+
+        {tab === 'receipt' && (<>
         {/* Printer */}
         <div className={SECTION_CLS}>
           <div className="flex items-center justify-between">
-            <h2 className="text-white font-semibold text-sm">Thermal Printer</h2>
+            <h2 className="text-white font-semibold text-sm">{t('settings.printerTitle')}</h2>
             <div className="flex items-center gap-2">
               <button onClick={openDrawerClick} disabled={openingDrawer}
                 className="flex items-center gap-2 border border-dark-border text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs transition-colors">
@@ -462,21 +631,21 @@ export default function SettingsScreen() {
               </button>
               <button onClick={testPrint} disabled={testing}
                 className="flex items-center gap-2 border border-dark-border text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs transition-colors">
-                <TestTube2 size={13} /> {testing ? 'Printing…' : 'Test Print'}
+                <TestTube2 size={13} /> {testing ? '…' : t('settings.testPrint')}
               </button>
             </div>
           </div>
           <p className="text-xs text-gray-500 -mt-2">{t('settings.openDrawerHint')}</p>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className={LABEL_CLS}>Connection Type</label>
+              <label className={LABEL_CLS}>{t('settings.printerConnection')}</label>
               <Select
                 value={printer.type}
                 onChange={(v) => p('type', v as PrinterConfig['type'])}
                 options={[
+                  { value: 'windows', label: t('settings.printerWindows') },
                   { value: 'usb', label: 'USB' },
-                  { value: 'network', label: 'Network (IP)' },
-                  { value: 'windows', label: 'Windows Printer' },
+                  { value: 'network', label: t('settings.printerNetwork') },
                 ]}
               />
             </div>
@@ -495,7 +664,7 @@ export default function SettingsScreen() {
             {printer.type === 'network' && (
               <>
                 <div>
-                  <label className={LABEL_CLS}>IP Address</label>
+                  <label className={LABEL_CLS}>{t('settings.printerIp')}</label>
                   <input value={printer.host} onChange={(e) => p('host', e.target.value)} placeholder="192.168.1.100" className={INPUT_CLS} />
                 </div>
                 <div>
@@ -506,14 +675,14 @@ export default function SettingsScreen() {
             )}
             {printer.type === 'windows' && (
               <div className="col-span-2">
-                <label className={LABEL_CLS}>Printer Name</label>
+                <label className={LABEL_CLS}>{t('settings.printerName')}</label>
                 <input value={printer.name} onChange={(e) => p('name', e.target.value)} placeholder="POS-58 Printer" className={INPUT_CLS} />
               </div>
             )}
           </div>
           <div className="flex items-center gap-2 mt-1">
             <Printer size={14} className="text-gray-500" />
-            <span className="text-xs text-gray-500">Printer settings are applied immediately when you print</span>
+            <span className="text-xs text-gray-500">{t('settings.printerAppliesNow')}</span>
           </div>
         </div>
 
@@ -521,17 +690,14 @@ export default function SettingsScreen() {
             direct USB/network ESC/POS printing has its own fixed layout. */}
         {printer.type === 'windows' && (
           <div className={SECTION_CLS}>
-            <h2 className="text-white font-semibold text-sm">Receipt Print Layout</h2>
-            <p className="text-xs text-gray-500 -mt-2">
-              Tune these to match your paper roll and printer — sizes/margins vary by hardware and can't be
-              previewed from here, so print a test receipt after each change.
-            </p>
+            <h2 className="text-white font-semibold text-sm">{t('settings.layoutTitle')}</h2>
+            <p className="text-xs text-gray-500 -mt-2">{t('settings.layoutHint')}</p>
 
             <div className="grid grid-cols-3 gap-3">
               {([
-                ['Paper Width (mm)', 'paperWidthMm', 1],
-                ['Side Margin (mm)', 'marginMm', 0.5],
-                ['Characters per Line', 'charWidth', 1],
+                [t('settings.paperWidth'), 'paperWidthMm', 1],
+                [t('settings.sideMargin'), 'marginMm', 0.5],
+                [t('settings.charsPerLine'), 'charWidth', 1],
               ] as Array<[string, 'paperWidthMm' | 'marginMm' | 'charWidth', number]>).map(([label, key, step]) => (
                 <div key={key}>
                   <label className={LABEL_CLS}>{label}</label>
@@ -542,19 +708,17 @@ export default function SettingsScreen() {
             </div>
 
             <div>
-              <label className={LABEL_CLS}>Per-text size &amp; position</label>
-              <p className="text-xs text-gray-600 mb-2">
-                Position moves the text left (negative) or right (positive) in pixels, independent of size.
-              </p>
+              <label className={LABEL_CLS}>{t('settings.textSizePosition')}</label>
+              <p className="text-xs text-gray-600 mb-2">{t('settings.textSizePositionHint')}</p>
               <div className="space-y-1.5">
                 <div className="grid grid-cols-[1fr,88px,96px] gap-2 px-1">
-                  <span className="text-xs text-gray-500">Text</span>
-                  <span className="text-xs text-gray-500">Size (px)</span>
-                  <span className="text-xs text-gray-500">Position (px)</span>
+                  <span className="text-xs text-gray-500">{t('settings.textCol')}</span>
+                  <span className="text-xs text-gray-500">{t('settings.sizeCol')}</span>
+                  <span className="text-xs text-gray-500">{t('settings.positionCol')}</span>
                 </div>
                 {ELEMENT_LABELS.map(([key, label]) => (
                   <div key={key} className="grid grid-cols-[1fr,88px,96px] gap-2 items-center bg-dark-card rounded-lg px-3 py-2">
-                    <span className="text-sm text-gray-300">{label}</span>
+                    <span className="text-sm text-gray-300">{t(`settings.el_${key}`, { defaultValue: label })}</span>
                     <input type="number" min={6} value={layout.elements[key].fontPx}
                       onChange={(e) => le(key, 'fontPx', Number(e.target.value) || 0)}
                       className="w-full bg-dark border border-dark-border rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-primary" />
@@ -568,31 +732,31 @@ export default function SettingsScreen() {
 
             <button onClick={() => setLayout(DEFAULT_LAYOUT)}
               className="text-xs text-gray-500 hover:text-primary transition-colors">
-              Reset to defaults
+              {t('settings.resetDefaults')}
             </button>
           </div>
         )}
 
         {/* Receipt */}
         <div className={SECTION_CLS}>
-          <h2 className="text-white font-semibold text-sm">Receipt Template</h2>
+          <h2 className="text-white font-semibold text-sm">{t('settings.receiptTitle')}</h2>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={LABEL_CLS}>Header Text</label>
+              <label className={LABEL_CLS}>{t('settings.receiptHeader')}</label>
               <textarea value={receipt.header} onChange={(e) => r('header', e.target.value)} rows={2}
-                placeholder="e.g. Welcome to Baraka Market"
+                placeholder={t('settings.receiptHeaderPlaceholder')}
                 className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary resize-none" />
             </div>
             <div>
-              <label className={LABEL_CLS}>Footer Text</label>
+              <label className={LABEL_CLS}>{t('settings.receiptFooter')}</label>
               <textarea value={receipt.footer} onChange={(e) => r('footer', e.target.value)} rows={2}
                 className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary resize-none" />
             </div>
           </div>
           <div className="flex flex-wrap gap-4">
             {[
-              { key: 'show_cashier', label: 'Show cashier name' },
-              { key: 'show_logo', label: 'Show store logo' },
+              { key: 'show_cashier', label: t('settings.showCashier') },
+              { key: 'show_logo', label: t('settings.showLogo') },
             ].map((opt) => (
               <label key={opt.key} className="flex items-center gap-2 cursor-pointer">
                 <button onClick={() => r(opt.key as keyof ReceiptSettings, !receipt[opt.key as keyof ReceiptSettings])}
@@ -603,37 +767,13 @@ export default function SettingsScreen() {
               </label>
             ))}
             <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-400">Copies:</label>
+              <label className="text-sm text-gray-400">{t('settings.copies')}</label>
               <input type="number" min={1} max={3} value={receipt.copies} onChange={(e) => r('copies', Number(e.target.value))}
                 className="w-16 bg-dark-card border border-dark-border rounded-lg px-2 py-1 text-white text-sm focus:outline-none focus:border-primary" />
             </div>
           </div>
         </div>
-
-        {/* Taxes & Charges */}
-        <div className={SECTION_CLS}>
-          <h2 className="text-white font-semibold text-sm">Taxes & Charges</h2>
-          {charges.length === 0 ? (
-            <p className="text-gray-600 text-sm">No charges configured. Add them on the server.</p>
-          ) : (
-            <div className="space-y-2">
-              {charges.map((c) => (
-                <div key={c.id} className="flex items-center justify-between py-2 border-b border-dark-border/50 last:border-0">
-                  <div>
-                    <p className="text-white text-sm">{c.name}</p>
-                    <p className="text-gray-500 text-xs">
-                      {c.rate_type === 'percentage' ? `${Number(c.rate_value)}%` : `UZS ${fmtUZS(Number(c.rate_value))}`} · {c.rate_type}
-                    </p>
-                  </div>
-                  <button onClick={() => toggleCharge(c.id, c.is_active)}
-                    className={`w-9 h-5 rounded-full transition-colors relative ${c.is_active ? 'bg-primary' : 'bg-dark-border'}`}>
-                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${c.is_active ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        </>)}
       </div>
 
       {pendingDrawerConfirm && (

@@ -29,6 +29,46 @@ function getConfig(): SmsConfig | null {
   }
 }
 
+// Uzbek + Russian Cyrillic → Uzbek Latin (official 1995 alphabet, ASCII
+// apostrophe for o'/g').
+const CYRILLIC: Record<string, string> = {
+  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'yo', ж: 'j', з: 'z', и: 'i', й: 'y',
+  к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f',
+  х: 'x', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sh', ъ: "'", ы: 'i', ь: '', э: 'e', ю: 'yu', я: 'ya',
+  ў: "o'", қ: 'q', ғ: "g'", ҳ: 'h',
+}
+
+const PUNCTUATION: Record<string, string> = {
+  '‘': "'", '’': "'", 'ʻ': "'", 'ʼ': "'", '`': "'", '´': "'",
+  '“': '"', '”': '"', '«': '"', '»': '"',
+  '–': '-', '—': '-', '−': '-', '•': '-', '·': '-',
+  '…': '...', '×': 'x', '№': 'N', ' ': ' ',
+}
+
+/**
+ * Reduces text to plain printable ASCII before it goes out as an SMS. Anything
+ * outside the GSM 7-bit alphabet (em dashes, bullets, curly apostrophes,
+ * Cyrillic, emoji) arrived on customers' phones as garbage characters, and it
+ * also forces UCS-2 encoding — 70 chars per SMS part instead of 160.
+ */
+export function toSmsText(text: string): string {
+  let out = ''
+  for (const ch of text) {
+    const lower = ch.toLowerCase()
+    if (CYRILLIC[lower] !== undefined) {
+      const latin = CYRILLIC[lower]
+      out += ch !== lower && latin ? latin[0].toUpperCase() + latin.slice(1) : latin
+    } else if (PUNCTUATION[ch] !== undefined) {
+      out += PUNCTUATION[ch]
+    } else {
+      out += ch
+    }
+  }
+  return out
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // é → e
+    .replace(/[^\n\x20-\x7E]/g, '')
+}
+
 export function isSmsConfigured(): boolean {
   const c = getConfig()
   return Boolean(c?.host)
@@ -42,10 +82,10 @@ export async function sendSms(phoneNumber: string, text: string): Promise<void> 
   const res = await fetch(url, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8',
       ...(c.token ? { Authorization: c.token } : {}),
     },
-    body: JSON.stringify({ to: phoneNumber, message: text }),
+    body: JSON.stringify({ to: phoneNumber, message: toSmsText(text) }),
   })
   if (!res.ok) {
     const body = await res.text().catch(() => '')

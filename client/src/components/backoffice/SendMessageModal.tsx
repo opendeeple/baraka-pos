@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Send, Copy, CheckCircle2 } from 'lucide-react'
 import { Modal, Button } from '../ui'
+import { REPAYMENT_FOR_CONTACT } from '../../lib/debt'
 
 interface Props {
   /** Local SQLite contact id. */
@@ -89,35 +90,37 @@ export function SendMessageModal({ contactId, contactName, hasDebt, onClose }: P
         ].join('\n'))
       } else {
         const [contactRows, sales, payments] = await Promise.all([
-          window.electronAPI.db.query(`SELECT name FROM contacts WHERE id=?`, [contactId]),
+          window.electronAPI.db.query(`SELECT name, balance FROM contacts WHERE id=?`, [contactId]),
           window.electronAPI.db.query(
             `SELECT id, invoice_number, total_amount, sale_date FROM sales
              WHERE contact_id=? AND status='completed' ORDER BY created_at DESC LIMIT 10`, [contactId]
           ),
           window.electronAPI.db.query(
             `SELECT amount, created_at FROM cash_logs
-             WHERE contact_id=? AND source='deposit' ORDER BY created_at DESC LIMIT 10`, [contactId]
+             WHERE ${REPAYMENT_FOR_CONTACT} ORDER BY created_at DESC LIMIT 10`, [contactId, contactId]
           ),
-        ]) as [Array<{ name: string }>, Array<{ id: number; invoice_number: string; total_amount: number; sale_date: string }>, Array<{ amount: number; created_at: string }>]
+        ]) as [Array<{ name: string; balance: number }>,Array<{ id: number; invoice_number: string; total_amount: number; sale_date: string }>, Array<{ amount: number; created_at: string }>]
 
         const contactName2 = contactRows[0]?.name ?? ''
-        const lines = [`${contactName2} — xarid va to'lov tarixi`, '']
+        const lines = [`${contactName2} - xarid va to'lov tarixi`, '']
 
         for (const sale of sales) {
           const items = await window.electronAPI.db.query(
             `SELECT description, quantity, unit_price FROM sale_items WHERE sale_id=?`, [sale.id]
           ) as Array<{ description: string; quantity: number; unit_price: number }>
-          lines.push(`${sale.sale_date} — ${sale.invoice_number} — UZS ${fmt(Number(sale.total_amount))}`)
+          lines.push(`${sale.sale_date} - ${sale.invoice_number} - UZS ${fmt(Number(sale.total_amount))}`)
           // unit_price is the price recorded at sale time, not the product's
           // current price — keeps old messages accurate after price changes.
-          for (const item of items) lines.push(`  • ${item.description} x${Number(item.quantity)} — UZS ${fmt(Number(item.unit_price))}`)
+          for (const item of items) lines.push(`  - ${item.description} x${Number(item.quantity)} - UZS ${fmt(Number(item.unit_price))}`)
         }
         if (sales.length === 0) lines.push('Xaridlar topilmadi.')
 
         if (payments.length > 0) {
           lines.push('', "To'lovlar:")
-          for (const p of payments) lines.push(`${p.created_at.slice(0, 10)} — UZS ${fmt(Number(p.amount))}`)
+          for (const p of payments) lines.push(`${p.created_at.slice(0, 10)} - UZS ${fmt(Number(p.amount))}`)
         }
+        const balance = Number(contactRows[0]?.balance ?? 0)
+        if (balance > 0) lines.push('', `Qolgan qarz: UZS ${fmt(balance)}`)
         setPreview(lines.join('\n'))
       }
     } finally { setLoadingPreview(false) }

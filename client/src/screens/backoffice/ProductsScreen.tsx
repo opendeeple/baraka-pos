@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
-import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, Check, ImagePlus, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, ImagePlus, X, Tag, Tags } from 'lucide-react'
+import { LabelPrintModal } from '../../components/backoffice/LabelPrintModal'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
+import { logAudit } from '../../lib/audit'
 import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader, Select } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { resizeImageDataUrl } from '../../lib/image'
@@ -41,12 +44,11 @@ export default function ProductsScreen() {
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState<ProductForm>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
-  const [adjustId, setAdjustId] = useState<number | null>(null)
-  const [adjustQty, setAdjustQty] = useState('')
-  const [adjustReason, setAdjustReason] = useState('')
   const [loading, setLoading] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [showLabels, setShowLabels] = useState(false)
+  const navigate = useNavigate()
   const debouncedSearch = useDebouncedValue(search)
   // setSaving/setDeleting only disable the button on the *next* render — a
   // few rapid clicks land before that commits and each ran a full extra
@@ -114,15 +116,21 @@ export default function ProductsScreen() {
     const now = new Date().toISOString()
     try {
       if (editId) {
+        const before = products.find((x) => x.id === editId)
         await window.electronAPI.db.exec(
           `UPDATE products SET name=?,sku=?,barcode=?,category_id=?,is_stock_managed=?,is_active=?,alert_quantity=?,unit=?,units_per_package=?,image_url=?,updated_at=? WHERE id=?`,
           [form.name, form.sku || null, form.barcode || null, form.category_id || null,
            form.is_stock_managed ? 1 : 0, form.is_active ? 1 : 0, Number(form.alert_quantity) || 0,
            form.unit, form.unit === 'box' ? (Number(form.units_per_package) || null) : null,
            form.image_url || null, now, editId])
+        // Only the selling price is edited here; the cost price follows what
+        // deliveries actually cost (weighted average on every receipt).
         await window.electronAPI.db.exec(
-          `UPDATE product_batches SET price=?,cost=?,updated_at=? WHERE product_id=? AND is_active=1`,
-          [Number(form.price), Number(form.cost) || 0, now, editId])
+          `UPDATE product_batches SET price=?,updated_at=? WHERE product_id=? AND is_active=1`,
+          [Number(form.price), now, editId])
+        if (before && Number(before.price) !== Number(form.price)) {
+          await logAudit('price_change', { entity: 'product', entityId: editId, details: { product: form.name, from: Number(before.price), to: Number(form.price) } })
+        }
         const syncRows = await window.electronAPI.db.query(
           `SELECT p.sync_id AS product_sync_id, b.sync_id AS batch_sync_id
            FROM products p LEFT JOIN product_batches b ON b.id = (
@@ -153,33 +161,11 @@ export default function ProductsScreen() {
           [uuidv4(), pid, bRows[0].id, now])
         await window.electronAPI.sync.enqueue('products', productSyncId, 'upsert')
         await window.electronAPI.sync.enqueue('product_batches', batchSyncId, 'upsert')
+        await logAudit('product_create', { entity: 'product', entityId: pid, details: { product: form.name, price: Number(form.price), cost: Number(form.cost) || 0 } })
       }
       window.electronAPI.sync.pushPending().catch(() => {})
       setShowForm(false); loadAll()
     } finally { setSaving(false); submittingRef.current = false }
-  }
-
-  async function saveAdjust() {
-    if (adjustId === null || !adjustQty.trim()) return
-    if (submittingRef.current) return
-    submittingRef.current = true
-    const p = products.find((x) => x.id === adjustId)
-    if (!p || !p.batch_id) { submittingRef.current = false; return }
-    try {
-      const now = new Date().toISOString()
-      await window.electronAPI.db.exec(
-        `UPDATE product_stocks SET quantity=?,updated_at=? WHERE product_id=? AND batch_id=? AND location='shop'`,
-        [Number(adjustQty), now, adjustId, p.batch_id])
-      // Always record the adjustment — it is the unit of stock sync (deltas).
-      const adjSyncId = uuidv4()
-      const stockRow = await window.electronAPI.db.query(`SELECT id FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop'`, [adjustId, p.batch_id]) as Array<{id:number}>
-      await window.electronAPI.db.exec(
-        `INSERT INTO quantity_adjustments (sync_id,batch_id,stock_id,previous_quantity,adjusted_quantity,reason,location,created_at,updated_at) VALUES (?,?,?,?,?,?,'shop',?,?)`,
-        [adjSyncId, p.batch_id, stockRow[0]?.id, p.stock, Number(adjustQty), adjustReason || null, now, now])
-      await window.electronAPI.sync.enqueue('quantity_adjustments', adjSyncId, 'upsert')
-      window.electronAPI.sync.pushPending().catch(() => {})
-      setAdjustId(null); setAdjustQty(''); setAdjustReason(''); loadAll()
-    } finally { submittingRef.current = false }
   }
 
   async function confirmDelete() {
@@ -197,6 +183,7 @@ export default function ProductsScreen() {
         [now, now, deleteTarget.id]
       )
       if (row?.sync_id) await window.electronAPI.sync.enqueue('products', row.sync_id, 'delete')
+      await logAudit('product_delete', { entity: 'product', entityId: deleteTarget.id, details: { product: deleteTarget.name, stock: deleteTarget.stock } })
       window.electronAPI.sync.pushPending().catch(() => {})
       toast.success(t('products.deletedToast', { name: deleteTarget.name }))
       setDeleteTarget(null)
@@ -217,8 +204,14 @@ export default function ProductsScreen() {
     <BackOfficeLayout>
       <PageHeader
         title={t('nav.products')}
-        actions={<Button icon={Plus} onClick={openCreate}>{t('products.addProduct')}</Button>}
+        subtitle={t('pageHints.products')}
+        actions={<>
+          <Button variant="secondary" icon={Tags} onClick={() => navigate('/backoffice/categories')}>{t('nav.categories')}</Button>
+          <Button variant="secondary" icon={Tag} onClick={() => setShowLabels(true)}>{t('labels.button')}</Button>
+          <Button icon={Plus} onClick={openCreate}>{t('products.addProduct')}</Button>
+        </>}
       />
+      {showLabels && <LabelPrintModal onClose={() => setShowLabels(false)} />}
 
       <div className="shrink-0 px-6 py-3 border-b border-dark-border flex gap-3">
         <div className="relative flex-1 max-w-xs">
@@ -263,8 +256,6 @@ export default function ProductsScreen() {
                   <div className="flex items-center gap-2">
                     <span className={`text-sm font-semibold ${p.stock === 0 ? 'text-red-400' : p.stock <= p.alert_quantity ? 'text-yellow-400' : 'text-white'}`}>{p.stock}</span>
                     {p.stock <= p.alert_quantity && p.is_stock_managed === 1 && <AlertTriangle size={12} className="text-yellow-400" />}
-                    <button onClick={() => { setAdjustId(p.id); setAdjustQty(String(p.stock)) }}
-                      className="text-xs text-gray-500 hover:text-primary">{t('products.adjust')}</button>
                   </div>
                 </td>
                 <td className="px-4 py-3">
@@ -351,14 +342,18 @@ export default function ProductsScreen() {
                     </p>
                   )}
                 </div>
-                <Input
-                  label={
-                    form.unit === 'kg' ? t('products.costLabelKg')
-                      : form.unit === 'box' ? t('products.costLabelBox')
-                      : t('products.costLabelPiece')
-                  }
-                  type="number" value={form.cost} onChange={(e) => f('cost', e.target.value)}
-                />
+                <div>
+                  <Input
+                    label={
+                      form.unit === 'kg' ? t('products.costLabelKg')
+                        : form.unit === 'box' ? t('products.costLabelBox')
+                        : t('products.costLabelPiece')
+                    }
+                    type="number" value={form.cost} onChange={(e) => f('cost', e.target.value)}
+                    disabled={editId !== null}
+                  />
+                  {editId !== null && <p className="text-xs text-gray-500 mt-1">{t('products.costFromReceipts')}</p>}
+                </div>
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">{t('common.category')}</label>
                   <Select
@@ -409,26 +404,6 @@ export default function ProductsScreen() {
                   </label>
                 </div>
               </div>
-            </div>
-      </Modal>
-
-      <Modal
-        open={adjustId !== null}
-        onClose={() => setAdjustId(null)}
-        title={<h2 className="text-white font-semibold text-sm">{t('products.adjustStock')}</h2>}
-        maxWidth="max-w-[18rem]"
-        footer={
-          <>
-            <Button variant="secondary" className="flex-1" onClick={() => setAdjustId(null)}>{t('common.cancel')}</Button>
-            <Button className="flex-1" icon={Check} onClick={saveAdjust}>{t('common.save')}</Button>
-          </>
-        }
-      >
-            <div className="p-4 space-y-3">
-              <Input label={t('products.newQuantity')} autoFocus type="number" value={adjustQty}
-                onChange={(e) => setAdjustQty(e.target.value)} />
-              <Input label={t('products.reason')} value={adjustReason} placeholder={t('products.reasonPlaceholder')}
-                onChange={(e) => setAdjustReason(e.target.value)} />
             </div>
       </Modal>
 

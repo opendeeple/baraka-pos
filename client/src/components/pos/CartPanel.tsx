@@ -8,6 +8,7 @@ import { DebtHistoryPanel } from './DebtHistoryDrawer'
 import { NumPad } from './NumPad'
 import { Modal, Button } from '../ui'
 import { Debtor } from '../../types/pos.types'
+import { OPEN_DEBT_CONDITION } from '../../lib/debt'
 
 interface Props {
   onCheckout: () => void
@@ -32,9 +33,9 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
 
   const loadDebtors = useCallback(() => {
     window.electronAPI.db.query(
-      `SELECT id, name, phone, balance FROM contacts
-       WHERE type IN ('customer','both') AND deleted_at IS NULL AND balance > 0
-       ORDER BY balance DESC LIMIT 50`,
+      `SELECT c.id, c.name, c.phone, c.balance FROM contacts c
+       WHERE c.type IN ('customer','both') AND c.deleted_at IS NULL AND ${OPEN_DEBT_CONDITION}
+       ORDER BY c.balance DESC LIMIT 50`,
       []
     ).then((rows) => setDebtors(rows as Debtor[]))
   }, [])
@@ -42,6 +43,10 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
   useEffect(() => {
     if (items.length > 0) return
     loadDebtors()
+    // Repayments and deleted debts also arrive from other devices via sync;
+    // a cheap local re-read keeps the list current without a click.
+    const timer = setInterval(loadDebtors, 10_000)
+    return () => clearInterval(timer)
   }, [items.length, loadDebtors])
 
   return (
@@ -91,7 +96,8 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
           <DebtHistoryPanel
             contact={selectedDebtor}
             onClose={() => setSelectedDebtor(null)}
-            onPaymentComplete={() => { setSelectedDebtor(null); loadDebtors() }}
+            onPaymentComplete={loadDebtors}
+            onCleared={() => { setSelectedDebtor(null); loadDebtors() }}
           />
         ) : items.length === 0 ? (
           <>
@@ -125,9 +131,15 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
                           <p className="text-white text-sm font-medium truncate">{d.name}</p>
                           {d.phone && <p className="text-gray-500 text-xs">{d.phone}</p>}
                         </div>
-                        <span className="text-yellow-400 text-sm font-semibold whitespace-nowrap ml-2">
-                          UZS {fmtUZS(d.balance)}
-                        </span>
+                        {d.balance > 0 ? (
+                          <span className="text-yellow-400 text-sm font-semibold whitespace-nowrap ml-2">
+                            UZS {fmtUZS(d.balance)}
+                          </span>
+                        ) : (
+                          <span className="text-green-400 text-xs font-semibold whitespace-nowrap ml-2">
+                            {t('debt.paidBadge')}
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>

@@ -35,6 +35,8 @@ model Store {
   settings      Setting[]
   devices       Device[]
   shifts        Shift[]
+  debtClearances DebtClearance[]
+  auditLogs     AuditLog[]
 
   @@map("stores")
 }
@@ -103,6 +105,7 @@ model Contact {
   paymentTransactions    PaymentTransaction[]
   productBatchesSupplied ProductBatch[]
   messageLogs            MessageLog[]
+  debtClearances         DebtClearance[]
 
   @@index([storeId, updatedAt])
   @@map("contacts")
@@ -498,6 +501,9 @@ model CashLog {
   transactionType CashLogType
   amount          Decimal         @db.Decimal(12, 2)
   source          CashLogSource
+  // How the money moved (Cash/Card/Click); only cash enters the drawer's
+  // expected total. Null on older rows = cash.
+  paymentMethod   String?
   description     String?
   referenceId     Int?
   createdBy       Int?
@@ -508,7 +514,56 @@ model CashLog {
   session PosSession? @relation(fields: [sessionId], references: [id])
   contact Contact?   @relation(fields: [contactId], references: [id])
 
+  // Customer debt repayments are pulled by every device (sync v2 cash_logs).
+  @@index([storeId, updatedAt])
   @@map("cash_logs")
+}
+
+// Who did what, when and why — voids, refunds, stocktakes, write-offs,
+// price changes, deletions, cash movements, shift closes. Insert-only,
+// written on the device that did it and synced to every other one.
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  syncId     String   @unique @default(uuid())
+  storeId    Int
+  action     String
+  entity     String?
+  entityId   String?
+  details    Json?
+  userId     Int?
+  userName   String?
+  occurredAt DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@index([storeId, updatedAt])
+  @@map("audit_logs")
+}
+
+// "Delete a paid-off debt": a cut-off, not a deletion — every device's debt
+// history only shows sales/repayments newer than the contact's latest
+// clearedAt. Sales and cash logs themselves are never removed. Insert-only
+// fact, synced both ways (sync v2 debt_clearances).
+model DebtClearance {
+  id        Int      @id @default(autoincrement())
+  syncId    String   @unique @default(uuid())
+  storeId   Int
+  contactId Int
+  clearedAt DateTime
+  totalDebt Decimal  @default(0) @db.Decimal(12, 2)
+  totalPaid Decimal  @default(0) @db.Decimal(12, 2)
+  createdBy Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  store   Store   @relation(fields: [storeId], references: [id])
+  contact Contact @relation(fields: [contactId], references: [id])
+
+  @@index([storeId, updatedAt])
+  @@index([contactId])
+  @@map("debt_clearances")
 }
 
 enum CashLogType {
@@ -541,6 +596,14 @@ model Purchase {
   status        PurchaseStatus @default(draft)
   note          String?
   createdBy     Int?
+  // Set when the delivery is received: 'shop' or 'warehouse' — where its
+  // goods were put into stock (by the server, exactly once; see sync v2).
+  receivedLocation String?
+  receivedAt       DateTime?
+  // Which device's receipt was applied (an id the receiving device minted).
+  // A device whose own receipt lost a race sees a different id on pull and
+  // takes back the stock it had added locally.
+  receiptId        String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   deletedAt     DateTime?
@@ -571,6 +634,12 @@ model PurchaseItem {
   unitPrice    Decimal  @db.Decimal(12, 2)
   unitCost     Decimal  @db.Decimal(12, 2)
   discount     Decimal  @default(0) @db.Decimal(5, 2)
+  // What actually arrived (null until received) and, when it differs from
+  // the ordered quantity, why.
+  receivedQuantity Decimal? @db.Decimal(12, 2)
+  discrepancyNote  String?
+  // The expiry date printed on the delivered goods, if the receiver wrote it.
+  expiryDate       DateTime?
   createdBy    Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -670,6 +739,9 @@ model QuantityAdjustment {
   // already implies it, but this lets "warehouse adjustments only" style
   // queries skip the join.
   location           String   @default("shop")
+  // Which document moved the stock: receipt | purchase | transfer | stocktake
+  // | writeoff | sale_void. Stock only ever changes through one of these.
+  kind               String?
   createdBy          Int?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @default(now()) @updatedAt
@@ -696,11 +768,9 @@ model Setting {
   @@map("settings")
 }
 
-// Server-managed only — deliberately NOT part of the local-first sync engine.
-// Sending a message inherently needs connectivity (there's no offline
-// Telegram/SMS), so the desktop app calls the REST endpoints in
-// notifications.router.ts directly rather than going through local SQLite +
-// the outbox like everything else in this app.
+// Unused since messaging moved fully client-side (the desktop app sends
+// Telegram/SMS itself and keeps its own local message_log). Kept so existing
+// rows aren't dropped; nothing writes it anymore.
 model MessageLog {
   id          Int             @id @default(autoincrement())
   storeId     Int

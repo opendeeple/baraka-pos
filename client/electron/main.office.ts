@@ -14,6 +14,7 @@ import { registerFullscreenIpc } from './ipc/window.ipc'
 import { registerFilesIpc } from './ipc/files.ipc'
 import { registerTelegramIpc } from './ipc/telegram.ipc'
 import { registerSmsIpc } from './ipc/sms.ipc'
+import { registerNotifyIpc } from './ipc/notify.ipc'
 import { startTelegramPolling } from './services/telegram.service'
 import { startAutoReminderScheduler } from './services/autoReminder.service'
 
@@ -110,6 +111,7 @@ app.whenReady().then(async () => {
   registerFilesIpc(() => mainWindow)
   registerTelegramIpc()
   registerSmsIpc()
+  registerNotifyIpc()
   startTelegramPolling()
   startAutoReminderScheduler()
 

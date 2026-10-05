@@ -1,186 +1,103 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Search, Truck, Check, X } from 'lucide-react'
+import { toast } from 'sonner'
+import { Plus, Search, Truck, PackageCheck, Printer, X, Banknote } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
-import { Modal, Button, Input, EmptyState, PageHeader, Select } from '../../components/ui'
+import { Button, EmptyState, PageHeader } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { PurchaseOrderModal } from '../../components/backoffice/PurchaseOrderModal'
+import { ReceivePurchaseModal } from '../../components/backoffice/ReceivePurchaseModal'
+import { SupplierPayModal } from '../../components/backoffice/SupplierPayModal'
+import { printPurchaseOrder } from '../../lib/purchases'
 
 interface Purchase {
-  id: number; reference_number: string; vendor_name: string | null
-  total_amount: number; status: string; created_at: string; note: string | null
+  id: number; reference_number: string; vendor_name: string | null; vendor_id: number | null
+  total_amount: number; amount_paid: number; status: string; created_at: string; note: string | null
+  received_location: string | null; received_at: string | null
 }
 
-interface PurchaseItem { product_id: number; product_name: string; batch_id: number; quantity: number; unit_cost: number }
+interface PurchaseItem {
+  product_name: string; quantity: number; unit_cost: number
+  received_quantity: number | null; discrepancy_note: string | null; expiry_date: string | null
+}
 
-interface Product { id: number; name: string; batch_id: number; cost: number }
-
+/**
+ * Purchase orders: placed (PurchaseOrderModal — prints the order slip and
+ * waits), then received against the delivery (ReceivePurchaseModal). Orders
+ * sync through the server, so one placed here can be received on any device.
+ */
 export default function PurchasesScreen() {
   const { t } = useTranslation()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [selected, setSelected] = useState<Purchase | null>(null)
   const [poItems, setPoItems] = useState<PurchaseItem[]>([])
-  const [showForm, setShowForm] = useState(false)
-  const [products, setProducts] = useState<Product[]>([])
-  const [vendorName, setVendorName] = useState('')
-  const [refNumber, setRefNumber] = useState('')
-  const [note, setNote] = useState('')
-  const [lines, setLines] = useState<Array<{ id: string; productId: string; batchId: string; qty: string; cost: string; name: string }>>([])
-  const [saving, setSaving] = useState(false)
-  const [receiving, setReceiving] = useState(false)
-  const [confirmReceive, setConfirmReceive] = useState(false)
+  const [showOrder, setShowOrder] = useState(false)
+  const [receiving, setReceiving] = useState<Purchase | null>(null)
+  const [paying, setPaying] = useState<{ id: number; name: string } | null>(null)
+  const [printing, setPrinting] = useState(false)
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search)
 
   useEffect(() => { loadPurchases() }, [debouncedSearch])
-  useEffect(() => { if (showForm) loadProducts() }, [showForm])
-  useEffect(() => { setConfirmReceive(false) }, [selected?.id])
+  useEffect(() => {
+    // Orders and receipts also arrive from other devices through sync.
+    const timer = setInterval(() => { loadPurchases() }, 15_000)
+    return () => clearInterval(timer)
+  }, [debouncedSearch])
 
   async function loadPurchases() {
     let sql = `
-      SELECT p.id, p.reference_number, c.name as vendor_name, p.total_amount, p.status, p.created_at, p.note
+      SELECT p.id, p.reference_number, c.name as vendor_name, p.vendor_id, p.total_amount,
+             COALESCE(p.amount_paid, 0) AS amount_paid, p.status, p.created_at, p.note,
+             p.received_location, p.received_at
       FROM purchases p LEFT JOIN contacts c ON c.id=p.vendor_id
       WHERE p.deleted_at IS NULL`
     const params: unknown[] = []
     if (debouncedSearch.trim()) { sql += ` AND (p.reference_number LIKE ? OR c.name LIKE ?)`; const q = `%${debouncedSearch}%`; params.push(q, q) }
-    sql += ` ORDER BY p.created_at DESC LIMIT 50`
-    setPurchases(await window.electronAPI.db.query(sql, params) as Purchase[])
+    sql += ` ORDER BY p.created_at DESC LIMIT 100`
+    const rows = await window.electronAPI.db.query(sql, params) as Purchase[]
+    setPurchases(rows)
+    setSelected((prev) => (prev ? rows.find((r) => r.id === prev.id) ?? null : null))
   }
 
-  async function loadProducts() {
-    const rows = await window.electronAPI.db.query(
-      `SELECT p.id, p.name, pb.id as batch_id, pb.cost FROM products p
-       JOIN product_batches pb ON pb.id = (
-         SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
-       )
-       WHERE p.deleted_at IS NULL ORDER BY p.name`, []
-    )
-    setProducts(rows as Product[])
+  async function openPurchase(po: Purchase) {
+    setSelected(po)
+    setPoItems(await window.electronAPI.db.query(
+      `SELECT p.name as product_name, pi.quantity, pi.unit_cost, pi.received_quantity, pi.discrepancy_note, pi.expiry_date
+       FROM purchase_items pi JOIN products p ON p.id=pi.product_id WHERE pi.purchase_id=? ORDER BY pi.id`, [po.id]
+    ) as PurchaseItem[])
   }
 
-  async function loadPoItems(id: number) {
-    const rows = await window.electronAPI.db.query(
-      `SELECT pi.product_id, p.name as product_name, pi.batch_id, pi.quantity, pi.unit_cost
-       FROM purchase_items pi JOIN products p ON p.id=pi.product_id WHERE pi.purchase_id=?`, [id]
-    )
-    setPoItems(rows as PurchaseItem[])
-  }
-
-  function addLine() { setLines((prev) => [...prev, { id: crypto.randomUUID(), productId: '', batchId: '', qty: '1', cost: '', name: '' }]) }
-
-  function setLine(i: number, k: string, v: string) {
-    setLines((prev) => prev.map((l, idx) => {
-      if (idx !== i) return l
-      const updated = { ...l, [k]: v }
-      if (k === 'productId') {
-        const prod = products.find((p) => p.id === Number(v))
-        if (prod) { updated.batchId = String(prod.batch_id); updated.cost = String(prod.cost); updated.name = prod.name }
-      }
-      return updated
-    }))
-  }
-
-  async function savePO() {
-    if (!lines.length || lines.some((l) => !l.productId || !l.qty)) return
-    setSaving(true)
-    const now = new Date().toISOString()
-    const total = lines.reduce((s, l) => s + Number(l.qty) * Number(l.cost || 0), 0)
+  async function reprint(po: Purchase) {
+    setPrinting(true)
     try {
-      const syncId = crypto.randomUUID()
-      await window.electronAPI.db.exec(
-        `INSERT INTO purchases (sync_id,reference_number,note,total_amount,status,created_at,updated_at) VALUES (?,?,?,?,'pending',?,?)`,
-        [syncId, refNumber || `PO-${Date.now()}`, note || null, total, now, now]
-      )
-      const rows = await window.electronAPI.db.query(`SELECT id FROM purchases WHERE sync_id=?`, [syncId]) as Array<{id:number}>
-      const pid = rows[0].id
-      for (const l of lines) {
-        await window.electronAPI.db.exec(
-          `INSERT INTO purchase_items (purchase_id,product_id,batch_id,quantity,unit_cost,total_cost,created_at) VALUES (?,?,?,?,?,?,?)`,
-          [pid, Number(l.productId), Number(l.batchId), Number(l.qty), Number(l.cost || 0), Number(l.qty) * Number(l.cost || 0), now]
-        )
-      }
-      // Pushed after its items exist: the payload is built from them at flush time.
-      await window.electronAPI.sync.enqueue('purchases', syncId, 'upsert')
-      window.electronAPI.sync.pushPending().catch(() => {})
-      setShowForm(false); setLines([]); setVendorName(''); setRefNumber(''); setNote(''); loadPurchases()
-    } finally { setSaving(false) }
+      const res = await printPurchaseOrder(po.id)
+      if (res.success) toast.success(t('purchases.printed'))
+      else toast.error(t('purchases.printFailed', { error: res.error ?? '' }))
+    } finally { setPrinting(false) }
   }
 
-  async function receivePO(purchase: Purchase) {
-    setReceiving(true)
-    const now = new Date().toISOString()
-    try {
-      const items = await window.electronAPI.db.query(
-        `SELECT product_id, batch_id, quantity, unit_cost FROM purchase_items WHERE purchase_id=?`, [purchase.id]
-      ) as Array<{product_id:number; batch_id:number | null; quantity:number; unit_cost:number}>
-      // Received goods go into shop stock — the only location before the
-      // warehouse module, and the one sales draw from. Stock reaches the
-      // server only as quantity_adjustments deltas (a purchase push never
-      // touches stock there), so each line records one; without it the server
-      // never saw the goods and the next stock pull wiped them locally.
-      for (const item of items) {
-        if (!item.batch_id) continue
-        // ORDER BY id DESC matches every other stock lookup in the app
-        // (Warehouse, Products) — this DB has pre-existing duplicate
-        // product_stocks rows per product+batch+location from historical
-        // sync activity, and without this a lookup can silently hit a
-        // stale duplicate instead of the one actually shown/used elsewhere.
-        const stock = (await window.electronAPI.db.query(
-          `SELECT id, quantity FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' ORDER BY id DESC LIMIT 1`,
-          [item.product_id, item.batch_id]
-        ) as Array<{ id: number; quantity: number }>)[0]
-        const previous = Number(stock?.quantity ?? 0)
-        const adjusted = previous + Number(item.quantity)
-        if (stock) {
-          await window.electronAPI.db.exec(`UPDATE product_stocks SET quantity=?,updated_at=? WHERE id=?`, [adjusted, now, stock.id])
-        } else {
-          await window.electronAPI.db.exec(
-            `INSERT INTO product_stocks (sync_id,product_id,batch_id,location,quantity,updated_at) VALUES (?,?,?,'shop',?,?)`,
-            [crypto.randomUUID(), item.product_id, item.batch_id, adjusted, now]
-          )
-        }
-        const stockId = stock?.id ?? (await window.electronAPI.db.query(
-          `SELECT id FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' ORDER BY id DESC LIMIT 1`,
-          [item.product_id, item.batch_id]
-        ) as Array<{ id: number }>)[0]?.id
-        const adjSyncId = crypto.randomUUID()
-        await window.electronAPI.db.exec(
-          `INSERT INTO quantity_adjustments (sync_id,batch_id,stock_id,previous_quantity,adjusted_quantity,reason,location,created_at,updated_at)
-           VALUES (?,?,?,?,?,?,'shop',?,?)`,
-          [adjSyncId, item.batch_id, stockId ?? null, previous, adjusted, `Purchase ${purchase.reference_number} received`, now, now]
-        )
-        await window.electronAPI.sync.enqueue('quantity_adjustments', adjSyncId, 'upsert')
+  const placeName = (loc: string | null) =>
+    loc === 'shop' ? t('purchases.toShop') : loc === 'warehouse' ? t('purchases.toWarehouse') : '—'
 
-        // The cost price (tannarx) shown everywhere else (Products, Warehouse,
-        // the next sale's margin, the restock shopping list) comes from
-        // product_batches.cost — refresh it to what was actually paid on
-        // this delivery, so it doesn't go stale after a price change. Past
-        // sales are unaffected: their margin was already snapshotted onto
-        // sale_items.unit_cost at sale time, not recomputed from this.
-        if (item.unit_cost != null) {
-          await window.electronAPI.db.exec(`UPDATE product_batches SET cost=?,updated_at=? WHERE id=?`, [Number(item.unit_cost), now, item.batch_id])
-          const batchRow = (await window.electronAPI.db.query(`SELECT sync_id FROM product_batches WHERE id=?`, [item.batch_id]) as Array<{ sync_id: string | null }>)[0]
-          if (batchRow?.sync_id) await window.electronAPI.sync.enqueue('product_batches', batchRow.sync_id, 'upsert')
-        }
-      }
-      await window.electronAPI.db.exec(`UPDATE purchases SET status='received',updated_at=? WHERE id=?`, [now, purchase.id])
-      const po = (await window.electronAPI.db.query(`SELECT sync_id FROM purchases WHERE id=?`, [purchase.id]) as Array<{ sync_id: string | null }>)[0]
-      if (po?.sync_id) await window.electronAPI.sync.enqueue('purchases', po.sync_id, 'upsert')
-      window.electronAPI.sync.pushPending().catch(() => {})
-      setConfirmReceive(false)
-      setSelected(null); loadPurchases()
-    } finally { setReceiving(false) }
+  // What's still owed on a received order (an open one isn't owed yet).
+  const dueOf = (po: Purchase) => Number(po.total_amount) - Number(po.amount_paid)
+  // Payables are tracked per supplier: an order without one (bought at the
+  // market and paid on the spot) owes nobody.
+  function paymentLabel(po: Purchase) {
+    if (po.status !== 'received' || !po.vendor_id) return <span className="text-gray-600">—</span>
+    const due = dueOf(po)
+    if (due <= 0.001) return <span className="text-green-400">{t('suppliers.paidFull')}</span>
+    return <span className="text-red-400">{t('suppliers.dueAmount', { amount: fmtUZS(due) })}</span>
   }
 
   return (
     <BackOfficeLayout>
       <PageHeader
         title={t('nav.purchases')}
-        actions={
-          <Button icon={Plus} onClick={() => { setShowForm(true); setLines([{ id: crypto.randomUUID(), productId: '', batchId: '', qty: '1', cost: '', name: '' }]) }}>
-            {t('purchases.newPurchaseOrder')}
-          </Button>
-        }
+        subtitle={t('pageHints.purchases')}
+        actions={<Button icon={Plus} onClick={() => setShowOrder(true)}>{t('purchases.newOrder')}</Button>}
       />
       <div className="shrink-0 px-6 py-3 border-b border-dark-border">
         <div className="relative max-w-xs">
@@ -194,24 +111,38 @@ export default function PurchasesScreen() {
         <div className="flex-1 overflow-auto">
           <table className="w-full">
             <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-              <tr>{[t('purchases.poNumber'), t('purchases.vendor'), t('common.total'), t('common.status'), t('common.date'), ''].map((h) => (
+              <tr>{[t('purchases.poNumber'), t('suppliers.supplier'), t('purchases.amount'), t('common.status'), t('suppliers.payment'), t('common.date'), ''].map((h) => (
                 <th key={h} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
               ))}</tr>
             </thead>
             <tbody className="divide-y divide-dark-border">
               {purchases.map((po) => (
-                <tr key={po.id} onClick={() => { setSelected(po); loadPoItems(po.id) }} className="hover:bg-dark-card/40 cursor-pointer group">
+                <tr key={po.id} onClick={() => openPurchase(po)} className="hover:bg-dark-card/40 cursor-pointer group">
                   <td className="px-4 py-3 text-primary text-sm font-mono font-medium">{po.reference_number}</td>
                   <td className="px-4 py-3 text-gray-300 text-sm">{po.vendor_name ?? '—'}</td>
                   <td className="px-4 py-3 text-white text-sm font-semibold">UZS {fmtUZS(Number(po.total_amount))}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      po.status === 'received' ? 'bg-green-500/15 text-green-400'
-                      : po.status === 'pending' ? 'bg-yellow-500/15 text-yellow-400'
-                      : 'bg-gray-500/15 text-gray-400'}`}>{po.status === 'received' ? t('purchases.received') : po.status === 'pending' ? t('purchases.pending') : po.status}</span>
+                      po.status === 'received' ? 'bg-green-500/15 text-green-400' : 'bg-yellow-500/15 text-yellow-400'}`}>
+                      {po.status === 'received'
+                        ? po.received_location ? `${t('purchases.received')} · ${placeName(po.received_location)}` : t('purchases.received')
+                        : t('purchases.pending')}
+                    </span>
                   </td>
+                  <td className="px-4 py-3 text-xs">{paymentLabel(po)}</td>
                   <td className="px-4 py-3 text-gray-500 text-sm">{new Date(po.created_at).toLocaleDateString()}</td>
-                  <td className="px-4 py-3 text-gray-600 group-hover:text-gray-300">›</td>
+                  <td className="px-4 py-2 text-right">
+                    {po.status !== 'received' ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setReceiving(po) }}
+                        className="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white rounded-lg px-3 py-2 text-xs font-semibold"
+                      >
+                        <PackageCheck size={14} /> {t('purchases.receiveShort')}
+                      </button>
+                    ) : (
+                      <span className="text-gray-600 group-hover:text-gray-300">›</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -222,124 +153,104 @@ export default function PurchasesScreen() {
         </div>
 
         {selected && (
-          <div className="w-72 border-l border-dark-border bg-dark-surface overflow-y-auto shrink-0">
+          <div className="w-80 border-l border-dark-border bg-dark-surface flex flex-col shrink-0">
             <div className="p-4 border-b border-dark-border flex items-center justify-between">
               <div>
                 <p className="text-white font-mono font-semibold text-sm">{selected.reference_number}</p>
-                <p className="text-gray-500 text-xs">{selected.vendor_name ?? t('purchases.noVendor')}</p>
+                <p className="text-gray-500 text-xs">
+                  {selected.status === 'received'
+                    ? `${t('purchases.received')}${selected.received_location ? ` · ${placeName(selected.received_location)}` : ''}${selected.received_at ? ` · ${new Date(selected.received_at).toLocaleString()}` : ''}`
+                    : t('purchases.pending')}
+                </p>
               </div>
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-white"><X size={16} /></button>
             </div>
-            <div className="p-4 space-y-3">
-              {poItems.map((item, i) => (
-                <div key={i} className="flex justify-between text-sm">
-                  <div className="flex-1 mr-2">
-                    <p className="text-white text-xs">{item.product_name}</p>
-                    <p className="text-gray-500 text-xs">{item.quantity} × UZS {fmtUZS(Number(item.unit_cost))}</p>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {poItems.map((item, i) => {
+                const got = item.received_quantity == null ? null : Number(item.received_quantity)
+                const differs = got != null && got !== Number(item.quantity)
+                return (
+                  <div key={i} className="text-sm">
+                    <div className="flex justify-between">
+                      <div className="flex-1 mr-2 min-w-0">
+                        <p className="text-white text-xs truncate">{item.product_name}</p>
+                        <p className="text-gray-500 text-xs">{Number(item.quantity)} × UZS {fmtUZS(Number(item.unit_cost))}</p>
+                      </div>
+                      <p className="text-primary text-xs font-semibold">UZS {fmtUZS(Number(item.quantity) * Number(item.unit_cost))}</p>
+                    </div>
+                    {got != null && (
+                      <p className={`text-xs mt-0.5 ${differs ? 'text-yellow-400' : 'text-green-400'}`}>
+                        {t('purchases.receivedQty', { qty: got })}{differs && item.discrepancy_note ? ` — ${item.discrepancy_note}` : ''}
+                      </p>
+                    )}
+                    {item.expiry_date && (
+                      <p className="text-xs text-gray-500">{t('purchases.expiresOn', { date: new Date(item.expiry_date).toLocaleDateString() })}</p>
+                    )}
                   </div>
-                  <p className="text-primary text-xs font-semibold">UZS {fmtUZS(item.quantity * Number(item.unit_cost))}</p>
-                </div>
-              ))}
+                )
+              })}
               <div className="border-t border-dark-border pt-3 flex justify-between font-bold">
-                <span className="text-white text-sm">{t('common.total')}</span>
+                <span className="text-white text-sm">{selected.status === 'received' ? t('purchases.invoiceTotal') : t('purchases.estimatedTotal')}</span>
                 <span className="text-primary text-sm">UZS {fmtUZS(Number(selected.total_amount))}</span>
               </div>
+              {selected.vendor_name && (
+                <p className="text-xs text-gray-400">{t('suppliers.supplier')}: <span className="text-white">{selected.vendor_name}</span></p>
+              )}
+              {selected.status === 'received' && selected.vendor_id && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">{t('suppliers.paidSoFar', { amount: fmtUZS(Number(selected.amount_paid)) })}</span>
+                  {paymentLabel(selected)}
+                </div>
+              )}
+              {selected.note && <p className="text-xs text-gray-400">{selected.note}</p>}
             </div>
-            {selected.status === 'pending' && (
-              <div className="p-4 border-t border-dark-border space-y-2">
-                {confirmReceive ? (
-                  <>
-                    <p className="text-gray-400 text-xs text-center">{t('purchases.addStockConfirm')}</p>
-                    <div className="flex gap-2">
-                      <button onClick={() => setConfirmReceive(false)}
-                        className="flex-1 border border-dark-border text-gray-400 rounded-xl py-2 text-sm">
-                        {t('common.cancel')}
-                      </button>
-                      <button onClick={() => receivePO(selected)} disabled={receiving}
-                        className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white rounded-xl py-2 text-sm font-semibold">
-                        {receiving ? t('purchases.receiving') : t('common.confirm')}
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <button onClick={() => setConfirmReceive(true)}
-                    className="w-full flex items-center justify-center gap-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-xl py-2.5 text-sm transition-colors">
-                    <Check size={14} /> {t('purchases.receiveStock')}
-                  </button>
-                )}
-              </div>
-            )}
+            <div className="p-4 border-t border-dark-border space-y-2">
+              {selected.status === 'received' && selected.vendor_id && dueOf(selected) > 0.001 && (
+                <button onClick={() => setPaying({ id: selected.vendor_id!, name: selected.vendor_name ?? '' })}
+                  className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white rounded-xl py-2.5 text-sm font-semibold transition-colors">
+                  <Banknote size={15} /> {t('suppliers.pay')}
+                </button>
+              )}
+              {selected.status !== 'received' && (
+                <button onClick={() => setReceiving(selected)}
+                  className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl py-2.5 text-sm font-semibold transition-colors">
+                  <PackageCheck size={15} /> {t('purchases.receiveOrder')}
+                </button>
+              )}
+              <button onClick={() => reprint(selected)} disabled={printing}
+                className="w-full flex items-center justify-center gap-2 border border-dark-border text-gray-300 hover:text-white rounded-xl py-2.5 text-sm transition-colors disabled:opacity-40">
+                <Printer size={14} /> {t('purchases.reprint')}
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      <Modal
-        open={showForm}
-        onClose={() => setShowForm(false)}
-        title={t('purchases.newPurchaseOrder')}
-        maxWidth="max-w-2xl"
-        footer={
-          <>
-            <Button variant="secondary" className="flex-1" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
-            <Button className="flex-1" onClick={savePO} loading={saving} disabled={lines.length === 0}>
-              {saving ? t('common.saving') : t('purchases.createPo')}
-            </Button>
-          </>
-        }
-      >
-            <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-3">
-                <Input label={t('purchases.poNumber')} placeholder={t('products.auto')} value={refNumber}
-                  onChange={(e) => setRefNumber(e.target.value)} />
-                <Input label={t('purchases.vendor')} placeholder={t('purchases.vendorName')} value={vendorName}
-                  onChange={(e) => setVendorName(e.target.value)} />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs text-gray-400">{t('purchases.itemsRequired')}</label>
-                  <button onClick={addLine} className="text-xs text-primary hover:text-orange-400">{t('purchases.addItem')}</button>
-                </div>
-                <div className="space-y-2">
-                  {lines.map((l, i) => (
-                    <div key={l.id} className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-5">
-                        <Select
-                          value={l.productId}
-                          onChange={(v) => setLine(i, 'productId', v)}
-                          placeholder={t('purchases.selectProduct')}
-                          options={products.map((p) => ({ value: String(p.id), label: p.name }))}
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <input type="number" value={l.qty} onChange={(e) => setLine(i, 'qty', e.target.value)} placeholder={t('common.quantity')}
-                          className="w-full bg-dark-card border border-dark-border rounded-lg px-2 py-2 text-white text-xs focus:outline-none focus:border-primary" />
-                      </div>
-                      <div className="col-span-3">
-                        <input type="number" value={l.cost} onChange={(e) => setLine(i, 'cost', e.target.value)} placeholder={t('purchases.unitCost')}
-                          className="w-full bg-dark-card border border-dark-border rounded-lg px-2 py-2 text-white text-xs focus:outline-none focus:border-primary" />
-                      </div>
-                      <div className="col-span-2 text-right">
-                        <p className="text-primary text-xs font-semibold">
-                          {l.qty && l.cost ? `UZS ${fmtUZS(Number(l.qty) * Number(l.cost))}` : '—'}
-                        </p>
-                      </div>
-                      <button onClick={() => setLines((prev) => prev.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-300 col-span-1 flex items-center justify-center text-base leading-none">×</button>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-2 pt-2 border-t border-dark-border flex justify-between">
-                  <span className="text-gray-400 text-sm">{t('common.total')}</span>
-                  <span className="text-primary font-bold text-sm">
-                    UZS {fmtUZS(lines.reduce((s, l) => s + Number(l.qty || 0) * Number(l.cost || 0), 0))}
-                  </span>
-                </div>
-              </div>
-
-              <Input label={t('purchases.note')} placeholder={t('purchases.optionalNote')} value={note}
-                onChange={(e) => setNote(e.target.value)} />
-            </div>
-      </Modal>
+      {showOrder && (
+        <PurchaseOrderModal
+          onClose={() => setShowOrder(false)}
+          onCreated={() => { loadPurchases() }}
+        />
+      )}
+      {paying && (
+        <SupplierPayModal supplier={paying} onClose={() => setPaying(null)} onPaid={() => {
+          loadPurchases()
+          if (selected) openPurchase(selected)
+        }} />
+      )}
+      {receiving && (
+        <ReceivePurchaseModal
+          purchaseId={receiving.id}
+          reference={receiving.reference_number}
+          onClose={() => setReceiving(null)}
+          onReceived={() => {
+            const po = receiving
+            setReceiving(null)
+            loadPurchases()
+            if (po) openPurchase({ ...po, status: 'received' })
+          }}
+        />
+      )}
     </BackOfficeLayout>
   )
 }

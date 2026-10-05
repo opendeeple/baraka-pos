@@ -12,6 +12,7 @@ import { registerWindowIpc, hideAllMiniapps, registerFullscreenIpc } from './ipc
 import { registerAuthIpc } from './ipc/auth.ipc'
 import { registerFilesIpc } from './ipc/files.ipc'
 import { registerShiftIpc } from './ipc/shift.ipc'
+import { registerNotifyIpc } from './ipc/notify.ipc'
 
 // Deliberately the SAME name as main.office.ts: for now POS and Office are
 // meant to share one local SQLite replica on a single machine (so data added
@@ -151,6 +152,7 @@ app.whenReady().then(async () => {
   registerAuthIpc()
   registerShiftIpc()
   registerFilesIpc(() => mainWindow)
+  registerNotifyIpc(isTraining)
 
   // App-level IPC (getVersion and isTraining are in session.ipc.ts — only add extras here)
   ipcMain.handle('app:getLogPath', () => logger.getLogPath())

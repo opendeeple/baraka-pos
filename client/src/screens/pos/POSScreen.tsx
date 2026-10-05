@@ -17,6 +17,7 @@ import { useBarcodeScanner } from '../../hooks/useBarcode'
 import { useSync } from '../../hooks/useSync'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { SCALE_SETTING_KEY, parseScaleBarcode, pluVariants, readScaleConfig } from '../../lib/scaleBarcode'
 
 export default function POSScreen() {
   const navigate = useNavigate()
@@ -119,7 +120,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
 
   /** Exact barcode lookup — used by the HID scanner and by Enter in the search box. Returns whether a product was found and added. */
   async function handleBarcodeScanned(barcode: string): Promise<boolean> {
-    const rows = await window.electronAPI.db.query(
+    const lookup = (where: string, params: unknown[]) => window.electronAPI.db.query(
       `SELECT p.id, p.name, p.barcode, p.unit, p.units_per_package, pb.id as batch_id, pb.price, pb.cost,
               COALESCE(ps.quantity,0) as stock
        FROM products p
@@ -129,11 +130,28 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
        LEFT JOIN product_stocks ps ON ps.id = (
          SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id AND location = 'shop' ORDER BY id DESC LIMIT 1
        )
-       WHERE p.barcode = ? AND p.is_active = 1 LIMIT 1`,
-      [barcode]
-    ) as LocalProduct[]
+       WHERE ${where} AND p.is_active = 1 AND p.deleted_at IS NULL LIMIT 1`,
+      params
+    ) as Promise<LocalProduct[]>
+    const rows = await lookup('p.barcode = ?', [barcode])
     if (rows.length > 0) { handleProductTap(rows[0]); return true }
-    return false
+
+    // A weighing-scale label (no product has this exact barcode): the
+    // product by its PLU, the weight straight into the cart.
+    const [cfgRow] = await window.electronAPI.db.query(
+      `SELECT meta_value FROM settings WHERE meta_key = ?`, [SCALE_SETTING_KEY]
+    ) as Array<{ meta_value: string }>
+    const scale = parseScaleBarcode(barcode, readScaleConfig(cfgRow?.meta_value))
+    if (!scale) return false
+    const plus = pluVariants(scale.plu)
+    const marks = plus.map(() => '?').join(',')
+    const [weighed] = await lookup(`(p.sku IN (${marks}) OR p.barcode IN (${marks}))`, [...plus, ...plus])
+    if (!weighed) {
+      toast.error(t('pos.scalePluNotFound', { plu: scale.plu }))
+      return true // it was a scale label — don't offer to create a product from it
+    }
+    addToCart(weighed, scale.weightKg)
+    return true
   }
 
   /** Enter in the search box: if it's an exact barcode match, add it straight to the cart and

@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 import { useAuthStore } from '../../store/auth.store'
 import { fmtUZS } from '../../lib/currency'
+import { ProductAnalysis } from '../../components/backoffice/ProductAnalysis'
 
 const COLORS = ['#f97316', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#f59e0b']
 
@@ -48,7 +49,7 @@ export default function ReportsScreen() {
   const { t } = useTranslation()
   const { token } = useAuthStore()
 
-  const [tab, setTab] = useState<'daily' | 'range'>('daily')
+  const [tab, setTab] = useState<'daily' | 'range' | 'analysis'>('daily')
   const [date, setDate] = useState(today())
   const [dateFrom, setDateFrom] = useState(nDaysAgo(30))
   const [dateTo, setDateTo] = useState(today())
@@ -63,7 +64,8 @@ export default function ReportsScreen() {
   const [error, setError] = useState('')
 
   const load = useCallback(async () => {
-    if (!token) return
+    // Product analysis is computed from this device's synced data.
+    if (!token || tab === 'analysis') return
     setLoading(true); setError('')
     const base = `${SERVER_URL}/api/reports`
     const authToken = token
@@ -104,12 +106,12 @@ export default function ReportsScreen() {
       <div className="flex items-center justify-between px-6 py-4 border-b border-dark-border shrink-0">
         <div>
           <h1 className="text-white font-bold text-xl">{t('nav.reports')}</h1>
-          <p className="text-gray-500 text-xs mt-0.5">{t('reports.subtitle')}</p>
+          <p className="text-gray-500 text-xs mt-0.5">{t('pageHints.reports')}</p>
         </div>
         <div className="flex items-center gap-2">
           {/* Tab toggle */}
           <div className="flex bg-dark-card rounded-lg p-0.5 border border-dark-border">
-            {(['daily', 'range'] as const).map((tb) => (
+            {(['daily', 'range', 'analysis'] as const).map((tb) => (
               <button
                 key={tb}
                 onClick={() => setTab(tb)}
@@ -117,7 +119,7 @@ export default function ReportsScreen() {
                   tab === tb ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >
-                {tb === 'daily' ? t('reports.daily') : t('reports.dateRange')}
+                {tb === 'daily' ? t('reports.daily') : tb === 'range' ? t('reports.dateRange') : t('analysis.tab')}
               </button>
             ))}
           </div>
@@ -138,6 +140,9 @@ export default function ReportsScreen() {
         </div>
       </div>
 
+      {tab === 'analysis' ? (
+        <div className="flex-1 overflow-y-auto p-6"><ProductAnalysis dateFrom={dateFrom} dateTo={dateTo} /></div>
+      ) : (
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-4 text-sm">
@@ -336,6 +341,7 @@ export default function ReportsScreen() {
           </div>
         )}
       </div>
+      )}
     </BackOfficeLayout>
   )
 }

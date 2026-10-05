@@ -16,6 +16,10 @@ const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string | undefined) || DE
 type LoginMode = 'password' | 'badge'
 const LOGIN_MODE_KEY = 'pos_login_mode'
 
+// The Office app changes stock, prices, voids and refunds — managers and the
+// owner only; cashiers sell at the till.
+const OFFICE_ROLES = new Set(['admin', 'manager', 'super_admin'])
+
 interface LoginData {
   token: string
   syncApiKey?: string
@@ -152,6 +156,7 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
       const result = await window.electronAPI.auth.me(SERVER_URL, token)
       if (result.status === 200) {
         const data = result.data as { user: AuthUser; store: { id: number; name: string; address?: string; phone?: string; salePrefix: string } }
+        if (!OFFICE_ROLES.has(data.user.role)) { await window.electronAPI.auth.clearToken(); return }
         setAuth(data.user, token, data.store)
         navigate('/backoffice', { replace: true })
       }
@@ -206,6 +211,7 @@ export default function LoginScreen({ variant = 'pos' }: LoginScreenProps) {
         throw new Error(msg)
       }
       const data = result.data as LoginData
+      if (isOffice && !OFFICE_ROLES.has(data.user.role)) throw new Error(t('auth.officeManagersOnly'))
       await completeLogin(data)
 
       // Register this terminal for sync v2 before entering the app — the sync

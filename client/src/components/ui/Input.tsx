@@ -16,7 +16,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       ref={ref}
       className={[
         'w-full bg-dark-card border rounded-lg text-white text-sm placeholder-gray-500',
-        'focus:outline-none focus:border-primary',
+        'focus:outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed',
         error ? 'border-red-500' : 'border-dark-border',
         left ? 'pl-9' : 'pl-3',
         right ? 'pr-9' : 'pr-3',

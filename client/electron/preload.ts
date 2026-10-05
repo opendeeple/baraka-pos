@@ -28,8 +28,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     print: (receiptData: unknown) => ipcRenderer.invoke('printer:print', receiptData),
     receiptHtml: (receiptData: unknown) => ipcRenderer.invoke('printer:receiptHtml', receiptData),
     printBadge: (html: string) => ipcRenderer.invoke('printer:printBadge', html),
-    printShoppingList: (items: Array<{ name: string; qty: number; cost: number }>) =>
-      ipcRenderer.invoke('printer:printShoppingList', items),
+    printShoppingList: (items: Array<{ name: string; qty: number; cost: number }>, meta?: { title?: string; reference?: string }) =>
+      ipcRenderer.invoke('printer:printShoppingList', items, meta),
+    printReport: (doc: unknown) => ipcRenderer.invoke('printer:printReport', doc),
     openCashDrawer: () => ipcRenderer.invoke('printer:openCashDrawer'),
     testPrint: () => ipcRenderer.invoke('printer:testPrint'),
     listPrinters: () => ipcRenderer.invoke('printer:listPrinters'),
@@ -39,6 +40,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     open: (openingBalance: number) => ipcRenderer.invoke('session:open', openingBalance),
     close: (closingData: unknown) => ipcRenderer.invoke('session:close', closingData),
     current: () => ipcRenderer.invoke('session:current'),
+    report: (sessionId: number) => ipcRenderer.invoke('session:report', sessionId),
   },
   sync: {
     pushPending: () => ipcRenderer.invoke('sync:pushPending'),
@@ -87,6 +89,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sms: {
     send: (phoneNumber: string, text: string) => ipcRenderer.invoke('sms:send', phoneNumber, text) as Promise<{ success: boolean; error?: string }>,
     status: () => ipcRenderer.invoke('sms:status') as Promise<boolean>,
+  },
+  notify: {
+    debtSale: (saleSyncId: string) => ipcRenderer.invoke('notify:debtSale', saleSyncId),
   },
   app: {
     isTraining: () => ipcRenderer.invoke('app:isTraining'),

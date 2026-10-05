@@ -4,8 +4,12 @@ import { useSyncStore } from '../store/sync.store'
 import { useAuthStore } from '../store/auth.store'
 
 // Pull order matters: FK targets before their referrers (products need
-// collections, batches need products, stocks need batches).
-const SYNC_TABLES = [
+// collections, batches need products, stocks need batches; sales, debt
+// repayments and debt clearances need contacts). sales/cash_logs/
+// debt_clearances bring other terminals' debt sales, repayments and deleted
+// debts, so every device shows the same debt history; purchases bring orders
+// placed or received elsewhere (their stock arrives via product_stocks).
+export const SYNC_TABLES = [
   'stores',
   'collections',
   'contacts',
@@ -15,7 +19,27 @@ const SYNC_TABLES = [
   'charges',
   'settings',
   'users',
+  'sales',
+  'purchases',
+  'cash_logs',
+  'debt_clearances',
+  'expenses',
+  'audit_logs',
 ] as const
+
+// Served only by server builds from 2026-10 on. Against an older server they
+// answer "Unknown table" — skipped rather than failing the whole sync, so a
+// client update never breaks syncing while the server deploy lags behind.
+const OPTIONAL_TABLES = new Set<string>(['cash_logs', 'debt_clearances', 'audit_logs'])
+
+export async function pullSyncTable(table: string): Promise<void> {
+  try {
+    await window.electronAPI.sync.pullLatest(table)
+  } catch (err) {
+    if (OPTIONAL_TABLES.has(table) && err instanceof Error && err.message.includes('Unknown table')) return
+    throw err
+  }
+}
 
 export function useSync() {
   const { setStatus, setPendingCount, setLastSync, setLastError } = useSyncStore()
@@ -49,7 +73,7 @@ export function useSync() {
         if (!(await window.electronAPI.sync.isDeviceRegistered())) return
         setStatus('syncing')
         for (const table of SYNC_TABLES) {
-          await window.electronAPI.sync.pullLatest(table)
+          await pullSyncTable(table)
         }
         setLastSync(new Date().toISOString())
         setLastError(null)

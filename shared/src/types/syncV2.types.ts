@@ -22,6 +22,10 @@ export type SyncV2PullTable =
   | 'purchases'
   | 'quantity_adjustments'
   | 'sales'
+  /** Customer debt repayments only (cash-in deposits against a contact), not drawer movements. */
+  | 'cash_logs'
+  | 'debt_clearances'
+  | 'audit_logs'
 
 /** Tables a device may push through the generic change endpoint (sales have their own). */
 export type SyncV2PushTable =
@@ -35,6 +39,11 @@ export type SyncV2PushTable =
   | 'quantity_adjustments'
   | 'users'
   | 'cash_logs'
+  | 'debt_clearances'
+  | 'settings'
+  | 'charges'
+  | 'audit_logs'
+  | 'stores'
 
 export interface DeviceRegisterRequest {
   name: string

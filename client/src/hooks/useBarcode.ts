@@ -22,7 +22,12 @@ export function useBarcodeScanner(onScan: BarcodeHandler) {
         const code = bufferRef.current.trim()
         bufferRef.current = ''
         if (timerRef.current) clearTimeout(timerRef.current)
-        if (code.length >= 3) onScanRef.current(code)
+        if (code.length >= 3) {
+          // The scanner's Enter must not also "press" whatever button has
+          // focus (e.g. a list item tapped a moment ago).
+          e.preventDefault()
+          onScanRef.current(code)
+        }
         return
       }
 

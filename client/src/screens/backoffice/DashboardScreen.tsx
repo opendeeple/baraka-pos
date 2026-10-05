@@ -4,9 +4,13 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { TrendingUp, ShoppingBag, Users, Package, AlertTriangle, RefreshCw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import {
+  TrendingUp, ShoppingBag, Users, Package, AlertTriangle, RefreshCw, Truck, HandCoins, Factory, CalendarClock, CheckCircle2,
+} from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
+import { loadExpiring, EXPIRING_DAYS, type ExpiringRow } from '../../lib/expiry'
 
 interface DashStats {
   todayRevenue: number
@@ -38,6 +42,50 @@ function StatCard({
   )
 }
 
+interface Attention {
+  pendingOrders: number
+  debtors: number
+  debtTotal: number
+  supplierOwed: number
+  expiring: ExpiringRow[]
+}
+
+/** What's waiting for the owner: deliveries, debts both ways, goods about to expire. */
+async function loadAttention(): Promise<Attention> {
+  const one = async (sql: string) => (await window.electronAPI.db.query(sql, []) as Array<Record<string, number>>)[0] ?? {}
+  const [orders, debt, owed, expiring] = await Promise.all([
+    one(`SELECT COUNT(*) AS n FROM purchases WHERE status != 'received' AND deleted_at IS NULL`),
+    one(`SELECT COUNT(*) AS n, COALESCE(SUM(balance), 0) AS total FROM contacts
+         WHERE type IN ('customer','both') AND deleted_at IS NULL AND balance > 0`),
+    one(`SELECT COALESCE(SUM(total_amount - COALESCE(amount_paid, 0)), 0) AS total FROM purchases
+         WHERE vendor_id IS NOT NULL AND status = 'received' AND deleted_at IS NULL`),
+    loadExpiring(),
+  ])
+  return {
+    pendingOrders: Number(orders.n ?? 0),
+    debtors: Number(debt.n ?? 0),
+    debtTotal: Number(debt.total ?? 0),
+    supplierOwed: Number(owed.total ?? 0),
+    expiring,
+  }
+}
+
+function AttentionTile({ icon: Icon, tone, title, sub, onClick }: {
+  icon: React.ElementType; tone: 'yellow' | 'red'; title: string; sub: string; onClick: () => void
+}) {
+  const color = tone === 'red' ? 'text-red-400 bg-red-500/15' : 'text-yellow-400 bg-yellow-500/15'
+  return (
+    <button onClick={onClick}
+      className="flex items-center gap-3 text-left bg-dark-surface border border-dark-border rounded-2xl px-4 py-3 hover:border-primary active:bg-dark-card transition-colors">
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}><Icon size={18} /></div>
+      <div className="min-w-0">
+        <p className="text-white text-sm font-semibold leading-tight">{title}</p>
+        <p className="text-gray-400 text-xs mt-0.5 truncate">{sub}</p>
+      </div>
+    </button>
+  )
+}
+
 const TOOLTIP_STYLE = {
   backgroundColor: '#2a2a3e',
   border: '1px solid #404060',
@@ -54,10 +102,13 @@ export default function DashboardScreen() {
   })
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<'today' | '7d' | '30d'>('7d')
+  const [attention, setAttention] = useState<Attention | null>(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     loadStats()
   }, [period])
+  useEffect(() => { loadAttention().then(setAttention) }, [])
 
   async function loadStats() {
     setLoading(true)
@@ -66,12 +117,14 @@ export default function DashboardScreen() {
     const chartFrom = new Date(Date.now() - daysBack * 86400000).toISOString().split('T')[0]
 
     const [todaySalesRows, weekRows, topRows, lowRows, recentRows] = await Promise.all([
+      // Revenue is net of refunds (a return's total is negative); the count
+      // and the average receipt are over sales only.
       window.electronAPI.db.query(
-        `SELECT COUNT(*) as cnt, COALESCE(SUM(total_amount),0) as revenue,
-                COUNT(DISTINCT contact_id) as customers
+        `SELECT SUM(CASE WHEN sale_type = 'return' THEN 0 ELSE 1 END) as cnt, COALESCE(SUM(total_amount),0) as revenue,
+                COALESCE(SUM(CASE WHEN sale_type = 'return' THEN 0 ELSE total_amount END), 0) as gross
          FROM sales WHERE sale_date = ? AND status != 'cancelled'`,
         [today]
-      ) as Promise<Array<{ cnt: number; revenue: number; customers: number }>>,
+      ) as Promise<Array<{ cnt: number; revenue: number; gross: number }>>,
 
       window.electronAPI.db.query(
         `SELECT sale_date as day, COALESCE(SUM(total_amount),0) as revenue
@@ -81,12 +134,14 @@ export default function DashboardScreen() {
       ) as Promise<Array<{ day: string; revenue: number }>>,
 
       window.electronAPI.db.query(
-        `SELECT p.name, SUM(si.quantity) as qty, SUM(si.quantity * si.unit_price) as revenue
+        `SELECT p.name,
+                SUM(CASE WHEN s.sale_type = 'return' THEN -ABS(si.quantity) ELSE si.quantity END) as qty,
+                SUM(CASE WHEN s.sale_type = 'return' THEN -ABS(si.quantity * si.unit_price) ELSE si.quantity * si.unit_price END) as revenue
          FROM sale_items si
          JOIN products p ON p.id = si.product_id
          JOIN sales s ON s.id = si.sale_id
          WHERE s.sale_date >= ? AND s.status != 'cancelled'
-         GROUP BY p.id ORDER BY qty DESC LIMIT 6`,
+         GROUP BY p.id HAVING qty > 0 ORDER BY qty DESC LIMIT 6`,
         [chartFrom]
       ) as Promise<Array<{ name: string; qty: number; revenue: number }>>,
 
@@ -112,11 +167,12 @@ export default function DashboardScreen() {
       ) as Promise<Array<{ id: number; invoice_number: string; total_amount: number; payment_status: string; created_at: string }>>,
     ])
 
-    const today0 = (todaySalesRows as Array<{ cnt: number; revenue: number; customers: number }>)[0]
+    const today0 = (todaySalesRows as Array<{ cnt: number; revenue: number; gross: number }>)[0]
+    const cnt = Number(today0?.cnt ?? 0)
     setStats({
       todayRevenue: Number(today0?.revenue ?? 0),
-      todaySales: Number(today0?.cnt ?? 0),
-      todayCustomers: Number(today0?.customers ?? 0),
+      todaySales: cnt,
+      todayCustomers: cnt > 0 ? Math.round(Number(today0?.gross ?? 0) / cnt) : 0,
       lowStockCount: (lowRows as Array<unknown>).length,
       recentSales: recentRows as Array<{ id: number; invoice_number: string; total_amount: number; payment_status: string; created_at: string }>,
       topProducts: topRows as Array<{ name: string; qty: number; revenue: number }>,
@@ -156,11 +212,58 @@ export default function DashboardScreen() {
           </div>
         </div>
 
+        {/* Needs attention */}
+        {attention && (
+          <div className="mb-6">
+            <h3 className="text-white font-semibold text-sm mb-3">{t('dashboard.needsAttention')}</h3>
+            {attention.pendingOrders + attention.debtors + attention.expiring.length === 0 && attention.supplierOwed <= 0 ? (
+              <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-2xl px-4 py-3 text-green-300 text-sm">
+                <CheckCircle2 size={16} /> {t('dashboard.allGood')}
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 gap-3">
+                {attention.pendingOrders > 0 && (
+                  <AttentionTile icon={Truck} tone="yellow" onClick={() => navigate('/backoffice/purchases')}
+                    title={t('dashboard.waitingDeliveries', { count: attention.pendingOrders })} sub={t('dashboard.receiveWhenArrives')} />
+                )}
+                {attention.debtors > 0 && (
+                  <AttentionTile icon={HandCoins} tone="red" onClick={() => navigate('/backoffice/debtors')}
+                    title={t('dashboard.debtorsCount', { count: attention.debtors })} sub={`UZS ${fmtUZS(attention.debtTotal)}`} />
+                )}
+                {attention.supplierOwed > 0 && (
+                  <AttentionTile icon={Factory} tone="yellow" onClick={() => navigate('/backoffice/suppliers')}
+                    title={t('dashboard.weOweSuppliers')} sub={`UZS ${fmtUZS(attention.supplierOwed)}`} />
+                )}
+                {attention.expiring.length > 0 && (
+                  <AttentionTile icon={CalendarClock} tone="red" onClick={() => navigate('/backoffice/warehouse')}
+                    title={t('dashboard.expiringCount', { count: attention.expiring.length, days: EXPIRING_DAYS })}
+                    sub={`UZS ${fmtUZS(attention.expiring.reduce((s, r) => s + r.stock * r.cost, 0))}`} />
+                )}
+              </div>
+            )}
+            {attention.expiring.length > 0 && (
+              <div className="mt-3 bg-dark-surface border border-dark-border rounded-2xl divide-y divide-dark-border">
+                {attention.expiring.slice(0, 6).map((r) => (
+                  <div key={r.batch_id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                    <span className="text-white truncate mr-3">{r.name}</span>
+                    <span className="text-gray-400 shrink-0 mr-4">{t('dashboard.inStock', { qty: r.stock })}</span>
+                    <span className={`shrink-0 font-semibold ${r.days_left < 0 ? 'text-red-400' : 'text-yellow-400'}`}>
+                      {r.days_left < 0 ? t('dashboard.expired', { date: new Date(r.expiry_date).toLocaleDateString() })
+                        : r.days_left === 0 ? t('dashboard.expiresToday')
+                        : t('dashboard.daysLeft', { count: r.days_left })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Stat Cards */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           <StatCard label={t('dashboard.todaysRevenue')} value={`UZS ${fmtUZS(stats.todayRevenue)}`} icon={TrendingUp} sub={t('dashboard.today')} />
           <StatCard label={t('dashboard.todaysSales')} value={String(stats.todaySales)} icon={ShoppingBag} sub={t('session.transactions')} color="text-blue-400" />
-          <StatCard label={t('dashboard.customersServed')} value={String(stats.todayCustomers)} icon={Users} sub={t('dashboard.today')} color="text-green-400" />
+          <StatCard label={t('dashboard.averageReceipt')} value={`UZS ${fmtUZS(stats.todayCustomers)}`} icon={Users} sub={t('dashboard.today')} color="text-green-400" />
           <StatCard
             label={t('dashboard.lowStockItems')}
             value={String(stats.lowStockCount)}

@@ -3,11 +3,11 @@ import { useTranslation } from 'react-i18next'
 import { Search, Printer, XCircle, Eye, ShoppingBag, RotateCcw } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { useAuthStore } from '../../store/auth.store'
-import { v4 as uuidv4 } from 'uuid'
 import { fmtUZS } from '../../lib/currency'
 import { toast } from 'sonner'
 import { Modal, Button, EmptyState, SkeletonRow, Select, DatePicker } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { voidSale as voidSaleOp, refundSale } from '../../lib/salesOps'
 
 interface Sale {
   id: number; invoice_number: string; total_amount: number; subtotal: number
@@ -26,12 +26,21 @@ interface SaleItem {
 interface SaleDetail extends Sale {
   items: SaleItem[]
   payments: Array<{ payment_method: string; amount: number }>
+  sync_id: string | null
+  /** State of the till session the sale was rung up in; a void is only allowed while it's still open. */
+  session_state: string | null
+  /** Already returned per product+batch ("pid:bid") across earlier returns of this sale. */
+  returned: Record<string, number>
 }
 
 interface ReturnItem {
   saleItemId: number; productId: number | null; batchId: number | null
-  name: string; maxQty: number; returnQty: number; unitPrice: number; unitCost: number
+  name: string; sold: number; maxQty: number; returnQty: number
+  /** What one unit actually cost the customer: item discount and the sale-level discount/charges spread in. */
+  refundEach: number; unitCost: number
 }
+
+const lineKey = (productId: number | null, batchId: number | null) => `${productId ?? 0}:${batchId ?? 0}`
 
 export default function SalesScreen() {
   const { t } = useTranslation()
@@ -45,6 +54,7 @@ export default function SalesScreen() {
   const [detail, setDetail] = useState<SaleDetail | null>(null)
   const [voiding, setVoiding] = useState(false)
   const [confirmVoid, setConfirmVoid] = useState(false)
+  const [voidReason, setVoidReason] = useState('')
   const [showReturnModal, setShowReturnModal] = useState(false)
   const [returnItems, setReturnItems] = useState<ReturnItem[]>([])
   const [returnMethod, setReturnMethod] = useState('Cash')
@@ -55,7 +65,7 @@ export default function SalesScreen() {
 
   useEffect(() => { loadSales() }, [debouncedSearch, dateFrom, dateTo, statusFilter, paymentMethodFilter])
   useEffect(() => { loadExpensesTotal() }, [dateFrom, dateTo])
-  useEffect(() => { setConfirmVoid(false) }, [detail?.id])
+  useEffect(() => { setConfirmVoid(false); setVoidReason('') }, [detail?.id])
 
   async function loadSales() {
     let sql = `
@@ -101,28 +111,50 @@ export default function SalesScreen() {
        LEFT JOIN contacts c ON c.id=s.contact_id LEFT JOIN users u ON u.id=s.user_id WHERE s.id=?`, [id]
     ) as SaleDetail[]
     if (!saleRows[0]) return
-    const [items, payments] = await Promise.all([
+    const [items, payments, sessionRows, returnedRows] = await Promise.all([
       window.electronAPI.db.query(
         `SELECT si.id, si.description, si.quantity, si.unit_price, si.unit_cost,
                 si.discount, si.is_free, si.product_id, si.batch_id
          FROM sale_items si WHERE si.sale_id=? AND si.item_type='product'`, [id]
       ),
       window.electronAPI.db.query(`SELECT payment_method,amount FROM payment_transactions WHERE sale_id=?`, [id]),
+      window.electronAPI.db.query(`SELECT state FROM pos_sessions WHERE id=?`, [saleRows[0].session_id ?? -1]),
+      // Returns may store their lines as negative quantities (older desktop
+      // builds) or positive ones (Android) — counted by magnitude.
+      window.electronAPI.db.query(
+        `SELECT si.product_id, si.batch_id, SUM(ABS(si.quantity)) AS qty
+         FROM sale_items si JOIN sales r ON r.id = si.sale_id
+         WHERE r.reference_id=? AND r.sale_type='return' AND r.status != 'cancelled'
+         GROUP BY si.product_id, si.batch_id`, [id]
+      ),
     ])
-    setDetail({ ...saleRows[0], items: items as SaleItem[], payments: payments as SaleDetail['payments'] })
+    const returned: Record<string, number> = {}
+    for (const r of returnedRows as Array<{ product_id: number | null; batch_id: number | null; qty: number }>) {
+      returned[lineKey(r.product_id, r.batch_id)] = Number(r.qty)
+    }
+    setDetail({
+      ...saleRows[0],
+      items: items as SaleItem[],
+      payments: payments as SaleDetail['payments'],
+      session_state: (sessionRows as Array<{ state: string }>)[0]?.state ?? null,
+      returned,
+    })
   }
 
+  // Void only while the sale's till session is open (once a shift is closed
+  // and its Z report printed, a refund is the way); always with a reason.
   async function voidSale(id: number) {
+    if (!detail || detail.id !== id || !voidReason.trim()) return
     setVoiding(true)
-    const now = new Date().toISOString()
-    await window.electronAPI.db.exec(`UPDATE sales SET status='cancelled',updated_at=? WHERE id=?`, [now, id])
-    // Without this the void never left this PC: the server kept counting the sale.
-    const row = (await window.electronAPI.db.query(`SELECT sync_id FROM sales WHERE id=?`, [id]) as Array<{ sync_id: string | null }>)[0]
-    if (row?.sync_id) {
-      await window.electronAPI.sync.enqueue('sales', row.sync_id, 'upsert')
-      window.electronAPI.sync.pushPending().catch(() => {})
+    try {
+      await voidSaleOp(detail, voidReason)
+      toast.success(t('sales.voided', { invoice: detail.invoice_number }))
+      setConfirmVoid(false); setDetail(null); loadSales()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setVoiding(false)
     }
-    setVoiding(false); setConfirmVoid(false); setDetail(null); loadSales()
   }
 
   async function reprintReceipt(sale: SaleDetail) {
@@ -138,102 +170,67 @@ export default function SalesScreen() {
 
   function openReturnModal() {
     if (!detail) return
+    // What each unit actually cost the customer: its own discount, then the
+    // sale-level discount/charges spread over all lines.
+    const lineNet = (i: SaleItem) => Number(i.unit_price) * (1 - Number(i.discount || 0) / 100)
+    const itemsNet = detail.items.reduce((s, i) => s + lineNet(i) * Math.abs(Number(i.quantity)), 0)
+    const ratio = itemsNet > 0 ? Number(detail.total_amount) / itemsNet : 1
     setReturnItems(
       detail.items
-        .filter((i) => i.quantity > 0)
-        .map((i) => ({
-          saleItemId: i.id,
-          productId: i.product_id,
-          batchId: i.batch_id,
-          name: i.description,
-          maxQty: Number(i.quantity),
-          returnQty: Number(i.quantity),
-          unitPrice: Number(i.unit_price),
-          unitCost: Number(i.unit_cost),
-        }))
+        .filter((i) => Number(i.quantity) > 0)
+        .map((i) => {
+          const sold = Number(i.quantity)
+          const left = Math.max(0, sold - (detail.returned[lineKey(i.product_id, i.batch_id)] ?? 0))
+          return {
+            saleItemId: i.id,
+            productId: i.product_id,
+            batchId: i.batch_id,
+            name: i.description,
+            sold,
+            maxQty: left,
+            returnQty: left,
+            refundEach: Math.round(lineNet(i) * ratio * 100) / 100,
+            unitCost: Number(i.unit_cost),
+          }
+        })
     )
-    setReturnMethod('Cash')
+    // Refund the way it was paid, by default.
+    const main = [...detail.payments].sort((a, b) => Number(b.amount) - Number(a.amount))[0]?.payment_method
+    setReturnMethod(main && ['Cash', 'Card', 'Click', 'Debt'].includes(main) ? main : 'Cash')
     setShowReturnModal(true)
   }
 
   async function processReturn() {
     if (!detail) return
-    const returnableItems = returnItems.filter((i) => i.returnQty > 0)
-    if (!returnableItems.length) return
+    const lines = returnItems.filter((i) => i.returnQty > 0 && i.returnQty <= i.maxQty)
+    if (!lines.length) return
     setProcessingReturn(true)
-    const now = new Date().toISOString()
-    const syncId = uuidv4()
-    const refundTotal = returnableItems.reduce((s, i) => s + i.unitPrice * i.returnQty, 0)
-
     try {
-      // A return needs a valid local pos_sessions link — buildSalePayload
-      // refuses to push a sale whose session can't be resolved — so it
-      // inherits the session the original sale was rung up under.
-      await window.electronAPI.db.exec(
-        `INSERT INTO sales (sync_id, store_id, session_id, contact_id, user_id, invoice_number, sale_type,
-           reference_id, subtotal, total_amount, amount_received, status, payment_status,
-           sale_date, sale_time, created_at, updated_at, sync_status)
-         VALUES (?,?,?,?,?,?,'return',?,?,?,?,'completed','fully_paid',?,?,?,?,'pending')`,
-        [syncId, detail.store_id ?? store?.id ?? 1, detail.session_id ?? null, detail.contact_id ?? null, user?.id ?? 1,
-         `RET-${syncId.slice(0, 8).toUpperCase()}`, detail.id,
-         refundTotal, refundTotal, refundTotal,
-         now.split('T')[0], now.split('T')[1].slice(0, 8), now, now]
+      const { refundTotal } = await refundSale(
+        detail,
+        lines.map((l) => ({ productId: l.productId, batchId: l.batchId, name: l.name, qty: l.returnQty, refundEach: l.refundEach, unitCost: l.unitCost })),
+        returnMethod,
+        { userId: user?.id ?? null, storeId: store?.id ?? 1 }
       )
-
-      const retRows = await window.electronAPI.db.query(
-        `SELECT id FROM sales WHERE sync_id=? LIMIT 1`, [syncId]
-      ) as Array<{ id: number }>
-      const retSaleId = retRows[0].id
-
-      for (const item of returnableItems) {
-        await window.electronAPI.db.exec(
-          `INSERT INTO sale_items (sale_id, item_type, product_id, batch_id, description,
-             quantity, unit_price, unit_cost, created_at)
-           VALUES (?,?,?,?,?,?,?,?,?)`,
-          [retSaleId, 'product', item.productId, item.batchId, item.name,
-           item.returnQty * -1, item.unitPrice, item.unitCost, now]
-        )
-        if (item.productId) {
-          await window.electronAPI.db.exec(
-            `UPDATE product_stocks SET quantity = quantity + ? WHERE product_id=? AND batch_id=? AND location='shop'`,
-            [item.returnQty, item.productId, item.batchId ?? 0]
-          )
-        }
-      }
-
-      await window.electronAPI.db.exec(
-        `INSERT INTO payment_transactions (sale_id, store_id, transaction_date, amount,
-           payment_method, transaction_type, charge_state, created_at, sync_status)
-         VALUES (?,?,?,?,?,'return','FULLY_CHARGED',?,'pending')`,
-        [retSaleId, detail.store_id ?? store?.id ?? 1, now, refundTotal * -1, returnMethod, now]
-      )
-
-      // Outbox pointer row — same mechanism POS checkout uses (PaymentScreen):
-      // the push payload is rebuilt from the sale rows at flush time. Without
-      // this, the return was never pushed at all.
-      await window.electronAPI.db.exec(
-        `INSERT INTO sync_queue_local (entity_type, table_name, op, payload, sync_id, created_at, status)
-         VALUES ('sale', 'sales', 'upsert', '{}', ?, ?, 'pending')`,
-        [syncId, now]
-      )
-      window.electronAPI.sync.pushPending().catch(() => {})
-
       setShowReturnModal(false)
       toast.success(t('sales.returnProcessed', { amount: `UZS ${fmtUZS(refundTotal)}` }))
       loadSales()
       setDetail(null)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
     } finally { setProcessingReturn(false) }
   }
 
+  // Net of refunds (by magnitude — older returns were stored positive).
   const totalRevenue = sales
-    .filter((s) => s.status !== 'cancelled' && s.sale_type === 'sale')
-    .reduce((sum, s) => sum + Number(s.total_amount), 0)
+    .filter((s) => s.status !== 'cancelled')
+    .reduce((sum, s) => sum + (s.sale_type === 'return' ? -Math.abs(Number(s.total_amount)) : Number(s.total_amount)), 0)
 
   return (
     <BackOfficeLayout>
       <div className="shrink-0 px-6 py-3 border-b border-dark-border bg-dark-surface flex items-center gap-2">
         <div className="mr-auto min-w-0">
-          <h1 className="text-base font-bold text-white leading-tight">{t('sales.salesHistory')}</h1>
+          <h1 className="text-base font-bold text-white leading-tight" title={t('pageHints.sales')}>{t('nav.sales')}</h1>
           <p className="text-xs text-gray-400 mt-0.5">
             {t('common.total')}: <span className="text-primary font-semibold">UZS {fmtUZS(totalRevenue)}</span>
             <span className="mx-1.5 text-gray-600">·</span>
@@ -372,16 +369,25 @@ export default function SalesScreen() {
                     className="w-full flex items-center justify-center gap-2 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 rounded-xl py-2.5 text-sm transition-colors">
                     <RotateCcw size={14} /> {t('sales.returnItems')}
                   </button>
-                  {confirmVoid ? (
+                  {detail.session_state !== 'opened' ? (
+                    <p className="text-xs text-gray-500 text-center">{t('sales.voidOnlyOpenShift')}</p>
+                  ) : confirmVoid ? (
                     <div className="space-y-2">
-                      <p className="text-gray-400 text-xs text-center">{t('sales.cannotBeUndone')}</p>
+                      <p className="text-gray-400 text-xs text-center">{t('sales.voidExplain')}</p>
+                      <input
+                        value={voidReason}
+                        onChange={(e) => setVoidReason(e.target.value)}
+                        placeholder={t('sales.voidReason')}
+                        autoFocus
+                        className="w-full bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary"
+                      />
                       <div className="flex gap-2">
                         <button onClick={() => setConfirmVoid(false)}
-                          className="flex-1 border border-dark-border text-gray-400 rounded-xl py-2 text-sm">
+                          className="flex-1 border border-dark-border text-gray-400 rounded-xl py-2.5 text-sm">
                           {t('common.cancel')}
                         </button>
-                        <button onClick={() => voidSale(detail.id)} disabled={voiding}
-                          className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-xl py-2 text-sm font-semibold">
+                        <button onClick={() => voidSale(detail.id)} disabled={voiding || !voidReason.trim()}
+                          className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-xl py-2.5 text-sm font-semibold">
                           {voiding ? t('sales.voiding') : t('sales.confirmVoid')}
                         </button>
                       </div>
@@ -432,26 +438,32 @@ export default function SalesScreen() {
                 <thead>
                   <tr className="text-gray-500 text-xs border-b border-dark-border">
                     <th className="text-left pb-2">{t('nav.products')}</th>
-                    <th className="text-center pb-2 w-16">{t('sales.ordered')}</th>
+                    <th className="text-center pb-2 w-16">{t('sales.sold')}</th>
+                    <th className="text-center pb-2 w-20">{t('sales.canReturn')}</th>
                     <th className="text-center pb-2 w-24">{t('sales.returnQty')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-dark-card">
                   {returnItems.map((item, i) => (
-                    <tr key={item.saleItemId}>
-                      <td className="py-2.5 text-gray-300">{item.name}</td>
-                      <td className="py-2.5 text-center text-gray-500">{item.maxQty}</td>
+                    <tr key={item.saleItemId} className={item.maxQty === 0 ? 'opacity-40' : ''}>
+                      <td className="py-2.5 text-gray-300">
+                        {item.name}
+                        <p className="text-xs text-gray-500">UZS {fmtUZS(item.refundEach)}</p>
+                      </td>
+                      <td className="py-2.5 text-center text-gray-500">{item.sold}</td>
+                      <td className="py-2.5 text-center text-gray-300">{item.maxQty}</td>
                       <td className="py-2.5 text-center">
                         <input
                           type="number"
                           min={0}
                           max={item.maxQty}
+                          disabled={item.maxQty === 0}
                           value={item.returnQty}
                           onChange={(e) => {
                             const val = Math.min(item.maxQty, Math.max(0, Number(e.target.value)))
                             setReturnItems((prev) => prev.map((x, idx) => idx === i ? { ...x, returnQty: val } : x))
                           }}
-                          className="w-16 text-center bg-dark-card border border-dark-border text-white rounded-lg py-1 text-sm focus:outline-none focus:border-primary"
+                          className="w-16 h-10 text-center bg-dark-card border border-dark-border text-white rounded-lg text-sm focus:outline-none focus:border-primary"
                         />
                       </td>
                     </tr>
@@ -463,25 +475,28 @@ export default function SalesScreen() {
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400 text-sm">{t('sales.refundMethod')}</span>
                   <div className="flex gap-2">
-                    {(['Cash', 'Credit'] as const).map((m) => (
-                      <button
-                        key={m}
-                        onClick={() => setReturnMethod(m)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                          returnMethod === m
-                            ? 'bg-primary border-primary text-white'
-                            : 'border-dark-border text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        {m === 'Cash' ? t('payment.methodCash') : t('sales.credit')}
-                      </button>
-                    ))}
+                    {(['Cash', 'Card', 'Click', 'Debt'] as const)
+                      // Refund to debt only lowers what a known customer owes.
+                      .filter((m) => m !== 'Debt' || detail.contact_id)
+                      .map((m) => (
+                        <button
+                          key={m}
+                          onClick={() => setReturnMethod(m)}
+                          className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                            returnMethod === m
+                              ? 'bg-primary border-primary text-white'
+                              : 'border-dark-border text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          {t(`payment.method${m}`)}
+                        </button>
+                      ))}
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400 text-sm">{t('sales.refundTotal')}</span>
                   <span className="text-white font-bold text-lg">
-                    UZS {fmtUZS(returnItems.filter((i) => i.returnQty > 0).reduce((s, i) => s + i.unitPrice * i.returnQty, 0))}
+                    UZS {fmtUZS(returnItems.filter((i) => i.returnQty > 0).reduce((s, i) => s + i.refundEach * i.returnQty, 0))}
                   </span>
                 </div>
               </div>
