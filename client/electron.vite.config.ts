@@ -1,8 +1,9 @@
 import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+import { serverUrlHtml } from './electron.vite.config.shared'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   main: {
     plugins: [externalizeDepsPlugin({ exclude: ['@baraka/shared', '@baraka/db-schema', '@baraka/sync-engine', '@baraka/data', '@baraka/app-core'] })],
     build: {
@@ -54,6 +55,6 @@ export default defineConfig({
         '@baraka/app-core': resolve(__dirname, '../packages/app-core/src/index.ts'),
       },
     },
-    plugins: [react()],
+    plugins: [react(), serverUrlHtml(mode)],
   },
-})
+}))

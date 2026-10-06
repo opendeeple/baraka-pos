@@ -17,14 +17,15 @@ import { registerSmsIpc } from './ipc/sms.ipc'
 import { registerNotifyIpc } from './ipc/notify.ipc'
 import { startTelegramPolling } from './services/telegram.service'
 import { startAutoReminderScheduler } from './services/autoReminder.service'
+import { APP_NAME } from './appEnv'
 
 // Deliberately the SAME name as main.ts: for now POS and Office are meant to
 // share one local SQLite replica on a single machine (so data added in one
 // shows up in the other immediately, without round-tripping through the
 // server). Must run before userData is first touched (initDatabase, logger,
 // settings) — package.json's "name" alone resolves inconsistently depending
-// on how the app is launched.
-app.setName('baraka-pos')
+// on how the app is launched. Demo builds get their own name (see appEnv.ts).
+app.setName(APP_NAME)
 
 let mainWindow: BrowserWindow | null = null
 

@@ -30,6 +30,8 @@ apps/*/.expo/
 client/dist/
 client/build/
 client/dist-office/
+client/dist-demo/
+client/dist-office-demo/
 *.zip
 
 # Local SQLite (desktop offline DB)
