@@ -39,6 +39,7 @@ mounted for the transition; remove it once the Electron fleet has updated.
 | `POST /api/sync/v2/push` | Generic change batch `{changes:[{table, syncId, op, data, clientUpdatedAt}]}`. Dimension tables use last-writer-wins on `clientUpdatedAt`; facts are insert-only idempotent on `syncId`. Per-change results: `applied \| skipped-stale \| error` (+`serverId`). |
 | `POST /api/sync/v2/sales` | Sales batch (complex transaction). Idempotent on `syncId`; resolves `userSyncId`/`sessionSyncId`/`contactSyncId` (no `userSyncId` → the token's user); clamps stock at 0 (logged discrepancy); broadcasts `sale:completed`/`stock:updated` after commit. |
 | `POST /api/sync/v2/invoice-range` | Atomically leases a block of invoice numbers from `store.currentSaleNumber`. Printed offline receipts are final; gaps from wiped devices are accepted. |
+| `GET /api/sync/v2/ids?table=&after=&limit=` | Every syncId the store holds for a table — the whole table, soft-deleted rows included, not a pull's filtered view — paged by server id (≤10000). Lets a device drop rows the server lost: a wipe leaves no tombstones. |
 
 After any accepted push the server emits `sync:changed {tables}` to the store's
 socket room so peers pull promptly.
@@ -181,6 +182,36 @@ Stock changes only through documents, and every document says what it is:
 - Local `users` (employees without a server username) are **not pushed** from
   desktop — a modeling mismatch deferred to the Android office work.
 
+### Startup refresh: the device is a cache of the server (2026-10)
+
+Server deletions arrive as tombstones, but a server-side wipe (the go-live
+resets) leaves none, so every terminal kept showing — and could push back —
+data the server had dropped. Now the first sync after every app start
+(desktop `useSync`, Android register screen / office root) calls
+`refreshFromServer()`:
+
+1. **Flush** the outbox.
+2. **Reconcile** (`reconcileWithServer`): skipped while anything is still
+   pending (its references must resolve when it's pushed). Otherwise, per
+   table in `RECONCILE_TABLES` (facts before what they reference), fetch the
+   server's id list and drop each local row it lacks — but only if the server
+   provably had it before the listing: pushed from here (a `synced` outbox row
+   older than the listing) or pulled (`server_id` set, `updated_at` older than
+   the server's listing time minus `RECONCILE_COMMIT_SLACK_MS`). Rows that
+   never reached the server (a device's own debt baseline) stay. The register
+   open on this device and its sales/cash/expenses are re-queued instead of
+   dropped. A table that lost rows gets its cursor reset, so a row dropped in
+   error comes back on the next pull.
+3. **Re-read** `STARTUP_REPULL_TABLES` (products, batches, stock, categories,
+   customers, charges, settings, users, store) in full by setting their
+   cursors to `FULL_REPULL_CURSOR` (1970, so no first-pull orphan sweep).
+
+Pulls never overwrite a row with a pending outbox entry (the unsent edit wins
+locally until its push lands); a push answered `skipped-stale` re-reads that
+table, since no cursor would bring the server's newer copy. Pulls, pushes and
+reconciliation take turns per process (`exclusive`); across the POS and Office
+processes sharing one SQLite file, the listing-time checks above cover the gap.
+
 ## Testing
 
 - `pnpm --filter server test:syncv2` — live-API suite: auth, scoping,
@@ -190,5 +221,10 @@ Stock changes only through documents, and every document says what it is:
   fresh-DB migration → device registration → full pull → local sale →
   flush → server verification (leaves a registered device + synced sale
   behind; dev only).
+- `pnpm --filter client test:reconcile` — headless startup-refresh e2e:
+  drift healed by the full re-pull, unsent edit kept, then a server wipe
+  (the go-live reset SQL) → lost rows dropped, open register re-sent,
+  local-only rows kept. **Wipes the server's database**: needs
+  `DATABASE_URL` on localhost (refuses anything else) and a re-seed after.
 - `pnpm --filter client test:e2e` — existing Playwright renderer suite
   (mocked `electronAPI`, includes the new sync surface).

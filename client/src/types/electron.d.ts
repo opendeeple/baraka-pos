@@ -79,6 +79,8 @@ export interface ElectronAPI {
     nextInvoiceNumber: () => Promise<string | null>
     enqueue: (table: string, syncId: string, op: 'upsert' | 'delete') => Promise<void>
     retryDead: () => Promise<number>
+    /** App start: push what's unsent, drop what the server no longer has, re-read the small tables whole. */
+    refreshFromServer: () => Promise<{ skipped?: string; removed: Record<string, number>; resent: number }>
   }
   auth: {
     saveToken: (token: string) => Promise<void>

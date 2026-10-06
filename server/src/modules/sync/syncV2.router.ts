@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import { authMiddleware } from '../../middleware/auth.middleware'
-import { pullTableV2, pushChangesV2, pushSalesV2, leaseInvoiceRange } from './syncV2.service'
-import type { SyncV2PullTable } from '@baraka/shared'
+import { pullTableV2, listIdsV2, IDS_TABLES, pushChangesV2, pushSalesV2, leaseInvoiceRange } from './syncV2.service'
+import type { SyncV2PullTable, SyncV2IdsTable } from '@baraka/shared'
 
 const router = Router()
 
@@ -39,6 +39,23 @@ router.get('/pull', async (req: Request, res: Response) => {
     res.json(result)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Pull failed'
+    res.status(400).json({ error: msg })
+  }
+})
+
+// Every syncId the store holds for a table, so a device can drop rows the
+// server no longer has (a wipe leaves no tombstones to pull).
+router.get('/ids', async (req: Request, res: Response) => {
+  try {
+    const table = req.query.table as SyncV2IdsTable
+    if (!IDS_TABLES.includes(table)) {
+      return res.status(400).json({ error: `Unknown table: ${table}` })
+    }
+    const after = req.query.after ? Number(req.query.after) || 0 : 0
+    const limit = req.query.limit ? Number(req.query.limit) : undefined
+    res.json(await listIdsV2(req.user!, table, after, limit))
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Id listing failed'
     res.status(400).json({ error: msg })
   }
 })

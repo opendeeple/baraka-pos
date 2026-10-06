@@ -33,6 +33,7 @@ export const MOCK_ELECTRON_API = () => {
       nextInvoiceNumber: async () => 'BRK-000001',
       enqueue: async () => {},
       retryDead: async () => 0,
+      refreshFromServer: async () => ({ removed: {}, resent: 0 }),
     },
     auth: {
       login: async () => ({}),

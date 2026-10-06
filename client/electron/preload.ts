@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     enqueue: (table: string, syncId: string, op: 'upsert' | 'delete') =>
       ipcRenderer.invoke('sync:enqueue', table, syncId, op),
     retryDead: () => ipcRenderer.invoke('sync:retryDead'),
+    refreshFromServer: () => ipcRenderer.invoke('sync:refreshFromServer'),
   },
   auth: {
     saveToken: (token: string) => ipcRenderer.invoke('auth:saveToken', token),

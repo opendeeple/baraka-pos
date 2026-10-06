@@ -74,4 +74,6 @@ export const retryDeadLetters: SyncEngine['retryDeadLetters'] = () =>
   getEngine().retryDeadLetters()
 export const backfillOutboxOnce: SyncEngine['backfillOutboxOnce'] = () =>
   getEngine().backfillOutboxOnce()
+export const refreshFromServer: SyncEngine['refreshFromServer'] = () =>
+  getEngine().refreshFromServer()
 export const getSyncStatus: SyncEngine['getSyncStatus'] = () => getEngine().getSyncStatus()

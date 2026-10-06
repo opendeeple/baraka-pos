@@ -82,6 +82,41 @@ export interface SyncV2PullResponse<T = Record<string, unknown>> {
   hasMore: boolean
 }
 
+/** Tables whose live row set a device can list (GET /api/sync/v2/ids). */
+export type SyncV2IdsTable =
+  | 'collections'
+  | 'contacts'
+  | 'products'
+  | 'product_batches'
+  | 'product_stocks'
+  | 'charges'
+  | 'users'
+  | 'pos_sessions'
+  | 'sales'
+  | 'purchases'
+  | 'expenses'
+  | 'quantity_adjustments'
+  | 'cash_logs'
+  | 'debt_clearances'
+  | 'audit_logs'
+
+/**
+ * Every syncId the server holds for a table in the device's store, whole table
+ * (not a pull's filtered view), soft-deleted rows included. A device compares
+ * it with its replica: a row the server once had but no longer does was wiped
+ * server-side, and since no tombstone will ever arrive for it, the device
+ * drops its copy (see the sync engine's reconcileWithServer).
+ */
+export interface SyncV2IdsResponse {
+  table: SyncV2IdsTable
+  ids: string[]
+  /** Pass as `after` for the next page. */
+  nextAfter: number
+  hasMore: boolean
+  /** Server clock just before this page was read. */
+  serverTime: string
+}
+
 export type SyncV2Op = 'upsert' | 'delete'
 
 export interface SyncV2Change {

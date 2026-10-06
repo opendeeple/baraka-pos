@@ -8,6 +8,7 @@ import {
   nextInvoiceNumber,
   backfillOutboxOnce,
   retryDeadLetters,
+  refreshFromServer,
   enqueueOutbox,
   startOutboxLoop,
   setSyncApp,
@@ -53,5 +54,9 @@ export function registerSyncIpc(app: 'pos' | 'office' = 'pos') {
 
   ipcMain.handle('sync:retryDead', () => {
     return retryDeadLetters()
+  })
+
+  ipcMain.handle('sync:refreshFromServer', () => {
+    return refreshFromServer()
   })
 }

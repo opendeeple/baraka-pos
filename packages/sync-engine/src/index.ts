@@ -163,6 +163,51 @@ const CASCADE_ON_DELETE: Record<string, Array<{ table: string; column: string }>
   ],
 }
 
+/**
+ * Swept by reconcileWithServer: facts before the rows they reference, so a
+ * dropped product never leaves a sale pointing at an id SQLite may recycle.
+ */
+export const RECONCILE_TABLES = [
+  'audit_logs', 'debt_clearances', 'cash_logs', 'expenses', 'quantity_adjustments',
+  'purchases', 'sales', 'pos_sessions', 'product_stocks', 'product_batches', 'products',
+  'contacts', 'charges', 'users', 'collections',
+] as const
+
+/** Re-read in full on every app start: small, editable, and on every screen. */
+export const STARTUP_REPULL_TABLES = [
+  'stores', 'collections', 'contacts', 'products', 'product_batches', 'product_stocks',
+  'charges', 'settings', 'users',
+] as const
+
+// Older than any row, so the next pull re-reads the whole table — without
+// counting as the first-ever pull (which would run the v1 orphan sweep and
+// push rows the server dropped straight back to it).
+const FULL_REPULL_CURSOR = '1970-01-01T00:00:00.000Z|0'
+
+// A pulled row carries the server's own updatedAt, compared with the server's
+// own listing time, so no device clock is involved: this only covers a write
+// stamped just before the listing that committed after it (cf.
+// CURSOR_OVERLAP_MS). Rows inside it are judged at the next start.
+const RECONCILE_COMMIT_SLACK_MS = 10_000
+
+const SWEEP_CASCADE: Record<string, Array<{ table: string; column: string }>> = {
+  ...CASCADE_ON_DELETE,
+  sales: [
+    { table: 'sale_items', column: 'sale_id' },
+    { table: 'payment_transactions', column: 'sale_id' },
+  ],
+  purchases: [{ table: 'purchase_items', column: 'purchase_id' }],
+}
+
+export interface ReconcileResult {
+  /** Why nothing was swept, when it wasn't. */
+  skipped?: 'not-signed-in' | 'unsent-changes'
+  /** Rows dropped, per table. */
+  removed: Record<string, number>
+  /** Rows queued to be sent again instead: the open register and its records. */
+  resent: number
+}
+
 class NetworkError extends Error {}
 
 // Render answers 502/503 while it deploys or restarts, and 5xx/429 generally
@@ -202,6 +247,15 @@ export function createSyncEngine(deps: SyncEngineDeps) {
   const roleKey = `${tokenKey}_role`
 
   let lastHttpSuccessAt = 0
+
+  // Pulls, pushes and reconciliation take turns: a sweep must not judge rows
+  // that a push or pull in this process is changing mid-way.
+  let lock: Promise<unknown> = Promise.resolve()
+  function exclusive<T>(fn: () => Promise<T>): Promise<T> {
+    const run = lock.then(fn, fn)
+    lock = run.catch(() => {})
+    return run
+  }
 
   // --- settings ------------------------------------------------------------
 
@@ -520,6 +574,12 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     const colInfo = db.all<{ name: string }>(`PRAGMA table_info(${table})`)
     const localCols = new Set(colInfo.map((c) => c.name))
     const fkMap = PULL_FK_MAP[table] ?? {}
+    // A row changed here but not pushed yet keeps its local values until the
+    // push lands (the pull after it brings the server's settled copy) — the
+    // startup full re-pull would otherwise undo every unsent edit.
+    const unsent = new Set(
+      db.all<{ sync_id: string }>(`SELECT sync_id FROM sync_queue_local WHERE status='pending'`).map((r) => r.sync_id)
+    )
 
     db.transaction(() => {
       for (const record of records) {
@@ -534,6 +594,8 @@ export function createSyncEngine(deps: SyncEngineDeps) {
           const key = record.metaKey as string
           if (!key || isReservedSettingKey(key)) continue
           if (record.deletedAt) continue
+          const local = db.get<{ sync_id: string | null }>(`SELECT sync_id FROM settings WHERE meta_key=?`, [key])
+          if (local?.sync_id && unsent.has(local.sync_id)) continue
           db.run(
             `INSERT INTO settings (store_id, meta_key, meta_value, updated_at) VALUES (?,?,?,?)
              ON CONFLICT(meta_key) DO UPDATE SET meta_value=excluded.meta_value, updated_at=excluded.updated_at`,
@@ -603,6 +665,8 @@ export function createSyncEngine(deps: SyncEngineDeps) {
           db.run(`DELETE FROM ${table} WHERE sync_id=?`, [syncId])
           continue
         }
+
+        if (unsent.has(syncId)) continue
 
         const entries: Array<[string, unknown]> = []
         for (const [k, v] of Object.entries(record)) {
@@ -678,7 +742,11 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     return pulledSyncIds
   }
 
-  async function pullTableV2(table: string): Promise<PullResult> {
+  function pullTableV2(table: string): Promise<PullResult> {
+    return exclusive(() => pullTable(table))
+  }
+
+  async function pullTable(table: string): Promise<PullResult> {
     // These tables arrive as absolute figures. While this device still has
     // unsent changes that move them (a sale's stock and debt, a repayment, a
     // supplier payment), pulling would overwrite the local figure with the
@@ -1176,7 +1244,11 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     return db.get<{ c: number }>(`SELECT COUNT(*) c FROM sync_queue_local WHERE status='dead'`)!.c
   }
 
-  async function flushOutbox(): Promise<FlushResult> {
+  function flushOutbox(): Promise<FlushResult> {
+    return exclusive(flush)
+  }
+
+  async function flush(): Promise<FlushResult> {
     if (!hasTerminalToken()) return { synced: 0, errors: 0, dead: deadCount() }
 
     // A cashier's token can't push staff/settings changes; they stay pending
@@ -1264,6 +1336,12 @@ export function createSyncEngine(deps: SyncEngineDeps) {
                   result.serverId, row.sync_id,
                 ])
               }
+              // The server kept a newer copy, which no pull will bring (it's
+              // older than the cursor, and pulls skipped it while this edit
+              // was unsent): the next pull re-reads the table.
+              if (result.status === 'skipped-stale' && (STARTUP_REPULL_TABLES as readonly string[]).includes(row.table_name!)) {
+                setSetting(`sync_cursor_${row.table_name}`, FULL_REPULL_CURSOR)
+              }
               synced++
             } else {
               scheduleRetry(row, result.error ?? 'unknown error', true)
@@ -1332,6 +1410,143 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     return { synced, errors, dead: deadCount() }
   }
 
+  // --- reconcile: this device's data is a cache of the server's -------------
+
+  async function fetchServerIds(table: string): Promise<{ ids: Set<string>; serverTime: string }> {
+    const ids = new Set<string>()
+    let serverTime = ''
+    let after = 0
+    for (let page = 0; page < 1000; page++) {
+      const params = new URLSearchParams({ table, after: String(after), limit: '5000' })
+      const { status, data } = await httpJson('GET', `/api/sync/v2/ids?${params}`, { headers: authHeaders() })
+      if (status !== 200) {
+        clearTerminalTokenOn401(status)
+        throw new Error(data?.error ?? `ids ${table}: HTTP ${status}`)
+      }
+      if (!serverTime) serverTime = data.serverTime
+      for (const id of data.ids as string[]) ids.add(id)
+      if (!data.hasMore) break
+      after = data.nextAfter
+    }
+    return { ids, serverTime }
+  }
+
+  function sweepTable(
+    table: string,
+    serverIds: Set<string>,
+    listedAt: string,
+    pulledBefore: string,
+    openSessions: Set<number>
+  ): { removed: number; resent: number } {
+    const cols = new Set(db.all<{ name: string }>(`PRAGMA table_info(${table})`).map((c) => c.name))
+    if (!cols.has('sync_id')) return { removed: 0, resent: 0 }
+    const col = (name: string) => (cols.has(name) ? name : `NULL AS ${name}`)
+    const gone = db
+      .all<{ id: number; sync_id: string; server_id: number | null; updated_at: string | null; session_id: number | null }>(
+        `SELECT id, sync_id, ${col('server_id')}, ${col('updated_at')}, ${col('session_id')}
+         FROM ${table} WHERE sync_id IS NOT NULL`
+      )
+      .filter((r) => !serverIds.has(r.sync_id))
+    let removed = 0
+    let resent = 0
+    if (!gone.length) return { removed, resent }
+
+    db.transaction(() => {
+      for (const row of gone) {
+        const outbox = db.all<{ status: string; synced_at: string | null }>(
+          `SELECT status, synced_at FROM sync_queue_local WHERE sync_id=?`, [row.sync_id]
+        )
+        // Still on its way to the server (or refused so far): not this sweep's call.
+        if (outbox.some((o) => o.status !== 'synced')) continue
+        // Pushed while the list was being read, so it may just be too new for it.
+        if (outbox.some((o) => o.synced_at && o.synced_at >= listedAt)) continue
+        const pushed = outbox.length > 0
+        const pulled = row.server_id != null && (!row.updated_at || String(row.updated_at) < pulledBefore)
+        // Never reached the server: local by design (e.g. a device's own debt baseline).
+        if (!pushed && !pulled) continue
+
+        // The register open on this till, and what it recorded: the server lost
+        // them, so they go to it again rather than vanishing mid-shift.
+        const openRegister = openSessions.has(table === 'pos_sessions' ? row.id : row.session_id ?? -1)
+        if (openRegister) {
+          enqueueOutbox(table, row.sync_id, 'upsert')
+          resent++
+          continue
+        }
+
+        for (const { table: child, column } of SWEEP_CASCADE[table] ?? []) {
+          db.run(`DELETE FROM ${child} WHERE ${column}=?`, [row.id])
+        }
+        db.run(`DELETE FROM ${table} WHERE id=?`, [row.id])
+        removed++
+      }
+    })
+    return { removed, resent }
+  }
+
+  /**
+   * Drops rows the server no longer has. Deletions normally arrive as pulled
+   * tombstones, but a server-side wipe leaves none, so every terminal kept
+   * showing — and could push back — data the server had dropped. A row goes
+   * only if the server provably had it before the listing (pushed from here,
+   * or pulled with an older updatedAt) and nothing about it is waiting to be
+   * sent. Skipped while anything is unsent: those changes still reference
+   * rows here, and those references must resolve when they're pushed.
+   */
+  function reconcileWithServer(): Promise<ReconcileResult> {
+    return exclusive(async () => {
+      const removed: Record<string, number> = {}
+      if (!hasTerminalToken()) return { skipped: 'not-signed-in', removed, resent: 0 }
+      const unsent = db.get<{ c: number }>(`SELECT COUNT(*) AS c FROM sync_queue_local WHERE status='pending'`)!.c
+      if (unsent) return { skipped: 'unsent-changes', removed, resent: 0 }
+
+      const tables = new Set(
+        db.all<{ name: string }>(`SELECT name FROM sqlite_master WHERE type='table'`).map((t) => t.name)
+      )
+      // Registers open on this device: opened here (so pushed from here), not
+      // another till's pulled in for history.
+      const openSessions = new Set(
+        tables.has('pos_sessions')
+          ? db.all<{ id: number }>(
+              `SELECT id FROM pos_sessions WHERE state <> 'closed'
+               AND sync_id IN (SELECT sync_id FROM sync_queue_local)`
+            ).map((s) => s.id)
+          : []
+      )
+      let resent = 0
+      for (const table of RECONCILE_TABLES) {
+        if (!tables.has(table)) continue
+        const listedAt = new Date().toISOString()
+        const { ids, serverTime } = await fetchServerIds(table)
+        const pulledBefore = new Date(new Date(serverTime).getTime() - RECONCILE_COMMIT_SLACK_MS).toISOString()
+        const result = sweepTable(table, ids, listedAt, pulledBefore, openSessions)
+        resent += result.resent
+        if (result.removed) {
+          removed[table] = result.removed
+          // What's left of the table is in doubt too: the next pull re-reads
+          // it whole, so a row dropped in error comes straight back.
+          setSetting(`sync_cursor_${table}`, FULL_REPULL_CURSOR)
+          log(`[syncV2] ${table}: dropped ${result.removed} row(s) the server no longer has`)
+        }
+      }
+      if (resent) log(`[syncV2] re-sending ${resent} row(s) of the open register the server lost`)
+      return { removed, resent }
+    })
+  }
+
+  /**
+   * App start, before the regular pulls. This device's data is only a cache
+   * of the server's: what's unsent goes up first, what the server dropped is
+   * dropped here, and the small tables every screen reads are re-read whole,
+   * so a terminal can't keep showing anything the server doesn't say.
+   */
+  async function refreshFromServer(): Promise<ReconcileResult> {
+    await flushOutbox()
+    const result = await reconcileWithServer()
+    for (const table of STARTUP_REPULL_TABLES) setSetting(`sync_cursor_${table}`, FULL_REPULL_CURSOR)
+    return result
+  }
+
   // --- one-time v2 backfill ------------------------------------------------
 
   function backfillOutboxOnce(): void {
@@ -1380,6 +1595,8 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     retryDeadLetters,
     requeueOnStartup,
     backfillOutboxOnce,
+    reconcileWithServer,
+    refreshFromServer,
     getSyncStatus,
   }
 }

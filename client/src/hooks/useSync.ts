@@ -42,6 +42,9 @@ export async function pullSyncTable(table: string): Promise<void> {
   }
 }
 
+// refreshFromServer runs once per app start (retried each sync until it works).
+let refreshedThisRun = false
+
 // Table pulls run one at a time, in call order: two overlapping pulls of the
 // same table (a full sync and a sync:changed one) race on its cursor.
 let pullChain: Promise<unknown> = Promise.resolve()
@@ -85,6 +88,19 @@ export function useSync() {
           return
         }
         setStatus('syncing')
+        // This device's data is a cache of the server's: on the first sync
+        // after start, drop what the server no longer has and re-read the
+        // small tables whole (see the sync engine's refreshFromServer).
+        if (!refreshedThisRun) {
+          try {
+            await window.electronAPI.sync.refreshFromServer()
+            refreshedThisRun = true
+          } catch (err) {
+            // A server without the id listing yet, or a blip: the regular
+            // pulls below still run, and the next sync tries again.
+            console.warn('refreshFromServer failed', err)
+          }
+        }
         // Send first: tables with unsent local changes skip their pull.
         await window.electronAPI.sync.pushPending().catch(() => {})
         for (const table of SYNC_TABLES) {

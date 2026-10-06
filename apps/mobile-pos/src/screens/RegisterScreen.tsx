@@ -16,6 +16,9 @@ import type { RootStackParamList } from '../navigation'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>
 
+// refreshFromServer runs once per app start (retried on each entry until it works).
+let refreshedThisRun = false
+
 export function RegisterScreen({ navigation }: Props) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
@@ -57,13 +60,18 @@ export function RegisterScreen({ navigation }: Props) {
     // Background sync cycle on entry: full pull order (users included — session
     // pushes need them for userSyncId resolution), then flush the outbox.
     const syncCycle = async () => {
+      // The local data is a cache of the server's: drop what the server no
+      // longer has and re-read the small tables whole (see refreshFromServer).
+      if (!refreshedThisRun) {
+        refreshedThisRun = await engine.refreshFromServer().then(() => true, () => false)
+      }
       try {
         for (const table of PULL_TABLE_ORDER) {
           await engine.pullTableV2(table)
         }
         await engine.flushOutbox()
         load()
-      } catch { /* offline — local data is authoritative */ }
+      } catch { /* offline — keep selling from the local copy */ }
     }
     syncCycle()
     const flushInterval = setInterval(() => { engine.flushOutbox().catch(() => {}) }, 60_000)

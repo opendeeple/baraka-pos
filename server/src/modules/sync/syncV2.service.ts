@@ -6,6 +6,8 @@ import { SHARED_SETTING_KEYS } from '@baraka/shared'
 import type {
   SyncV2PullTable,
   SyncV2PullResponse,
+  SyncV2IdsTable,
+  SyncV2IdsResponse,
   SyncV2Change,
   SyncV2ChangeResult,
   SyncV2PushResponse,
@@ -397,6 +399,79 @@ export async function pullTableV2(
     serverTime: dayjs().toISOString(),
     nextCursor,
     hasMore,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Live id listing (replica reconciliation)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_IDS_LIMIT = 5000
+const MAX_IDS_LIMIT = 10000
+
+type IdsFetch = (storeId: number, afterId: number, take: number) => Promise<Array<{ id: number; syncId: string }>>
+
+// Whole table in the store's scope, soft-deleted rows included: unlike a
+// pull, this answers "does the server still have this row at all".
+function idsOf(
+  model: { findMany: (args: any) => Promise<Array<{ id: number; syncId: string }>> },
+  scope: (storeId: number) => object
+): IdsFetch {
+  return (storeId, afterId, take) =>
+    model.findMany({
+      where: { ...scope(storeId), id: { gt: afterId } },
+      select: { id: true, syncId: true },
+      orderBy: { id: 'asc' },
+      take,
+    })
+}
+
+const byStore = (storeId: number) => ({ storeId })
+
+const IDS_CONFIG: Record<SyncV2IdsTable, IdsFetch> = {
+  // Collections are global (see PULL_CONFIG).
+  collections: idsOf(prisma.collection, () => ({})),
+  contacts: idsOf(prisma.contact, byStore),
+  products: idsOf(prisma.product, byStore),
+  product_batches: idsOf(prisma.productBatch, (storeId) => ({ product: { storeId } })),
+  product_stocks: idsOf(prisma.productStock, byStore),
+  charges: idsOf(prisma.charge, byStore),
+  users: idsOf(prisma.user, byStore),
+  pos_sessions: idsOf(prisma.posSession, byStore),
+  sales: idsOf(prisma.sale, byStore),
+  purchases: idsOf(prisma.purchase, byStore),
+  expenses: idsOf(prisma.expense, byStore),
+  quantity_adjustments: idsOf(prisma.quantityAdjustment, byStore),
+  cash_logs: idsOf(prisma.cashLog, byStore),
+  debt_clearances: idsOf(prisma.debtClearance, byStore),
+  audit_logs: idsOf(prisma.auditLog, byStore),
+}
+
+export const IDS_TABLES = Object.keys(IDS_CONFIG) as SyncV2IdsTable[]
+
+export async function listIdsV2(
+  device: DeviceCtx,
+  table: SyncV2IdsTable,
+  after = 0,
+  limit?: number
+): Promise<SyncV2IdsResponse> {
+  const fetch = IDS_CONFIG[table]
+  if (!fetch) throw new Error(`Unknown table: ${table}`)
+
+  const take = Math.min(Math.max(1, limit ?? DEFAULT_IDS_LIMIT), MAX_IDS_LIMIT)
+  // Taken before the read: a row the device pulled after this instant may
+  // be missing from the list, and the device judges such rows by this time.
+  const serverTime = dayjs().toISOString()
+  const rows = await fetch(device.storeId, after, take + 1)
+  const hasMore = rows.length > take
+  const page = hasMore ? rows.slice(0, take) : rows
+
+  return {
+    table,
+    ids: page.map((r) => r.syncId),
+    nextAfter: page.length ? page[page.length - 1].id : after,
+    hasMore,
+    serverTime,
   }
 }
 

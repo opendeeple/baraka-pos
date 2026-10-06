@@ -20,6 +20,9 @@ import { colors } from './theme'
 
 const Tab = createBottomTabNavigator()
 
+// refreshFromServer runs once per app start (retried on each sign-in until it works).
+let refreshedThisRun = false
+
 const navTheme = {
   ...DarkTheme,
   colors: {
@@ -69,10 +72,15 @@ export default function AppRoot() {
     if (!ready || !isAuthenticated) return
     const { engine } = getServices()
     Promise.resolve().then(async () => {
+      // The local data is a cache of the server's: drop what the server no
+      // longer has and re-read the small tables whole (see refreshFromServer).
+      if (!refreshedThisRun) {
+        refreshedThisRun = await engine.refreshFromServer().then(() => true, () => false)
+      }
       try {
         for (const table of PULL_TABLE_ORDER) await engine.pullTableV2(table)
         await engine.flushOutbox()
-      } catch { /* offline — local data is authoritative */ }
+      } catch { /* offline — keep working from the local copy */ }
     })
     const flushInterval = setInterval(() => {
       getServices().engine.flushOutbox().catch(() => {})
