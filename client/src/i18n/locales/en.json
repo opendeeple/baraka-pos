@@ -728,7 +728,8 @@
     "clearDebt": "Delete Debt",
     "clearLocked": "Can't be deleted until the debt is fully paid",
     "clearConfirm": "Delete this debt history? The customer will leave the debtors list.",
-    "clearYes": "Yes, delete"
+    "clearYes": "Yes, delete",
+    "paymentReceiptTitle": "Payment Receipt"
   },
   "posSettings": {
     "title": "POS Settings",

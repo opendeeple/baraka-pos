@@ -125,6 +125,18 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
       await logAudit('debt_payment', { entity: 'contact', entityId: contact.id, details: { customer: contact.name, amount: amt, method: payMethod, balanceAfter: newBalance } })
       window.electronAPI.sync.pushPending().catch(() => {})
       window.electronAPI.notify.debtPayment(contact.id, amt).catch(console.error)
+      window.electronAPI.printer.printReport({
+        title: t('debt.paymentReceiptTitle'),
+        subtitle: store?.name,
+        lines: [
+          { label: t('common.customer'), value: contact.name },
+          { divider: true },
+          { label: t('debt.payment'), value: `UZS ${fmtUZS(amt)}`, bold: true },
+          newBalance > 0
+            ? { label: t('debt.remaining'), value: `UZS ${fmtUZS(newBalance)}`, bold: true }
+            : { label: t('debt.fullyPaid') },
+        ],
+      }).catch(console.error)
       setCurrentBalance(newBalance)
       setShowPay(false)
       setPayAmount('0')

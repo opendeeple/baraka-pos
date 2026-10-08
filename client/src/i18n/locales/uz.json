@@ -723,7 +723,8 @@
     "clearDebt": "Qarzni o'chirish",
     "clearLocked": "Qarz to'liq to'lanmaguncha o'chirib bo'lmaydi",
     "clearConfirm": "Qarz tarixi o'chirilsinmi? Mijoz qarzdorlar ro'yxatidan chiqadi.",
-    "clearYes": "Ha, o'chirish"
+    "clearYes": "Ha, o'chirish",
+    "paymentReceiptTitle": "To'lov cheki"
   },
   "posSettings": {
     "title": "Kassa sozlamalari",
