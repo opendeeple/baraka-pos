@@ -275,6 +275,7 @@ export default function CustomersScreen() {
               onClose={() => setShowDebtPanel(false)}
               onPaymentComplete={refreshAfterDebtPayment}
               onCleared={() => { setShowDebtPanel(false); refreshAfterDebtPayment() }}
+              onDeleted={() => { setShowDebtPanel(false); setSelected(null); loadCustomers() }}
             />
           </div>
         </Modal>

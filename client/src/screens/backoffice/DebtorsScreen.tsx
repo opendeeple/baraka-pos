@@ -182,6 +182,7 @@ export default function DebtorsScreen() {
               onClose={() => setHistoryTarget(null)}
               onPaymentComplete={() => loadDebtors(true)}
               onCleared={() => { setHistoryTarget(null); loadDebtors(true) }}
+              onDeleted={() => { setHistoryTarget(null); loadDebtors(true) }}
             />
           </div>
         </Modal>

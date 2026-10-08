@@ -100,6 +100,7 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
             onClose={() => setSelectedDebtor(null)}
             onPaymentComplete={loadDebtors}
             onCleared={() => { setSelectedDebtor(null); loadDebtors() }}
+            onDeleted={() => { setSelectedDebtor(null); loadDebtors() }}
           />
         ) : items.length === 0 ? (
           <>

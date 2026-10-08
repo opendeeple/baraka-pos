@@ -739,7 +739,9 @@
     "clearLocked": "Нельзя удалить, пока долг не погашен полностью",
     "clearConfirm": "Удалить историю долга? Клиент исчезнет из списка должников.",
     "clearYes": "Да, удалить",
-    "paymentReceiptTitle": "Чек об оплате"
+    "paymentReceiptTitle": "Чек об оплате",
+    "deleteContact": "Удалить клиента полностью",
+    "deleteContactConfirm": "Удалить этого клиента навсегда? Это действие нельзя отменить."
   },
   "posSettings": {
     "title": "Настройки кассы",
@@ -921,6 +923,7 @@
     "action_expense": "Расход",
     "action_debt_payment": "Оплата долга",
     "action_debt_clear": "Долг удалён",
+    "action_contact_delete": "Клиент удалён",
     "action_shift_close": "Смена закрыта",
     "action_settings_change": "Настройка изменена",
     "action_drawer_open": "Денежный ящик открыт",

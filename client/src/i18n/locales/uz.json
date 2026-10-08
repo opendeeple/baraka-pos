@@ -724,7 +724,9 @@
     "clearLocked": "Qarz to'liq to'lanmaguncha o'chirib bo'lmaydi",
     "clearConfirm": "Qarz tarixi o'chirilsinmi? Mijoz qarzdorlar ro'yxatidan chiqadi.",
     "clearYes": "Ha, o'chirish",
-    "paymentReceiptTitle": "To'lov cheki"
+    "paymentReceiptTitle": "To'lov cheki",
+    "deleteContact": "Mijozni butunlay o'chirish",
+    "deleteContactConfirm": "Mijoz butunlay o'chirilsinmi? Bu amalni ortga qaytarib bo'lmaydi."
   },
   "posSettings": {
     "title": "Kassa sozlamalari",
@@ -906,6 +908,7 @@
     "action_expense": "Xarajat",
     "action_debt_payment": "Qarz to'lovi",
     "action_debt_clear": "Qarz o'chirildi",
+    "action_contact_delete": "Mijoz o'chirildi",
     "action_shift_close": "Smena yopildi",
     "action_settings_change": "Sozlama o'zgardi",
     "action_drawer_open": "Kassa qutisi ochildi",

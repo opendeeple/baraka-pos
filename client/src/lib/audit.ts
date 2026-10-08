@@ -11,7 +11,7 @@ export type AuditAction =
   | 'stock_receive' | 'stock_transfer' | 'stocktake' | 'writeoff'
   | 'purchase_order' | 'purchase_receive' | 'supplier_payment'
   | 'price_change' | 'product_create' | 'product_delete'
-  | 'expense' | 'debt_payment' | 'debt_clear'
+  | 'expense' | 'debt_payment' | 'debt_clear' | 'contact_delete'
   | 'shift_close' | 'settings_change' | 'drawer_open' | 'discount'
 
 export async function logAudit(

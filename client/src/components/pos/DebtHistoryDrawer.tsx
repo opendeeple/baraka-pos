@@ -21,6 +21,8 @@ interface Props {
   onPaymentComplete?: () => void
   /** After a paid-off debt was deleted; defaults to onClose. */
   onCleared?: () => void
+  /** After the contact itself was deleted; defaults to onClose. */
+  onDeleted?: () => void
 }
 
 /**
@@ -28,7 +30,7 @@ interface Props {
  * credit, below it every repayment (when + how much), the totals of each,
  * and what's still owed. The debt can only be deleted once fully paid.
  */
-export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleared }: Props) {
+export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleared, onDeleted }: Props) {
   const { t } = useTranslation()
   const { user, store } = useAuthStore()
   const { session } = useSessionStore()
@@ -46,6 +48,9 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
 
   const [confirmClear, setConfirmClear] = useState(false)
   const [clearing, setClearing] = useState(false)
+
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => { loadRecords() }, [contact.id])
 
@@ -176,6 +181,38 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
       ;(onCleared ?? onClose)()
     } finally {
       setClearing(false)
+    }
+  }
+
+  // Soft-deletes the contact itself (not just its debt history) — same
+  // deleted_at + sync 'delete' op products already use, which the server's
+  // contacts push handler already supports. A brand-new contact created
+  // afterward (even same phone/name) is always a fresh row with its own
+  // syncId and a zero balance — contacts have no unique phone constraint
+  // and creation never looks up or reuses an existing row, so nothing from
+  // this deleted one can carry over to it.
+  async function deleteContact() {
+    setDeleting(true)
+    try {
+      const [row] = await window.electronAPI.db.query(
+        `SELECT balance, sync_id FROM contacts WHERE id = ?`, [contact.id]
+      ) as Array<{ balance: number; sync_id: string }>
+      if (row && Number(row.balance) > 0) {
+        // Re-checked at click time — something added debt since this opened.
+        setCurrentBalance(Number(row.balance))
+        setConfirmDelete(false)
+        return
+      }
+      const now = new Date().toISOString()
+      await window.electronAPI.db.exec(
+        `UPDATE contacts SET deleted_at=?, updated_at=? WHERE id=?`, [now, now, contact.id]
+      )
+      if (row?.sync_id) await window.electronAPI.sync.enqueue('contacts', row.sync_id, 'delete')
+      await logAudit('contact_delete', { entity: 'contact', entityId: contact.id, details: { customer: contact.name } })
+      window.electronAPI.sync.pushPending().catch(() => {})
+      ;(onDeleted ?? onClose)()
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -351,6 +388,38 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
                     <p className="text-[11px] text-gray-500 text-center">{t('debt.clearLocked')}</p>
                   )}
                 </>
+              ))}
+
+              {/* Deletes the contact itself (not just its debt history) —
+                  same fullyPaid gate as clearDebt above, so a contact still
+                  owed money can't quietly disappear. */}
+              {fullyPaid && (confirmDelete ? (
+                <div className="space-y-2 pt-2 border-t border-dark-border/50">
+                  <p className="text-xs text-gray-300 text-center">{t('debt.deleteContactConfirm')}</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setConfirmDelete(false)}
+                      className="flex-1 h-11 border border-dark-border text-gray-300 rounded-xl text-sm transition-colors"
+                    >
+                      {t('common.cancel')}
+                    </button>
+                    <button
+                      onClick={deleteContact}
+                      disabled={deleting}
+                      className="flex-1 h-11 bg-red-600 active:bg-red-700 disabled:opacity-40 text-white font-semibold rounded-xl text-sm transition-colors"
+                    >
+                      {deleting ? t('debt.processing') : t('debt.clearYes')}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="w-full flex items-center justify-center gap-2 h-10 text-gray-500 active:text-red-400 text-xs transition-colors"
+                >
+                  <Trash2 size={13} />
+                  {t('debt.deleteContact')}
+                </button>
               ))}
             </div>
           )}

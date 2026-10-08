@@ -729,7 +729,9 @@
     "clearLocked": "Can't be deleted until the debt is fully paid",
     "clearConfirm": "Delete this debt history? The customer will leave the debtors list.",
     "clearYes": "Yes, delete",
-    "paymentReceiptTitle": "Payment Receipt"
+    "paymentReceiptTitle": "Payment Receipt",
+    "deleteContact": "Delete customer entirely",
+    "deleteContactConfirm": "Delete this customer permanently? This cannot be undone."
   },
   "posSettings": {
     "title": "POS Settings",
@@ -911,6 +913,7 @@
     "action_expense": "Expense",
     "action_debt_payment": "Debt payment",
     "action_debt_clear": "Debt deleted",
+    "action_contact_delete": "Customer deleted",
     "action_shift_close": "Shift closed",
     "action_settings_change": "Setting changed",
     "action_drawer_open": "Cash drawer opened",
