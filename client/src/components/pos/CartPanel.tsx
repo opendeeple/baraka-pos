@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Trash2, Pause, ShoppingBag, Plus, Minus, LogOut, Tag } from 'lucide-react'
+import { Trash2, Pause, ShoppingBag, Plus, Minus, LogOut, Tag, X } from 'lucide-react'
 import { useCartStore, cartLineTotal } from '../../store/cart.store'
 import { fmtUZS } from '../../lib/currency'
 import { HeldOrdersPanel } from './HeldOrdersDrawer'
@@ -340,7 +340,9 @@ function CartItemRow({
         }}
         className="px-3 py-2.5 flex flex-col gap-2 bg-dark-surface"
       >
-        {/* Top row: name + line total */}
+        {/* Top row: name + line total + delete. The swipe-left gesture below
+            also removes the line, but it's not discoverable on a touchscreen
+            with no visual hint — this button works with a single direct tap. */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <p className="text-sm text-white font-medium leading-snug">{item.name}</p>
@@ -354,6 +356,14 @@ function CartItemRow({
           <span className="text-primary font-bold text-sm whitespace-nowrap shrink-0">
             UZS {fmtUZS(lineTotal)}
           </span>
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onRemove() }}
+            title={t('common.delete')}
+            className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-gray-500 active:text-red-400 active:bg-red-500/10 transition-colors"
+          >
+            <X size={16} />
+          </button>
         </div>
 
         {/* Bottom row: qty controls + unit price */}
