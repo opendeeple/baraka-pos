@@ -92,6 +92,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   notify: {
     debtSale: (saleSyncId: string) => ipcRenderer.invoke('notify:debtSale', saleSyncId),
+    debtPayment: (contactId: number, amountPaid: number) => ipcRenderer.invoke('notify:debtPayment', contactId, amountPaid),
   },
   app: {
     isTraining: () => ipcRenderer.invoke('app:isTraining'),

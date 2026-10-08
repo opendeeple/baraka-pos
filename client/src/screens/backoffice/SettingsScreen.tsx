@@ -44,6 +44,10 @@ interface DebtSaleNotifyConfig {
   enabled: boolean
 }
 
+interface DebtPaymentNotifyConfig {
+  enabled: boolean
+}
+
 interface ReceiptSettings {
   header: string; footer: string; show_logo: boolean
   show_cashier: boolean; copies: number
@@ -123,6 +127,8 @@ export default function SettingsScreen() {
   const [runningReminders, setRunningReminders] = useState(false)
   // Default on — matches debtNotify.service.ts's DEFAULT_CONFIG.
   const [debtSaleNotify, setDebtSaleNotify] = useState<DebtSaleNotifyConfig>({ enabled: true })
+  // Default on — matches debtNotify.service.ts's DEFAULT_PAYMENT_CONFIG.
+  const [debtPaymentNotify, setDebtPaymentNotify] = useState<DebtPaymentNotifyConfig>({ enabled: true })
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [storeName, setStoreName] = useState('')
   const [storeAddress, setStoreAddress] = useState('')
@@ -198,6 +204,9 @@ export default function SettingsScreen() {
     if (map.debt_sale_notify_config) {
       try { setDebtSaleNotify({ enabled: true, ...JSON.parse(map.debt_sale_notify_config) }) } catch {}
     }
+    if (map.debt_payment_notify_config) {
+      try { setDebtPaymentNotify({ enabled: true, ...JSON.parse(map.debt_payment_notify_config) }) } catch {}
+    }
     const scaleCfg = readScaleConfig(map[SCALE_SETTING_KEY])
     setScale(scaleCfg)
     setScalePrefixes(scaleCfg.prefixes.join(', '))
@@ -246,6 +255,7 @@ export default function SettingsScreen() {
       await saveSetting('sms_config', JSON.stringify(sms))
       await saveSetting('auto_reminder_config', JSON.stringify(autoReminder))
       await saveSetting('debt_sale_notify_config', JSON.stringify(debtSaleNotify))
+      await saveSetting('debt_payment_notify_config', JSON.stringify(debtPaymentNotify))
       const prefixes = splitPrefixes(scalePrefixes)
       await saveSetting(SCALE_SETTING_KEY, JSON.stringify({ ...scale, prefixes: prefixes.length ? prefixes : DEFAULT_SCALE_CONFIG.prefixes }))
       // The store's name/address/phone print on every till's receipts.
@@ -561,6 +571,22 @@ export default function SettingsScreen() {
               className="w-4 h-4"
             />
             {t('settings.debtSaleNotifyEnabled')}
+          </label>
+        </div>
+
+        {/* Instant debt-payment confirmation — sent by debtNotify.service.ts
+            right after a repayment is recorded (DebtHistoryDrawer). */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm flex items-center gap-2"><Send size={15} /> {t('settings.debtPaymentNotify')}</h2>
+          <p className="text-xs text-gray-500">{t('settings.debtPaymentNotifyHint')}</p>
+          <label className="flex items-center gap-2 text-sm text-gray-300">
+            <input
+              type="checkbox"
+              checked={debtPaymentNotify.enabled}
+              onChange={(e) => setDebtPaymentNotify({ enabled: e.target.checked })}
+              className="w-4 h-4"
+            />
+            {t('settings.debtPaymentNotifyEnabled')}
           </label>
         </div>
         </>)}

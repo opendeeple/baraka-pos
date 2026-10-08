@@ -124,6 +124,7 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
       ])
       await logAudit('debt_payment', { entity: 'contact', entityId: contact.id, details: { customer: contact.name, amount: amt, method: payMethod, balanceAfter: newBalance } })
       window.electronAPI.sync.pushPending().catch(() => {})
+      window.electronAPI.notify.debtPayment(contact.id, amt).catch(console.error)
       setCurrentBalance(newBalance)
       setShowPay(false)
       setPayAmount('0')

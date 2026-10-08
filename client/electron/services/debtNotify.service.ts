@@ -47,6 +47,73 @@ export type DebtNotifyResult =
   | { status: 'skipped'; reason: string }
   | { status: 'failed'; channel: 'telegram' | 'sms'; error: string }
 
+interface DebtPaymentNotifyConfig {
+  enabled: boolean
+}
+
+const DEFAULT_PAYMENT_CONFIG: DebtPaymentNotifyConfig = { enabled: true }
+
+function getPaymentConfig(): DebtPaymentNotifyConfig {
+  const rows = dbQuery(`SELECT meta_value FROM settings WHERE meta_key='debt_payment_notify_config' LIMIT 1`) as Array<{ meta_value: string }>
+  if (!rows.length) return DEFAULT_PAYMENT_CONFIG
+  try {
+    const parsed = JSON.parse(rows[0].meta_value) as Partial<DebtPaymentNotifyConfig>
+    return { enabled: parsed.enabled !== false }
+  } catch {
+    return DEFAULT_PAYMENT_CONFIG
+  }
+}
+
+// Instant "here's what you just paid, here's what's left" message, sent right
+// after a debt repayment is recorded (DebtHistoryDrawer → notify:debtPayment).
+// Mirrors notifyDebtSale's channel choice (Telegram first, SMS fallback) but
+// stays plain text — a payment confirmation doesn't need an itemized PDF.
+// contact.balance is read fresh here, not passed in, because confirmPayment
+// already committed the new balance to the same row before calling this.
+export async function notifyDebtPayment(contactId: number, amountPaid: number): Promise<DebtNotifyResult> {
+  if (!getPaymentConfig().enabled) return { status: 'skipped', reason: 'disabled' }
+
+  const contact = (dbQuery(
+    `SELECT id, name, phone, balance, telegram_chat_id FROM contacts WHERE id=? LIMIT 1`, [contactId]
+  ) as Array<{ id: number; name: string; phone: string | null; balance: number; telegram_chat_id: string | null }>)[0]
+  if (!contact) return { status: 'skipped', reason: 'contact not found' }
+
+  let channel: 'telegram' | 'sms'
+  if (contact.telegram_chat_id && isTelegramConfigured()) channel = 'telegram'
+  else if (contact.phone && isSmsConfigured()) channel = 'sms'
+  else return { status: 'skipped', reason: 'no channel' }
+
+  const store = (dbQuery(`SELECT name FROM stores LIMIT 1`) as Array<{ name: string }>)[0]
+  const storeName = store?.name ?? ''
+  const remaining = Number(contact.balance)
+
+  const lines = [
+    `Assalomu alaykum, ${contact.name}!`, '',
+    `${storeName} do'koniga to'lov qildingiz: UZS ${fmt(amountPaid)}`,
+    remaining > 0 ? `Qolgan qarzingiz: UZS ${fmt(remaining)}` : `Qarzingiz to'liq yopildi!`,
+    '', 'Rahmat!',
+  ]
+  const body = channel === 'sms' ? toSmsText(lines.join('\n')) : lines.join('\n')
+
+  try {
+    if (channel === 'telegram') await sendTelegramMessage(contact.telegram_chat_id as string, body)
+    else await sendSms(contact.phone as string, body)
+    dbExec(
+      `INSERT INTO message_log (contact_id, channel, body, status, error, created_at, trigger) VALUES (?,?,?,?,?,?,?)`,
+      [contact.id, channel, body, 'sent', null, new Date().toISOString(), 'debt_payment']
+    )
+    return { status: 'sent', channel }
+  } catch (err) {
+    const error = err instanceof Error ? err.message : 'Unknown error'
+    dbExec(
+      `INSERT INTO message_log (contact_id, channel, body, status, error, created_at, trigger) VALUES (?,?,?,?,?,?,?)`,
+      [contact.id, channel, body, 'failed', error, new Date().toISOString(), 'debt_payment']
+    )
+    logger.warn(`Debt-payment notification failed for contact ${contact.id}`, err)
+    return { status: 'failed', channel, error }
+  }
+}
+
 export async function notifyDebtSale(saleSyncId: string): Promise<DebtNotifyResult> {
   if (!getConfig().enabled) return { status: 'skipped', reason: 'disabled' }
 

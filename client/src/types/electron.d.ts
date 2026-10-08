@@ -124,6 +124,12 @@ export interface ElectronAPI {
       | { status: 'skipped'; reason: string }
       | { status: 'failed'; channel: 'telegram' | 'sms'; error: string }
     >
+    /** Messages the contact what they just paid + their remaining debt (Telegram, else SMS). Never throws on a send failure — it's logged to message_log instead. */
+    debtPayment: (contactId: number, amountPaid: number) => Promise<
+      | { status: 'sent'; channel: 'telegram' | 'sms' }
+      | { status: 'skipped'; reason: string }
+      | { status: 'failed'; channel: 'telegram' | 'sms'; error: string }
+    >
   }
   app: {
     isTraining: () => Promise<boolean>
