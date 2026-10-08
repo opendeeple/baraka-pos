@@ -731,7 +731,8 @@
     "clearYes": "Yes, delete",
     "paymentReceiptTitle": "Payment Receipt",
     "deleteContact": "Delete customer entirely",
-    "deleteContactConfirm": "Delete this customer permanently? This cannot be undone."
+    "deleteContactPinTitle": "PIN to delete customer",
+    "deleteWithDebtWarning": "Note: this customer's {{amount}} debt will also be written off"
   },
   "posSettings": {
     "title": "POS Settings",

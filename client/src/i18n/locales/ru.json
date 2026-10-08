@@ -741,7 +741,8 @@
     "clearYes": "Да, удалить",
     "paymentReceiptTitle": "Чек об оплате",
     "deleteContact": "Удалить клиента полностью",
-    "deleteContactConfirm": "Удалить этого клиента навсегда? Это действие нельзя отменить."
+    "deleteContactPinTitle": "PIN для удаления клиента",
+    "deleteWithDebtWarning": "Внимание: долг этого клиента в размере {{amount}} также будет списан"
   },
   "posSettings": {
     "title": "Настройки кассы",

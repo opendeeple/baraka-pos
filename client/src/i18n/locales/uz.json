@@ -726,7 +726,8 @@
     "clearYes": "Ha, o'chirish",
     "paymentReceiptTitle": "To'lov cheki",
     "deleteContact": "Mijozni butunlay o'chirish",
-    "deleteContactConfirm": "Mijoz butunlay o'chirilsinmi? Bu amalni ortga qaytarib bo'lmaydi."
+    "deleteContactPinTitle": "Mijozni o'chirish uchun PIN",
+    "deleteWithDebtWarning": "Diqqat: bu mijozning {{amount}} qarzi ham yozib tashlanadi"
   },
   "posSettings": {
     "title": "Kassa sozlamalari",

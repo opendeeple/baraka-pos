@@ -6,6 +6,7 @@ import { fmtUZS } from '../../lib/currency'
 import { lastClearedSql, fmtDateTime, REPAYMENT_FOR_CONTACT } from '../../lib/debt'
 import { logAudit } from '../../lib/audit'
 import { NumPad } from './NumPad'
+import { PinConfirmModal } from '../ui'
 import { useAuthStore } from '../../store/auth.store'
 import { useSessionStore } from '../../store/session.store'
 import { Debtor } from '../../types/pos.types'
@@ -49,10 +50,20 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
   const [confirmClear, setConfirmClear] = useState(false)
   const [clearing, setClearing] = useState(false)
 
-  const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showDeletePin, setShowDeletePin] = useState(false)
+  const [ownerPin, setOwnerPin] = useState('')
 
   useEffect(() => { loadRecords() }, [contact.id])
+  // Same owner-authorization PIN as the Personal (Owner) expense category —
+  // deleting a contact with debt still owed writes that debt off, so it gets
+  // the same step-up gate. If the owner never set one, this stays permissive
+  // like the expense flow does: no PIN configured means no gate.
+  useEffect(() => {
+    window.electronAPI.db.query(
+      `SELECT meta_value FROM settings WHERE meta_key='owner_expense_pin' LIMIT 1`, []
+    ).then((rows) => setOwnerPin((rows as Array<{ meta_value: string }>)[0]?.meta_value ?? ''))
+  }, [])
 
   const totalDebt = debts.reduce((s, d) => s + Number(d.amount), 0)
   const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0)
@@ -186,29 +197,26 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
 
   // Soft-deletes the contact itself (not just its debt history) — same
   // deleted_at + sync 'delete' op products already use, which the server's
-  // contacts push handler already supports. A brand-new contact created
-  // afterward (even same phone/name) is always a fresh row with its own
-  // syncId and a zero balance — contacts have no unique phone constraint
-  // and creation never looks up or reuses an existing row, so nothing from
-  // this deleted one can carry over to it.
+  // contacts push handler already supports. Allowed even with an open
+  // balance — any remaining debt is written off along with the contact,
+  // which is exactly why this is PIN-gated (see showDeletePin above), same
+  // as the owner-expense category. A brand-new contact created afterward
+  // (even same phone/name) is always a fresh row with its own syncId and a
+  // zero balance — contacts have no unique phone constraint and creation
+  // never looks up or reuses an existing row, so nothing from this deleted
+  // one can carry over to it.
   async function deleteContact() {
     setDeleting(true)
     try {
       const [row] = await window.electronAPI.db.query(
-        `SELECT balance, sync_id FROM contacts WHERE id = ?`, [contact.id]
-      ) as Array<{ balance: number; sync_id: string }>
-      if (row && Number(row.balance) > 0) {
-        // Re-checked at click time — something added debt since this opened.
-        setCurrentBalance(Number(row.balance))
-        setConfirmDelete(false)
-        return
-      }
+        `SELECT sync_id FROM contacts WHERE id = ?`, [contact.id]
+      ) as Array<{ sync_id: string }>
       const now = new Date().toISOString()
       await window.electronAPI.db.exec(
         `UPDATE contacts SET deleted_at=?, updated_at=? WHERE id=?`, [now, now, contact.id]
       )
       if (row?.sync_id) await window.electronAPI.sync.enqueue('contacts', row.sync_id, 'delete')
-      await logAudit('contact_delete', { entity: 'contact', entityId: contact.id, details: { customer: contact.name } })
+      await logAudit('contact_delete', { entity: 'contact', entityId: contact.id, details: { customer: contact.name, balanceWrittenOff: currentBalance } })
       window.electronAPI.sync.pushPending().catch(() => {})
       ;(onDeleted ?? onClose)()
     } finally {
@@ -390,40 +398,37 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
                 </>
               ))}
 
-              {/* Deletes the contact itself (not just its debt history) —
-                  same fullyPaid gate as clearDebt above, so a contact still
-                  owed money can't quietly disappear. */}
-              {fullyPaid && (confirmDelete ? (
-                <div className="space-y-2 pt-2 border-t border-dark-border/50">
-                  <p className="text-xs text-gray-300 text-center">{t('debt.deleteContactConfirm')}</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setConfirmDelete(false)}
-                      className="flex-1 h-11 border border-dark-border text-gray-300 rounded-xl text-sm transition-colors"
-                    >
-                      {t('common.cancel')}
-                    </button>
-                    <button
-                      onClick={deleteContact}
-                      disabled={deleting}
-                      className="flex-1 h-11 bg-red-600 active:bg-red-700 disabled:opacity-40 text-white font-semibold rounded-xl text-sm transition-colors"
-                    >
-                      {deleting ? t('debt.processing') : t('debt.clearYes')}
-                    </button>
-                  </div>
-                </div>
-              ) : (
+              {/* Deletes the contact itself, debt or no debt — any open
+                  balance is written off with it, which is why this asks for
+                  the owner PIN (same gate as the owner-expense category)
+                  instead of a plain confirm. */}
+              <div className="space-y-1.5 pt-2 border-t border-dark-border/50">
+                {!fullyPaid && (
+                  <p className="text-[11px] text-red-400 text-center">
+                    {t('debt.deleteWithDebtWarning', { amount: `UZS ${fmtUZS(currentBalance)}` })}
+                  </p>
+                )}
                 <button
-                  onClick={() => setConfirmDelete(true)}
-                  className="w-full flex items-center justify-center gap-2 h-10 text-gray-500 active:text-red-400 text-xs transition-colors"
+                  onClick={() => (ownerPin ? setShowDeletePin(true) : deleteContact())}
+                  disabled={deleting}
+                  className="w-full flex items-center justify-center gap-2 h-10 text-gray-500 active:text-red-400 disabled:opacity-40 text-xs transition-colors"
                 >
                   <Trash2 size={13} />
-                  {t('debt.deleteContact')}
+                  {deleting ? t('debt.processing') : t('debt.deleteContact')}
                 </button>
-              ))}
+              </div>
             </div>
           )}
         </>
+      )}
+
+      {showDeletePin && (
+        <PinConfirmModal
+          expectedPin={ownerPin}
+          title={t('debt.deleteContactPinTitle')}
+          onClose={() => setShowDeletePin(false)}
+          onConfirmed={() => { setShowDeletePin(false); deleteContact() }}
+        />
       )}
     </>
   )
