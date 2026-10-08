@@ -38,6 +38,12 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "658d6608-8414-4c82-bd6a-59f8db992c7e"
+      }
+    },
+    "owner": "mirzobekcoders-team"
   }
 }
