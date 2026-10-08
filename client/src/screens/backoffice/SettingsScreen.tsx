@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  Save, Printer, TestTube2, RefreshCw, Globe, Maximize, Minimize, Send, BellRing, Banknote, Scale, Store, Receipt, Monitor,
+  Save, Printer, TestTube2, RefreshCw, Globe, Maximize, Minimize, Send, BellRing, Banknote, Scale, Store, Receipt, Monitor, Lock,
   type LucideIcon,
 } from 'lucide-react'
 import { DEFAULT_SCALE_CONFIG, SCALE_SETTING_KEY, parseScaleBarcode, readScaleConfig, type ScaleConfig } from '../../lib/scaleBarcode'
@@ -16,6 +16,7 @@ import { SYNC_TABLES, pullSyncTable } from '../../hooks/useSync'
 import { SHARED_SETTING_KEYS } from '@baraka/shared'
 import { v4 as uuidv4 } from 'uuid'
 import { logAudit } from '../../lib/audit'
+import { useAuthStore } from '../../store/auth.store'
 
 interface StoreSetting { meta_key: string; meta_value: string }
 
@@ -143,6 +144,8 @@ export default function SettingsScreen() {
   const [ownerPin, setOwnerPin] = useState('')
   const [openingDrawer, setOpeningDrawer] = useState(false)
   const [pendingDrawerConfirm, setPendingDrawerConfirm] = useState(false)
+  const [savingStoreInfo, setSavingStoreInfo] = useState(false)
+  const [pendingStoreInfoConfirm, setPendingStoreInfoConfirm] = useState(false)
   // A caller can jump straight to a tab (e.g. the sidebar's store name, which
   // links here to edit it) by navigating with { state: { tab: '...' } }.
   const location = useLocation()
@@ -249,7 +252,6 @@ export default function SettingsScreen() {
 
   async function saveAll() {
     setSaving(true)
-    const now = new Date().toISOString()
     try {
       await saveSetting('printer_config', JSON.stringify(printer))
       await saveSetting('receipt_template', JSON.stringify(receipt))
@@ -262,16 +264,38 @@ export default function SettingsScreen() {
       await saveSetting('debt_payment_notify_config', JSON.stringify(debtPaymentNotify))
       const prefixes = splitPrefixes(scalePrefixes)
       await saveSetting(SCALE_SETTING_KEY, JSON.stringify({ ...scale, prefixes: prefixes.length ? prefixes : DEFAULT_SCALE_CONFIG.prefixes }))
-      // The store's name/address/phone print on every till's receipts.
+      window.electronAPI.sync.pushPending().catch(() => {})
+      toast.success(t('settings.saved'))
+    } finally { setSaving(false) }
+  }
+
+  /** The store name/address/phone print on every till's receipt and show in
+   *  both apps' headers — changing them is gated behind the owner PIN (same
+   *  one as the drawer and Owner-category expenses), since anyone with till
+   *  access could otherwise rename the store. Same convention as those: no
+   *  PIN set means no gate. */
+  function saveStoreInfoClick() {
+    if (ownerPin) { setPendingStoreInfoConfirm(true); return }
+    saveStoreInfo()
+  }
+
+  async function saveStoreInfo() {
+    setSavingStoreInfo(true)
+    const now = new Date().toISOString()
+    try {
       const [st] = await window.electronAPI.db.query(`SELECT id, name, address, phone, sync_id FROM stores ORDER BY id LIMIT 1`, []) as Array<{ id: number; name: string; address: string | null; phone: string | null; sync_id: string | null }>
       if (st && (st.name !== storeName || (st.address ?? '') !== storeAddress || (st.phone ?? '') !== storePhone)) {
         const syncId = st.sync_id ?? uuidv4()
         await window.electronAPI.db.exec(`UPDATE stores SET name=?,address=?,phone=?,updated_at=?,sync_id=? WHERE id=?`, [storeName, storeAddress, storePhone, now, syncId, st.id])
         await window.electronAPI.sync.enqueue('stores', syncId, 'upsert')
+        window.electronAPI.sync.pushPending().catch(() => {})
+        // Immediate feedback in this same window (TopBar/sidebar) — other
+        // open windows and devices pick it up once they pull 'stores' (see
+        // useSync.ts's refreshStoreFromLocalDb).
+        useAuthStore.getState().updateStore({ name: storeName, address: storeAddress, phone: storePhone })
       }
-      window.electronAPI.sync.pushPending().catch(() => {})
       toast.success(t('settings.saved'))
-    } finally { setSaving(false) }
+    } finally { setSavingStoreInfo(false) }
   }
 
   async function runRemindersNow() {
@@ -757,7 +781,14 @@ export default function SettingsScreen() {
         {/* Store Info — printed at the top (name, address) and bottom (phone)
             of every receipt, so it's edited next to the receipt settings. */}
         <div className={SECTION_CLS}>
-          <h2 className="text-white font-semibold text-sm">{t('settings.storeInformation')}</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-white font-semibold text-sm">{t('settings.storeInformation')}</h2>
+            <button onClick={saveStoreInfoClick} disabled={savingStoreInfo}
+              className="flex items-center gap-2 border border-dark-border text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs transition-colors">
+              <Lock size={13} /> {savingStoreInfo ? '…' : t('common.save')}
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 -mt-2">{t('settings.storeInfoHint')}</p>
           <div className="grid grid-cols-3 gap-3">
             {[[t('settings.storeName'), storeName, setStoreName], [t('common.address'), storeAddress, setStoreAddress], [t('common.phone'), storePhone, setStorePhone]].map(([label, val, set]) => (
               <div key={label as string}>
@@ -813,6 +844,15 @@ export default function SettingsScreen() {
           title={t('settings.openDrawer')}
           onClose={() => setPendingDrawerConfirm(false)}
           onConfirmed={() => { setPendingDrawerConfirm(false); openDrawer() }}
+        />
+      )}
+
+      {pendingStoreInfoConfirm && (
+        <PinConfirmModal
+          expectedPin={ownerPin}
+          title={t('settings.storeInformation')}
+          onClose={() => setPendingStoreInfoConfirm(false)}
+          onConfirmed={() => { setPendingStoreInfoConfirm(false); saveStoreInfo() }}
         />
       )}
     </BackOfficeLayout>

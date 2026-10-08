@@ -36,10 +36,28 @@ const OPTIONAL_TABLES = new Set<string>(['cash_logs', 'debt_clearances', 'audit_
 export async function pullSyncTable(table: string): Promise<void> {
   try {
     await window.electronAPI.sync.pullLatest(table)
+    if (table === 'stores') await refreshStoreFromLocalDb()
   } catch (err) {
     if (OPTIONAL_TABLES.has(table) && err instanceof Error && err.message.includes('Unknown table')) return
     throw err
   }
+}
+
+// useAuthStore's store object is set once at login/session-restore and
+// otherwise never touched — without this, a name/address/phone change made
+// in Settings on one device (or even this same one, once its own push comes
+// back) would sit correctly in the local stores table while every screen
+// reading useAuthStore().store (TopBar, BackOfficeLayout's sidebar,
+// receipts) kept showing the old value until the next relogin.
+async function refreshStoreFromLocalDb(): Promise<void> {
+  const current = useAuthStore.getState().store
+  if (!current) return
+  const rows = await window.electronAPI.db.query(
+    `SELECT name, address, phone FROM stores WHERE id=? LIMIT 1`, [current.id]
+  ) as Array<{ name: string; address: string | null; phone: string | null }>
+  const row = rows[0]
+  if (!row) return
+  useAuthStore.getState().updateStore({ name: row.name, address: row.address ?? undefined, phone: row.phone ?? undefined })
 }
 
 // Table pulls run one at a time, in call order: two overlapping pulls of the

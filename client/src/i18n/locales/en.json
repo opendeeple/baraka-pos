@@ -52,6 +52,7 @@
     "syncNow": "Sync Now",
     "saveChanges": "Save Changes",
     "storeInformation": "Store Information",
+    "storeInfoHint": "Store name, address and phone show in both apps' headers and on receipts. Changing them asks for the owner PIN (if one is set).",
     "ownerExpensePin": "Owner Expense PIN",
     "ownerExpensePinHint": "Required when \"Personal (Owner)\" is selected as an expense category — keeps staff from logging expenses under the owner's name.",
     "telegramBot": "Telegram Bot",

@@ -52,6 +52,7 @@
     "syncNow": "Sinxronlash",
     "saveChanges": "Saqlash",
     "storeInformation": "Do'kon ma'lumotlari",
+    "storeInfoHint": "Do'kon nomi, manzili va telefoni har ikkala ilova sarlavhasida va cheklarda ko'rinadi. O'zgartirish uchun Egasi PIN-kodi so'raladi (agar qo'yilgan bo'lsa).",
     "ownerExpensePin": "Egasi xarajatlari uchun PIN-kod",
     "ownerExpensePinHint": "Xarajat qo'shishda \"Shaxsiy (Egasi)\" toifasi tanlansa, shu kod so'raladi — shunda xodimlar egasi nomidan xarajat yoza olmaydi.",
     "telegramBot": "Telegram bot",
