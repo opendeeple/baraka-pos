@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Save, Printer, TestTube2, RefreshCw, Globe, Maximize, Minimize, Send, BellRing, Banknote, Scale, Store, Receipt, Monitor,
@@ -142,7 +143,10 @@ export default function SettingsScreen() {
   const [ownerPin, setOwnerPin] = useState('')
   const [openingDrawer, setOpeningDrawer] = useState(false)
   const [pendingDrawerConfirm, setPendingDrawerConfirm] = useState(false)
-  const [tab, setTab] = useState<SettingsTab>('store')
+  // A caller can jump straight to a tab (e.g. the sidebar's store name, which
+  // links here to edit it) by navigating with { state: { tab: '...' } }.
+  const location = useLocation()
+  const [tab, setTab] = useState<SettingsTab>((location.state as { tab?: SettingsTab } | null)?.tab ?? 'store')
   const [scale, setScale] = useState<ScaleConfig>(DEFAULT_SCALE_CONFIG)
   const [scalePrefixes, setScalePrefixes] = useState(DEFAULT_SCALE_CONFIG.prefixes.join(', '))
   const [scaleTest, setScaleTest] = useState('')

@@ -123,7 +123,13 @@ export function BackOfficeLayout({ children }: { children: React.ReactNode }) {
             <span className="text-white font-bold">B</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-white font-bold text-sm leading-tight truncate" title={t('nav.backOffice')}>{store?.name ?? 'BarakaPOS'}</p>
+            <button
+              onClick={() => navigate('/backoffice/settings', { state: { tab: 'receipt' } })}
+              className="text-white font-bold text-sm leading-tight truncate block text-left hover:text-primary transition-colors"
+              title={t('settings.storeName')}
+            >
+              {store?.name ?? 'BarakaPOS'}
+            </button>
             <div className="mt-1 inline-flex"><SyncStatusBadge /></div>
           </div>
         </div>
