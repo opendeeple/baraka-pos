@@ -3,14 +3,15 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Home, Package, Receipt as ReceiptIcon, Users, Truck, Wallet, Settings, ArrowLeft, BarChart2,
-  UserCog, LogOut, HandCoins, Warehouse, ScrollText, Factory, type LucideIcon,
+  UserCog, LogOut, HandCoins, Warehouse, ScrollText, Factory, Landmark, type LucideIcon,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/auth.store'
 import { SyncStatusBadge } from './SyncStatusBadge'
 import { useAppMode } from '../../contexts/AppModeContext'
 import { EXPIRING_DAYS } from '../../lib/expiry'
+import { CREDITORS_ATTENTION_SQL } from '../../lib/creditors'
 
-type BadgeKey = 'pendingOrders' | 'debtors' | 'suppliersOwed' | 'expiring'
+type BadgeKey = 'pendingOrders' | 'debtors' | 'creditors' | 'suppliersOwed' | 'expiring'
 type BadgeTone = 'yellow' | 'red'
 
 interface NavItem {
@@ -36,6 +37,8 @@ const SECTIONS: Array<{ titleKey: string | null; items: NavItem[] }> = [
     items: [
       { to: '/backoffice/sales', labelKey: 'nav.sales', hintKey: 'pageHints.sales', icon: ReceiptIcon },
       { to: '/backoffice/debtors', labelKey: 'nav.debtors', hintKey: 'pageHints.debtors', icon: HandCoins, badge: { key: 'debtors', tone: 'red' } },
+      // Badge: open creditors whose due date is within their reminder window or past.
+      { to: '/backoffice/creditors', labelKey: 'nav.creditors', hintKey: 'pageHints.creditors', icon: Landmark, badge: { key: 'creditors', tone: 'yellow' } },
       { to: '/backoffice/customers', labelKey: 'nav.customers', hintKey: 'pageHints.customers', icon: Users },
     ],
   },
@@ -69,6 +72,7 @@ const SECTIONS: Array<{ titleKey: string | null; items: NavItem[] }> = [
 const BADGE_SQL: Record<BadgeKey, string> = {
   pendingOrders: `SELECT COUNT(*) AS n FROM purchases WHERE status != 'received' AND deleted_at IS NULL`,
   debtors: `SELECT COUNT(*) AS n FROM contacts WHERE type IN ('customer','both') AND deleted_at IS NULL AND balance > 0`,
+  creditors: CREDITORS_ATTENTION_SQL,
   suppliersOwed: `SELECT COUNT(DISTINCT vendor_id) AS n FROM purchases
                   WHERE vendor_id IS NOT NULL AND status = 'received' AND deleted_at IS NULL AND COALESCE(amount_paid, 0) < total_amount`,
   expiring: `SELECT COUNT(DISTINCT pb.product_id) AS n FROM product_batches pb

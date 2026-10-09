@@ -37,6 +37,7 @@ model Store {
   shifts        Shift[]
   debtClearances DebtClearance[]
   auditLogs     AuditLog[]
+  creditors     Creditor[]
 
   @@map("stores")
 }
@@ -566,6 +567,41 @@ model DebtClearance {
   @@index([storeId, updatedAt])
   @@index([contactId])
   @@map("debt_clearances")
+}
+
+// Creditors ("haqdorlar"): money the shop took from a customer and owes back
+// by dueDate, as money or as goods (returnType). The amount keeps its own
+// currency (UZS / USD). receivedAt / dueDate / returnedAt are the device's
+// local 'YYYY-MM-DD', kept as text so no timezone shifts the day.
+// reminderSentAt / overdueSentAt: the owner was already warned for that stage.
+// Synced both ways (sync v2 creditors), last writer wins.
+model Creditor {
+  id             Int       @id @default(autoincrement())
+  syncId         String    @unique @default(uuid())
+  storeId        Int
+  name           String
+  phone          String?
+  amount         Decimal   @default(0) @db.Decimal(14, 2)
+  currency       String    @default("UZS")
+  returnType     String    @default("money")
+  productNote    String?
+  receivedAt     String
+  dueDate        String
+  remindDays     Int       @default(3)
+  status         String    @default("open")
+  returnedAt     String?
+  note           String?
+  reminderSentAt String?
+  overdueSentAt  String?
+  createdBy      Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@index([storeId, updatedAt])
+  @@map("creditors")
 }
 
 enum CashLogType {

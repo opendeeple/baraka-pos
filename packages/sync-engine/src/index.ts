@@ -47,6 +47,8 @@ export const PULL_TABLE_ORDER = [
   'product_stocks', 'charges', 'settings', 'users', 'pos_sessions', 'sales',
   'purchases', 'cash_logs', 'debt_clearances', 'expenses', 'audit_logs',
 ] as const
+// 'creditors' syncs too, but only the desktop back office has a screen for
+// it, so it's pulled from its own table list (client useSync SYNC_TABLES).
 
 // Insert-only facts: a pulled row that already exists locally (usually this
 // device's own, pulled back) is left exactly as it is. cash_logs especially:
@@ -143,7 +145,7 @@ const SWEEP_TABLES = new Set(['products', 'product_batches', 'product_stocks', '
 const FLUSH_PRIORITY: Record<string, number> = {
   collections: 0, contacts: 1, users: 1, products: 2, product_batches: 3, pos_sessions: 4,
   settings: 1, charges: 1, stores: 1,
-  quantity_adjustments: 5, expenses: 6, purchases: 7, cash_logs: 8, debt_clearances: 9, audit_logs: 10, sales: 99,
+  quantity_adjustments: 5, expenses: 6, purchases: 7, cash_logs: 8, debt_clearances: 9, audit_logs: 10, creditors: 11, sales: 99,
 }
 
 // When a pulled tombstone hard-deletes a row by sync_id, also delete rows in
@@ -1103,6 +1105,22 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       return {
         action: a.action, entity: a.entity, entityId: a.entity_id, details: a.details,
         userId: a.user_id, userName: a.user_name, occurredAt: a.occurred_at, _updatedAt: a.occurred_at,
+      }
+    },
+    // Read regardless of op: a deleted row is soft-deleted locally (deleted_at).
+    creditors: ({ sync_id }) => {
+      const c = db.get<any>(`SELECT * FROM creditors WHERE sync_id=?`, [sync_id])
+      if (!c) return null
+      return {
+        name: c.name, phone: c.phone, amount: Number(c.amount) || 0,
+        currency: c.currency === 'USD' ? 'USD' : 'UZS',
+        returnType: c.return_type === 'product' ? 'product' : 'money',
+        productNote: c.product_note, receivedAt: c.received_at, dueDate: c.due_date,
+        remindDays: Number(c.remind_days) || 0, status: c.status === 'returned' ? 'returned' : 'open',
+        returnedAt: c.returned_at, note: c.note,
+        reminderSentAt: c.reminder_sent_at, overdueSentAt: c.overdue_sent_at,
+        createdBy: c.created_by,
+        _updatedAt: c.updated_at ?? c.created_at,
       }
     },
   }

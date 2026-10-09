@@ -124,6 +124,8 @@ export interface ElectronAPI {
       | { status: 'skipped'; reason: string }
       | { status: 'failed'; channel: 'telegram' | 'sms'; error: string }
     >
+    /** Warns the owner (Windows notification + SMS) about creditors whose due date is near or here. */
+    creditors: () => Promise<{ notified: number; sms: 'sent' | 'skipped' | 'failed' }>
   }
   app: {
     isTraining: () => Promise<boolean>
