@@ -19,6 +19,11 @@ interface Props {
 interface SimilarMatch { id: number; name: string; barcode: string | null }
 interface Category { id: number; name: string }
 
+function isExactDuplicate(p: SimilarMatch, name: string, barcode: string): boolean {
+  return p.name.trim().toLowerCase() === name.trim().toLowerCase() ||
+    (barcode.trim() !== '' && p.barcode === barcode.trim())
+}
+
 /**
  * Opened the moment a barcode scan or search-enter finds nothing — lets the
  * cashier create the missing product on the spot instead of losing the sale.
@@ -120,6 +125,7 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
   useEffect(() => { setBarcodeValue(barcode) }, [barcode])
 
   if (step === 'confirm') {
+    const exactDup = similar.find((p) => isExactDuplicate(p, name, barcodeValue))
     return (
       <Modal
         open
@@ -131,17 +137,24 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
             <Button variant="secondary" className="flex-1" onClick={() => setStep('form')}>
               {t('common.back')}
             </Button>
-            <Button className="flex-1" onClick={confirmCreate} loading={saving}>
+            <Button className="flex-1" onClick={confirmCreate} loading={saving} disabled={!!exactDup}>
               {t('pos.confirmNewProductYes')}
             </Button>
           </>
         }
       >
         <div className="p-5 space-y-3">
-          <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-            <AlertTriangle size={16} className="text-yellow-400 shrink-0 mt-0.5" />
-            <p className="text-sm text-yellow-200">{t('pos.confirmNewProductWarning')}</p>
-          </div>
+          {exactDup ? (
+            <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+              <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-200">{t('products.duplicateExists', { name: exactDup.name })}</p>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+              <AlertTriangle size={16} className="text-yellow-400 shrink-0 mt-0.5" />
+              <p className="text-sm text-yellow-200">{t('pos.confirmNewProductWarning')}</p>
+            </div>
+          )}
           {similar.length > 0 && (
             <div className="space-y-1.5">
               <p className="text-xs text-gray-400">{t('pos.similarProductsFound')}</p>

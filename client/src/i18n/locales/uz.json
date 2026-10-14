@@ -510,6 +510,7 @@
   },
   "products": {
     "addProduct": "Mahsulot qo'shish",
+    "duplicateExists": "Bu nomda yoki shtrix-kodda mahsulot allaqachon mavjud: \"{{name}}\"",
     "searchProducts": "Mahsulotlarni qidirish…",
     "allCategories": "Barcha kategoriyalar",
     "adjust": "O'zgartirish",

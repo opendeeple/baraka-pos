@@ -525,6 +525,7 @@
   },
   "products": {
     "addProduct": "Добавить товар",
+    "duplicateExists": "Товар с таким названием или штрих-кодом уже существует: «{{name}}»",
     "searchProducts": "Поиск товаров…",
     "allCategories": "Все категории",
     "adjust": "Изменить",

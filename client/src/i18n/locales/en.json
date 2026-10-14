@@ -515,6 +515,7 @@
   },
   "products": {
     "addProduct": "Add Product",
+    "duplicateExists": "A product with this name or barcode already exists: \"{{name}}\"",
     "searchProducts": "Search products…",
     "allCategories": "All Categories",
     "adjust": "Adjust",

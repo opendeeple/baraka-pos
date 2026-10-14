@@ -116,6 +116,17 @@ export default function ProductsScreen() {
     setSaving(true)
     const now = new Date().toISOString()
     try {
+      const barcodeTrimmed = form.barcode.trim()
+      const dupRows = await window.electronAPI.db.query(
+        `SELECT id, name, barcode FROM products
+         WHERE deleted_at IS NULL AND id != ? AND (LOWER(name) = LOWER(?) OR (? != '' AND barcode = ?))
+         LIMIT 1`,
+        [editId ?? -1, form.name.trim(), barcodeTrimmed, barcodeTrimmed]
+      ) as Array<{ id: number; name: string; barcode: string | null }>
+      if (dupRows[0]) {
+        toast.error(t('products.duplicateExists', { name: dupRows[0].name }))
+        return
+      }
       if (editId) {
         const before = products.find((x) => x.id === editId)
         await window.electronAPI.db.exec(
