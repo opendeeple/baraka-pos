@@ -7,6 +7,7 @@ import { fmtUZS } from '../../lib/currency'
 import { useAuthStore } from '../../store/auth.store'
 import { useBarcodeScanner } from '../../hooks/useBarcode'
 import { barcodeSvg, generateInternalBarcode, labelsHtml, LABEL_SIZES, type LabelSize } from '../../lib/labels'
+import { loadBarcodeAliasMap } from '../../lib/productBarcodes'
 
 interface Row { id: number; name: string; barcode: string | null; unit: string | null; price: number; sync_id: string | null }
 interface Pick { product: Row; copies: number }
@@ -26,6 +27,9 @@ export function LabelPrintModal({ onClose }: { onClose: () => void }) {
   const [size, setSize] = useState<LabelSize>('58x40')
   const [showStore, setShowStore] = useState(true)
   const [printing, setPrinting] = useState(false)
+  const [aliasMap, setAliasMap] = useState<Map<string, number>>(new Map())
+
+  useEffect(() => { loadBarcodeAliasMap().then(setAliasMap) }, [])
 
   async function load() {
     const rows = await window.electronAPI.db.query(
@@ -52,7 +56,7 @@ export function LabelPrintModal({ onClose }: { onClose: () => void }) {
   }
 
   useBarcodeScanner((code) => {
-    const p = products.find((r) => r.barcode === code)
+    const p = products.find((r) => r.barcode === code) ?? products.find((r) => r.id === aliasMap.get(code))
     if (p) add(p)
     else toast.error(t('purchases.barcodeNotFound', { code }))
   })

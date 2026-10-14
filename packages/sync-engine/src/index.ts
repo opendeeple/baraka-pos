@@ -44,6 +44,7 @@ export interface FlushResult {
 /** Order matters: FK targets must sync before their referrers. */
 export const PULL_TABLE_ORDER = [
   'stores', 'collections', 'contacts', 'products', 'product_batches',
+  'product_barcodes',
   'product_stocks', 'charges', 'settings', 'users', 'pos_sessions', 'sales',
   'purchases', 'cash_logs', 'debt_clearances', 'expenses', 'audit_logs',
 ] as const
@@ -110,6 +111,9 @@ const PULL_FK_MAP: Record<string, Record<string, { table: string; localColumn: s
     productSyncId: { table: 'products', localColumn: 'product_id' },
     vendorSyncId: { table: 'contacts', localColumn: 'vendor_id' },
   },
+  product_barcodes: {
+    productSyncId: { table: 'products', localColumn: 'product_id' },
+  },
   product_stocks: {
     productSyncId: { table: 'products', localColumn: 'product_id' },
     batchSyncId: { table: 'product_batches', localColumn: 'batch_id' },
@@ -143,7 +147,7 @@ const SWEEP_TABLES = new Set(['products', 'product_batches', 'product_stocks', '
 // products) exist server-side by the time their sales arrive. Collections
 // flush first — products reference them via categorySyncId/brandSyncId.
 const FLUSH_PRIORITY: Record<string, number> = {
-  collections: 0, contacts: 1, users: 1, products: 2, product_batches: 3, pos_sessions: 4,
+  collections: 0, contacts: 1, users: 1, products: 2, product_batches: 3, product_barcodes: 3, pos_sessions: 4,
   settings: 1, charges: 1, stores: 1,
   quantity_adjustments: 5, expenses: 6, purchases: 7, cash_logs: 8, debt_clearances: 9, audit_logs: 10, creditors: 11, sales: 99,
 }
@@ -159,6 +163,7 @@ const CASCADE_ON_DELETE: Record<string, Array<{ table: string; column: string }>
   products: [
     { table: 'product_batches', column: 'product_id' },
     { table: 'product_stocks', column: 'product_id' },
+    { table: 'product_barcodes', column: 'product_id' },
   ],
   product_batches: [
     { table: 'product_stocks', column: 'batch_id' },
@@ -722,7 +727,13 @@ export function createSyncEngine(deps: SyncEngineDeps) {
       })
       if (status !== 200) {
         clearTerminalTokenOn401(status)
-        throw new Error(data?.error ?? `Pull ${table}: HTTP ${status}`)
+        const message = data?.error ?? `Pull ${table}: HTTP ${status}`
+        // A server predating this table's migration: nothing to pull yet,
+        // not a real failure — every other table still syncs normally. Keeps
+        // a client update safe to ship ahead of the server deploy that adds
+        // the table (every platform shares this loop, not just desktop).
+        if (typeof message === 'string' && message.startsWith('Unknown table')) return { table, count: 0 }
+        throw new Error(message)
       }
 
       const pulled = upsertPulledRecords(table, data.records as Record<string, unknown>[])
@@ -937,6 +948,13 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         price: b.price, discount: b.discount, isActive: Boolean(b.is_active),
         isFeatured: Boolean(b.is_featured), _updatedAt: b.updated_at,
       }
+    },
+    product_barcodes: ({ sync_id }) => {
+      const b = db.get<any>(`SELECT * FROM product_barcodes WHERE sync_id=?`, [sync_id])
+      if (!b) return null
+      const productSyncId = syncIdForLocalId('products', b.product_id)
+      if (!productSyncId) return null
+      return { productSyncId, barcode: b.barcode, _updatedAt: b.updated_at }
     },
     users: ({ sync_id }) => {
       const u = db.get<any>(`SELECT * FROM users WHERE sync_id=?`, [sync_id])

@@ -133,7 +133,12 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
        WHERE ${where} AND p.is_active = 1 AND p.deleted_at IS NULL LIMIT 1`,
       params
     ) as Promise<LocalProduct[]>
-    const rows = await lookup('p.barcode = ?', [barcode])
+    // Also matches an alias barcode (an older batch's packaging, a
+    // supplier's own code) registered against the product in Mahsulotlar.
+    const rows = await lookup(
+      `(p.barcode = ? OR EXISTS (SELECT 1 FROM product_barcodes pbc WHERE pbc.product_id = p.id AND pbc.barcode = ? AND pbc.deleted_at IS NULL))`,
+      [barcode, barcode]
+    )
     if (rows.length > 0) { handleProductTap(rows[0]); return true }
 
     // A weighing-scale label (no product has this exact barcode): the

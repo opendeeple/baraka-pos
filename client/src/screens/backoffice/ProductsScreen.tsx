@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, ImagePlus, X, Tag, Tags } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, ImagePlus, X, Tag, Tags, Barcode } from 'lucide-react'
 import { LabelPrintModal } from '../../components/backoffice/LabelPrintModal'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
@@ -11,6 +11,7 @@ import { logAudit } from '../../lib/audit'
 import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader, Select } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { resizeImageDataUrl } from '../../lib/image'
+import { generateInternalBarcode } from '../../lib/labels'
 
 interface Product {
   id: number; name: string; sku: string | null; barcode: string | null
@@ -48,6 +49,11 @@ export default function ProductsScreen() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [showLabels, setShowLabels] = useState(false)
+  // Extra barcodes this product also answers to (an older batch's packaging,
+  // a supplier's own code) — diffed against originalExtraBarcodes on save.
+  const [extraBarcodes, setExtraBarcodes] = useState<string[]>([])
+  const [originalExtraBarcodes, setOriginalExtraBarcodes] = useState<string[]>([])
+  const [newExtraBarcode, setNewExtraBarcode] = useState('')
   const navigate = useNavigate()
   const debouncedSearch = useDebouncedValue(search)
   // setSaving/setDeleting only disable the button on the *next* render — a
@@ -95,8 +101,11 @@ export default function ProductsScreen() {
     ) as Category[])
   }
 
-  function openCreate() { setEditId(null); setForm(EMPTY_FORM); setShowForm(true) }
-  function openEdit(p: Product) {
+  function openCreate() {
+    setEditId(null); setForm(EMPTY_FORM); setExtraBarcodes([]); setOriginalExtraBarcodes([]); setNewExtraBarcode('')
+    setShowForm(true)
+  }
+  async function openEdit(p: Product) {
     setEditId(p.id)
     setForm({ name: p.name, sku: p.sku ?? '', barcode: p.barcode ?? '',
       category_id: p.category_id ? String(p.category_id) : '',
@@ -106,7 +115,36 @@ export default function ProductsScreen() {
       unit: p.unit ?? 'piece', units_per_package: p.units_per_package ? String(p.units_per_package) : '',
       piece_price: p.piece_price ? String(p.piece_price) : '',
       image_url: p.image_url ?? '' })
+    const rows = await window.electronAPI.db.query(
+      `SELECT barcode FROM product_barcodes WHERE product_id=? AND deleted_at IS NULL ORDER BY id`, [p.id]
+    ) as Array<{ barcode: string }>
+    const codes = rows.map((r) => r.barcode)
+    setExtraBarcodes(codes); setOriginalExtraBarcodes(codes); setNewExtraBarcode('')
     setShowForm(true)
+  }
+
+  function addExtraBarcode() {
+    const code = newExtraBarcode.trim()
+    if (!code) return
+    if (code === form.barcode.trim() || extraBarcodes.includes(code)) {
+      toast.error(t('products.duplicateBarcodeInForm', { barcode: code }))
+      return
+    }
+    setExtraBarcodes((prev) => [...prev, code])
+    setNewExtraBarcode('')
+  }
+
+  async function generateBarcode() {
+    let code = generateInternalBarcode()
+    for (let i = 0; i < 5; i++) {
+      const [dup] = await window.electronAPI.db.query(
+        `SELECT 1 AS x FROM products WHERE barcode = ? UNION SELECT 1 FROM product_barcodes WHERE barcode = ? AND deleted_at IS NULL`,
+        [code, code]
+      ) as unknown[]
+      if (!dup) break
+      code = generateInternalBarcode()
+    }
+    f('barcode', code)
   }
 
   async function saveProduct() {
@@ -117,16 +155,33 @@ export default function ProductsScreen() {
     const now = new Date().toISOString()
     try {
       const barcodeTrimmed = form.barcode.trim()
-      const dupRows = await window.electronAPI.db.query(
-        `SELECT id, name, barcode FROM products
-         WHERE deleted_at IS NULL AND id != ? AND (LOWER(name) = LOWER(?) OR (? != '' AND barcode = ?))
-         LIMIT 1`,
-        [editId ?? -1, form.name.trim(), barcodeTrimmed, barcodeTrimmed]
-      ) as Array<{ id: number; name: string; barcode: string | null }>
-      if (dupRows[0]) {
-        toast.error(t('products.duplicateExists', { name: dupRows[0].name }))
-        return
+      const rawBarcodes = [barcodeTrimmed, ...extraBarcodes].filter((b) => b !== '')
+      const seenBarcodes = new Set<string>()
+      for (const b of rawBarcodes) {
+        if (seenBarcodes.has(b)) { toast.error(t('products.duplicateBarcodeInForm', { barcode: b })); return }
+        seenBarcodes.add(b)
       }
+      const [nameDup] = await window.electronAPI.db.query(
+        `SELECT name FROM products WHERE deleted_at IS NULL AND id != ? AND LOWER(name) = LOWER(?) LIMIT 1`,
+        [editId ?? -1, form.name.trim()]
+      ) as Array<{ name: string }>
+      if (nameDup) { toast.error(t('products.duplicateExists', { name: nameDup.name })); return }
+      if (seenBarcodes.size) {
+        const list = [...seenBarcodes]
+        const marks = list.map(() => '?').join(',')
+        const [prodDup] = await window.electronAPI.db.query(
+          `SELECT name FROM products WHERE deleted_at IS NULL AND id != ? AND barcode IN (${marks}) LIMIT 1`,
+          [editId ?? -1, ...list]
+        ) as Array<{ name: string }>
+        if (prodDup) { toast.error(t('products.duplicateExists', { name: prodDup.name })); return }
+        const [aliasDup] = await window.electronAPI.db.query(
+          `SELECT p.name FROM product_barcodes pb JOIN products p ON p.id = pb.product_id
+           WHERE pb.deleted_at IS NULL AND pb.product_id != ? AND pb.barcode IN (${marks}) LIMIT 1`,
+          [editId ?? -1, ...list]
+        ) as Array<{ name: string }>
+        if (aliasDup) { toast.error(t('products.duplicateExists', { name: aliasDup.name })); return }
+      }
+      let productId: number
       if (editId) {
         const before = products.find((x) => x.id === editId)
         await window.electronAPI.db.exec(
@@ -153,6 +208,7 @@ export default function ProductsScreen() {
         ) as Array<{ product_sync_id: string; batch_sync_id: string | null }>
         if (syncRows[0]?.product_sync_id) await window.electronAPI.sync.enqueue('products', syncRows[0].product_sync_id, 'upsert')
         if (syncRows[0]?.batch_sync_id) await window.electronAPI.sync.enqueue('product_batches', syncRows[0].batch_sync_id, 'upsert')
+        productId = editId
       } else {
         const productSyncId = uuidv4()
         const batchSyncId = uuidv4()
@@ -176,10 +232,38 @@ export default function ProductsScreen() {
         await window.electronAPI.sync.enqueue('products', productSyncId, 'upsert')
         await window.electronAPI.sync.enqueue('product_batches', batchSyncId, 'upsert')
         await logAudit('product_create', { entity: 'product', entityId: pid, details: { product: form.name, price: Number(form.price), cost: Number(form.cost) || 0 } })
+        productId = pid
       }
+      await saveExtraBarcodes(productId)
       window.electronAPI.sync.pushPending().catch(() => {})
       setShowForm(false); loadAll()
     } finally { setSaving(false); submittingRef.current = false }
+  }
+
+  async function saveExtraBarcodes(productId: number) {
+    const now = new Date().toISOString()
+    const toAdd = extraBarcodes.filter((b) => !originalExtraBarcodes.includes(b))
+    const toRemove = originalExtraBarcodes.filter((b) => !extraBarcodes.includes(b))
+    for (const barcode of toAdd) {
+      const syncId = uuidv4()
+      await window.electronAPI.db.exec(
+        `INSERT INTO product_barcodes (sync_id,product_id,barcode,created_at,updated_at) VALUES (?,?,?,?,?)`,
+        [syncId, productId, barcode, now, now]
+      )
+      await window.electronAPI.sync.enqueue('product_barcodes', syncId, 'upsert')
+    }
+    for (const barcode of toRemove) {
+      const [row] = await window.electronAPI.db.query(
+        `SELECT sync_id FROM product_barcodes WHERE product_id=? AND barcode=? AND deleted_at IS NULL LIMIT 1`,
+        [productId, barcode]
+      ) as Array<{ sync_id: string }>
+      if (!row) continue
+      await window.electronAPI.db.exec(
+        `UPDATE product_barcodes SET deleted_at=?, updated_at=? WHERE product_id=? AND barcode=? AND deleted_at IS NULL`,
+        [now, now, productId, barcode]
+      )
+      await window.electronAPI.sync.enqueue('product_barcodes', row.sync_id, 'delete')
+    }
   }
 
   async function confirmDelete() {
@@ -336,11 +420,44 @@ export default function ProductsScreen() {
                 <div className="col-span-2">
                   <Input label={t('products.nameRequired')} value={form.name} onChange={(e) => f('name', e.target.value)} />
                 </div>
-                {[[t('products.sku'), 'sku', t('products.auto')], [t('products.barcode'), 'barcode', t('products.scanOrType')]].map(([label, key, ph]) => (
-                  <Input key={key} label={label} placeholder={ph}
-                    value={form[key as keyof ProductForm] as string}
-                    onChange={(e) => f(key as keyof ProductForm, e.target.value)} />
-                ))}
+                <Input label={t('products.sku')} placeholder={t('products.auto')}
+                  value={form.sku} onChange={(e) => f('sku', e.target.value)} />
+                <div className="flex items-end gap-1.5">
+                  <div className="flex-1">
+                    <Input label={t('products.barcode')} placeholder={t('products.scanOrType')}
+                      value={form.barcode} onChange={(e) => f('barcode', e.target.value)} />
+                  </div>
+                  <button type="button" title={t('products.generateBarcode')} onClick={generateBarcode}
+                    className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-dark-border text-gray-400 hover:text-white hover:border-primary">
+                    <Barcode size={16} />
+                  </button>
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <label className="text-xs text-gray-400 block">{t('products.extraBarcodes')}</label>
+                  {extraBarcodes.map((code) => (
+                    <div key={code} className="flex items-center gap-2 bg-dark-card border border-dark-border rounded-lg px-3 py-2">
+                      <span className="flex-1 text-sm text-white">{code}</span>
+                      <button type="button" onClick={() => setExtraBarcodes((prev) => prev.filter((b) => b !== code))}
+                        className="text-gray-500 hover:text-red-400 p-0.5">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      value={newExtraBarcode}
+                      onChange={(e) => setNewExtraBarcode(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addExtraBarcode() } }}
+                      placeholder={t('products.scanOrType')}
+                      className="flex-1 bg-dark-card border border-dark-border rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary"
+                    />
+                    <button type="button" onClick={addExtraBarcode}
+                      className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-dark-border text-gray-400 hover:text-white hover:border-primary">
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">{t('products.extraBarcodesHint')}</p>
+                </div>
                 <div>
                   <Input
                     label={

@@ -156,7 +156,15 @@ export function createProductRepository(db: DbAdapter, uuid?: () => string, enqu
 
     findByBarcode(barcode: string): ProductListItem | null {
       const row = db.get<Record<string, any>>(`${PRODUCT_SELECT} AND p.barcode = ? LIMIT 1`, [barcode])
-      return row ? mapProduct(row) : null
+      if (row) return mapProduct(row)
+      // Also answers to an alias barcode (an older batch's packaging, a
+      // supplier's own code) registered against this product.
+      const alias = db.get<{ product_id: number }>(
+        `SELECT product_id FROM product_barcodes WHERE barcode = ? AND deleted_at IS NULL LIMIT 1`, [barcode]
+      )
+      if (!alias) return null
+      const aliasRow = db.get<Record<string, any>>(`${PRODUCT_SELECT} AND p.id = ? LIMIT 1`, [alias.product_id])
+      return aliasRow ? mapProduct(aliasRow) : null
     },
 
     categories(): CategoryItem[] {

@@ -8,6 +8,7 @@ import { useBarcodeScanner } from '../../hooks/useBarcode'
 import { moveStock } from '../../lib/stock'
 import { logAudit } from '../../lib/audit'
 import type { StockLocation } from '../../lib/purchases'
+import { loadBarcodeAliasMap } from '../../lib/productBarcodes'
 
 interface Product { id: number; name: string; barcode: string | null; batch_id: number; cost: number; shop: number; warehouse: number }
 
@@ -32,8 +33,10 @@ export function WriteOffModal({ onClose, onDone }: Props) {
   const [reason, setReason] = useState<Reason | null>(null)
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+  const [aliasMap, setAliasMap] = useState<Map<string, number>>(new Map())
 
   useEffect(() => {
+    loadBarcodeAliasMap().then(setAliasMap)
     window.electronAPI.db.query(
       `SELECT p.id, p.name, p.barcode, pb.id AS batch_id, COALESCE(pb.cost, 0) AS cost,
               COALESCE((SELECT quantity FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id AND location = 'shop' ORDER BY id DESC LIMIT 1), 0) AS shop,
@@ -47,7 +50,7 @@ export function WriteOffModal({ onClose, onDone }: Props) {
   }, [])
 
   useBarcodeScanner((code) => {
-    const p = products.find((x) => x.barcode === code)
+    const p = products.find((x) => x.barcode === code) ?? products.find((x) => x.id === aliasMap.get(code))
     if (p) setPicked(p)
     else toast.error(t('purchases.barcodeNotFound', { code }))
   })

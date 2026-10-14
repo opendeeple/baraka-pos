@@ -8,6 +8,7 @@ import { useBarcodeScanner } from '../../hooks/useBarcode'
 import { moveStock } from '../../lib/stock'
 import { logAudit } from '../../lib/audit'
 import { useAuthStore } from '../../store/auth.store'
+import { loadBarcodeAliasMap } from '../../lib/productBarcodes'
 import type { StockLocation } from '../../lib/purchases'
 
 interface Row { id: number; name: string; barcode: string | null; batch_id: number; cost: number; system: number }
@@ -31,7 +32,10 @@ export function StocktakeModal({ onClose, onDone }: Props) {
   const [note, setNote] = useState('')
   const [confirming, setConfirming] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [aliasMap, setAliasMap] = useState<Map<string, number>>(new Map())
   const inputs = useRef<Record<number, HTMLInputElement | null>>({})
+
+  useEffect(() => { loadBarcodeAliasMap().then(setAliasMap) }, [])
 
   useEffect(() => {
     if (!location) return
@@ -48,7 +52,7 @@ export function StocktakeModal({ onClose, onDone }: Props) {
 
   // Scanning a product jumps to its row, ready to type the count.
   useBarcodeScanner((code) => {
-    const row = rows.find((r) => r.barcode === code)
+    const row = rows.find((r) => r.barcode === code) ?? rows.find((r) => r.id === aliasMap.get(code))
     if (!row) { toast.error(t('purchases.barcodeNotFound', { code })); return }
     setSearch('')
     setOnlyDiff(false)

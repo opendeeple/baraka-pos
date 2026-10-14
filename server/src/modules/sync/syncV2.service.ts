@@ -102,6 +102,21 @@ const PULL_CONFIG: Record<SyncV2PullTable, PullConfig> = {
       vendorSyncId: vendor?.syncId ?? null,
     }),
   },
+  product_barcodes: {
+    fetch: (storeId, where, take) =>
+      prisma.productBarcode.findMany({
+        where: { product: { storeId }, ...where },
+        include: {
+          product: { select: { syncId: true } },
+        },
+        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        take,
+      }),
+    map: ({ product, ...row }) => ({
+      ...row,
+      productSyncId: product.syncId,
+    }),
+  },
   product_stocks: {
     fetch: (storeId, where, take) =>
       prisma.productStock.findMany({
@@ -462,6 +477,7 @@ const CONTACT_FIELDS = ['name', 'email', 'phone', 'whatsapp', 'address', 'type',
 const COLLECTION_FIELDS = ['collectionType', 'name', 'description', 'sortOrder']
 const PRODUCT_FIELDS = ['name', 'description', 'sku', 'barcode', 'imageUrl', 'unit', 'unitsPerPackage', 'piecePrice', 'productType', 'isStockManaged', 'isActive', 'isFeatured', 'alertQuantity', 'discount', 'metaData']
 const BATCH_FIELDS = ['batchNumber', 'expiryDate', 'cost', 'price', 'discount', 'isActive', 'isFeatured']
+const PRODUCT_BARCODE_FIELDS = ['barcode']
 const EXPENSE_FIELDS = ['description', 'amount', 'expenseDate', 'source', 'createdBy']
 const SESSION_FIELDS = ['terminalId', 'state', 'openingBalance', 'closingBalanceTheoretical', 'closingBalanceActual', 'variance', 'openedAt', 'closedAt']
 const USER_FIELDS = ['name', 'email', 'username', 'role', 'pinCode', 'badgeCode', 'isActive']
@@ -576,6 +592,24 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
     }
     if (op === 'delete') return { serverId: 0, status: 'applied' }
     const created = await tx.productBatch.create({ data: { syncId, ...fields } as never })
+    return { serverId: created.id, status: 'applied' }
+  },
+
+  product_barcodes: async (tx, _device, { syncId, op, data, clientUpdatedAt }) => {
+    const productId = await resolveSyncId(tx, 'product', data.productSyncId as string)
+    if (!productId) throw new Error('product_barcodes push requires productSyncId')
+    const fields = { ...pick(data, PRODUCT_BARCODE_FIELDS), productId }
+    const existing = await tx.productBarcode.findUnique({ where: { syncId } })
+    if (existing) {
+      if (isStale(existing.updatedAt, clientUpdatedAt)) return { serverId: existing.id, status: 'skipped-stale' }
+      await tx.productBarcode.update({
+        where: { syncId },
+        data: op === 'delete' ? { deletedAt: new Date() } : (fields as never),
+      })
+      return { serverId: existing.id, status: 'applied' }
+    }
+    if (op === 'delete') return { serverId: 0, status: 'applied' }
+    const created = await tx.productBarcode.create({ data: { syncId, ...fields } as never })
     return { serverId: created.id, status: 'applied' }
   },
 

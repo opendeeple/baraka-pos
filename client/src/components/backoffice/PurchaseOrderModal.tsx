@@ -7,6 +7,7 @@ import { fmtUZS } from '../../lib/currency'
 import { useAuthStore } from '../../store/auth.store'
 import { useBarcodeScanner } from '../../hooks/useBarcode'
 import { createPurchaseOrder, printPurchaseOrder } from '../../lib/purchases'
+import { loadBarcodeAliasMap } from '../../lib/productBarcodes'
 import { SupplierPicker } from './SupplierPicker'
 
 interface PickProduct {
@@ -39,8 +40,10 @@ export function PurchaseOrderModal({ onClose, onCreated }: Props) {
   const [note, setNote] = useState('')
   const [vendorId, setVendorId] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
+  const [aliasMap, setAliasMap] = useState<Map<string, number>>(new Map())
 
   useEffect(() => {
+    loadBarcodeAliasMap().then(setAliasMap)
     window.electronAPI.db.query(
       `SELECT p.id, p.name, p.barcode, pb.id AS batch_id, COALESCE(pb.cost, 0) AS cost,
               COALESCE(p.alert_quantity, 0) AS alert_quantity, COALESCE(p.is_stock_managed, 1) AS is_stock_managed,
@@ -74,7 +77,7 @@ export function PurchaseOrderModal({ onClose, onCreated }: Props) {
   }
 
   function addByBarcode(code: string): boolean {
-    const p = products.find((pr) => pr.barcode === code)
+    const p = products.find((pr) => pr.barcode === code) ?? products.find((pr) => pr.id === aliasMap.get(code))
     if (p) { addProduct(p); setSearch('') }
     return Boolean(p)
   }

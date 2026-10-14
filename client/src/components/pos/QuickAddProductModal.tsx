@@ -64,7 +64,18 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
        LIMIT 5`,
       [q, barcodeValue.trim()]
     ) as SimilarMatch[]
-    setSimilar(rows)
+    // Also catches a scan matching a product's *alias* barcode (an older
+    // batch's packaging, a supplier's own code) registered in Mahsulotlar.
+    const aliasRows = barcodeValue.trim()
+      ? await window.electronAPI.db.query(
+          `SELECT p.id, p.name, pbc.barcode FROM product_barcodes pbc
+           JOIN products p ON p.id = pbc.product_id
+           WHERE pbc.deleted_at IS NULL AND p.deleted_at IS NULL AND pbc.barcode = ? LIMIT 5`,
+          [barcodeValue.trim()]
+        ) as SimilarMatch[]
+      : []
+    const merged = [...rows, ...aliasRows].filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i)
+    setSimilar(merged)
     setStep('confirm')
   }
 

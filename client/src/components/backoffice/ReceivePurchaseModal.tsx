@@ -7,8 +7,9 @@ import { useAuthStore } from '../../store/auth.store'
 import { useBarcodeScanner } from '../../hooks/useBarcode'
 import { receivePurchaseOrder, type StockLocation } from '../../lib/purchases'
 import { fmtUZS } from '../../lib/currency'
+import { loadBarcodeAliasMap } from '../../lib/productBarcodes'
 
-interface Line { id: number; name: string; barcode: string | null; quantity: number; unit_cost: number }
+interface Line { id: number; product_id: number; name: string; barcode: string | null; quantity: number; unit_cost: number }
 interface Check { qty: number; note: string | null }
 
 interface Props {
@@ -44,10 +45,12 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
   const [prices, setPrices] = useState<Record<number, string>>({})
   const [expiries, setExpiries] = useState<Record<number, string>>({})
   const [lastAnswered, setLastAnswered] = useState<{ name: string; qty: number; note: string | null; ok: boolean } | null>(null)
+  const [aliasMap, setAliasMap] = useState<Map<string, number>>(new Map())
 
   useEffect(() => {
+    loadBarcodeAliasMap().then(setAliasMap)
     window.electronAPI.db.query(
-      `SELECT pi.id, p.name, p.barcode, pi.quantity, COALESCE(pi.unit_cost, 0) AS unit_cost FROM purchase_items pi
+      `SELECT pi.id, p.id AS product_id, p.name, p.barcode, pi.quantity, COALESCE(pi.unit_cost, 0) AS unit_cost FROM purchase_items pi
        JOIN products p ON p.id = pi.product_id WHERE pi.purchase_id = ? ORDER BY pi.id`,
       [purchaseId]
     ).then((rows) => {
@@ -87,7 +90,10 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
 
   useBarcodeScanner(async (code) => {
     if (!location) { toast.info(t('purchases.chooseLocationFirst')); return }
-    const same = lines.filter((l) => l.barcode === code)
+    // Matches either the barcode this line was ordered under, or any alias
+    // registered since (an older batch's packaging, a supplier's own code
+    // printed on this delivery) — same product, possibly a different label.
+    const same = lines.filter((l) => l.barcode === code || l.product_id === aliasMap.get(code))
     // The same product twice in the order: the unanswered line first; an
     // answered one opens again so its count can be corrected.
     const line = same.find((l) => !checks[l.id]) ?? same[0]
@@ -97,7 +103,9 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
       return
     }
     const [product] = await window.electronAPI.db.query(
-      `SELECT name FROM products WHERE barcode = ? AND deleted_at IS NULL LIMIT 1`, [code]
+      `SELECT name FROM products WHERE deleted_at IS NULL AND (barcode = ? OR id IN (
+         SELECT product_id FROM product_barcodes WHERE barcode = ? AND deleted_at IS NULL
+       )) LIMIT 1`, [code, code]
     ) as Array<{ name: string }>
     if (product) toast.warning(t('purchases.notInOrder', { name: product.name }))
     else toast.error(t('purchases.barcodeNotFound', { code }))

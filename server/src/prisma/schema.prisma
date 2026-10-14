@@ -194,9 +194,29 @@ model Product {
   stocks      ProductStock[]
   collections CollectionProduct[]
   saleItems   SaleItem[]
+  barcodes    ProductBarcode[]
 
   @@index([storeId, updatedAt])
   @@map("products")
+}
+
+/// An extra barcode a product also answers to — an older batch's packaging,
+/// a supplier's own code, or an auto-generated one — alongside its primary
+/// products.barcode. No DB-level uniqueness, matching products.barcode itself.
+model ProductBarcode {
+  id        Int       @id @default(autoincrement())
+  syncId    String    @unique @default(uuid())
+  productId Int
+  barcode   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([updatedAt])
+  @@index([barcode])
+  @@map("product_barcodes")
 }
 
 enum ProductType {

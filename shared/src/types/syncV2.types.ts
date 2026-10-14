@@ -9,6 +9,8 @@
 export type SyncV2PullTable =
   | 'products'
   | 'product_batches'
+  /** Extra barcodes a product also answers to (alongside products.barcode). */
+  | 'product_barcodes'
   | 'product_stocks'
   | 'contacts'
   | 'collections'

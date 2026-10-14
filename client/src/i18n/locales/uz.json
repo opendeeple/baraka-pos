@@ -511,6 +511,10 @@
   "products": {
     "addProduct": "Mahsulot qo'shish",
     "duplicateExists": "Bu nomda yoki shtrix-kodda mahsulot allaqachon mavjud: \"{{name}}\"",
+    "duplicateBarcodeInForm": "\"{{barcode}}\" shtrix-kodi bu mahsulotda ikki marta kiritildi",
+    "generateBarcode": "Shtrix-kod generatsiya qilish",
+    "extraBarcodes": "Qo'shimcha shtrix-kodlar",
+    "extraBarcodesHint": "Masalan, eski qadoqdagi yoki boshqa yetkazib beruvchining shtrix-kodi — qaysi birini skanerlasa ham shu mahsulot topiladi",
     "searchProducts": "Mahsulotlarni qidirish…",
     "allCategories": "Barcha kategoriyalar",
     "adjust": "O'zgartirish",

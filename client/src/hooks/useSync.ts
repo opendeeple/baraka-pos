@@ -16,6 +16,7 @@ export const SYNC_TABLES = [
   'contacts',
   'products',
   'product_batches',
+  'product_barcodes',
   'product_stocks',
   'charges',
   'settings',
@@ -32,7 +33,7 @@ export const SYNC_TABLES = [
 // Served only by server builds from 2026-10 on. Against an older server they
 // answer "Unknown table" — skipped rather than failing the whole sync, so a
 // client update never breaks syncing while the server deploy lags behind.
-const OPTIONAL_TABLES = new Set<string>(['cash_logs', 'debt_clearances', 'audit_logs', 'creditors'])
+const OPTIONAL_TABLES = new Set<string>(['cash_logs', 'debt_clearances', 'audit_logs', 'creditors', 'product_barcodes'])
 
 export async function pullSyncTable(table: string): Promise<void> {
   try {

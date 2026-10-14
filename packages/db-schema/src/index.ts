@@ -692,6 +692,25 @@ function migrateToV18(db: SchemaDb): void {
   db.exec(`CREATE INDEX IF NOT EXISTS idx_creditors_due ON creditors(status, due_date)`)
 }
 
+// Schema v19 — a product may carry more than one barcode (an older batch's
+// packaging, a supplier's own code, an auto-generated one) alongside its
+// primary products.barcode; scanning any of them resolves to the same
+// product. Synced both ways (sync v2 product_barcodes).
+function migrateToV19(db: SchemaDb): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS product_barcodes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sync_id TEXT UNIQUE,
+    server_id INTEGER,
+    product_id INTEGER NOT NULL,
+    barcode TEXT NOT NULL,
+    created_at TEXT,
+    updated_at TEXT,
+    deleted_at TEXT
+  )`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_product_barcodes_product ON product_barcodes(product_id)`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_product_barcodes_barcode ON product_barcodes(barcode)`)
+}
+
 export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb) => void }> = [
   { version: 2, apply: migrateToV2 },
   { version: 3, apply: migrateToV3 },
@@ -710,6 +729,7 @@ export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb
   { version: 16, apply: migrateToV16 },
   { version: 17, apply: migrateToV17 },
   { version: 18, apply: migrateToV18 },
+  { version: 19, apply: migrateToV19 },
 ]
 
 export const CURRENT_SCHEMA_VERSION = VERSIONED_MIGRATIONS[VERSIONED_MIGRATIONS.length - 1].version
