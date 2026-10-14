@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { dbQuery } from '../services/db.service'
+import { sendRawToWindowsPrinter, CASH_DRAWER_PULSE, CASH_DRAWER_PULSE_TSPL } from '../services/rawPrint.service'
 import type { ReceiptDoc } from '@baraka/app-core'
 import { thermalItemsTable, boxLineForPrint, fmtMoney, fmtQty, fmtDateTime, THANKS, type DocItem } from '../services/documentLayout'
 
@@ -699,9 +700,10 @@ export function registerPrinterIpc() {
       const reason = unconfiguredReason(config)
       if (reason) return { success: false, error: reason }
       if (config.type === 'windows') {
-        // A Windows print-driver queue has no raw-byte channel to pulse the
-        // drawer with — only USB/network ESC/POS connections can do that.
-        return { success: false, error: 'Cash drawer control needs a USB or network printer connection' }
+        // The driver's normal print path can't carry ESC/POS commands, so the
+        // drawer pulse goes to the same queue as a RAW job instead.
+        await sendRawToWindowsPrinter(config.name, CASH_DRAWER_PULSE, CASH_DRAWER_PULSE_TSPL)
+        return { success: true }
       }
       const { Printer, USB, Network } = await import('escpos' as never) as never as EscposModule
       const device =
