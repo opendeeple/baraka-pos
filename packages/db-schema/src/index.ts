@@ -658,6 +658,40 @@ function migrateToV17(db: SchemaDb): void {
   addColumnIfMissing(db, 'products', 'piece_price', 'REAL')
 }
 
+// Schema v18 — creditors ("haqdorlar"): money the shop took from a customer
+// and owes back by a due date, either as money or as goods. The amount keeps
+// its own currency (UZS or USD) — no conversion, totals are per currency.
+// Dates are local 'YYYY-MM-DD'. reminder_sent_at / overdue_sent_at record
+// that the owner was already warned (days-before window, then the due day),
+// so the back office's hourly check (creditorReminder.service.ts) warns once
+// per stage. Synced both ways (sync v2 creditors).
+function migrateToV18(db: SchemaDb): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS creditors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sync_id TEXT UNIQUE,
+    server_id INTEGER,
+    name TEXT NOT NULL,
+    phone TEXT,
+    amount REAL NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'UZS',
+    return_type TEXT NOT NULL DEFAULT 'money',
+    product_note TEXT,
+    received_at TEXT NOT NULL,
+    due_date TEXT NOT NULL,
+    remind_days INTEGER NOT NULL DEFAULT 3,
+    status TEXT NOT NULL DEFAULT 'open',
+    returned_at TEXT,
+    note TEXT,
+    reminder_sent_at TEXT,
+    overdue_sent_at TEXT,
+    created_by INTEGER,
+    created_at TEXT,
+    updated_at TEXT,
+    deleted_at TEXT
+  )`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_creditors_due ON creditors(status, due_date)`)
+}
+
 export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb) => void }> = [
   { version: 2, apply: migrateToV2 },
   { version: 3, apply: migrateToV3 },
@@ -675,6 +709,7 @@ export const VERSIONED_MIGRATIONS: Array<{ version: number; apply: (db: SchemaDb
   { version: 15, apply: migrateToV15 },
   { version: 16, apply: migrateToV16 },
   { version: 17, apply: migrateToV17 },
+  { version: 18, apply: migrateToV18 },
 ]
 
 export const CURRENT_SCHEMA_VERSION = VERSIONED_MIGRATIONS[VERSIONED_MIGRATIONS.length - 1].version

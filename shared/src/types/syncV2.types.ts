@@ -26,6 +26,8 @@ export type SyncV2PullTable =
   | 'cash_logs'
   | 'debt_clearances'
   | 'audit_logs'
+  /** Money taken from customers, owed back by a due date (as money or goods). */
+  | 'creditors'
 
 /** Tables a device may push through the generic change endpoint (sales have their own). */
 export type SyncV2PushTable =
@@ -44,6 +46,7 @@ export type SyncV2PushTable =
   | 'charges'
   | 'audit_logs'
   | 'stores'
+  | 'creditors'
 
 export interface DeviceRegisterRequest {
   name: string

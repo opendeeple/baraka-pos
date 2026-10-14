@@ -370,6 +370,14 @@ const PULL_CONFIG: Record<SyncV2PullTable, PullConfig> = {
     // Devices call the column cleared_by (who deleted the debt).
     map: ({ contact, createdBy, ...row }) => ({ ...row, clearedBy: createdBy, contactSyncId: contact.syncId }),
   },
+  creditors: {
+    fetch: (storeId, where, take) =>
+      prisma.creditor.findMany({
+        where: { storeId, ...where },
+        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+        take,
+      }),
+  },
 }
 
 export async function pullTableV2(
@@ -464,6 +472,10 @@ const SHARED_SETTINGS = new Set(SHARED_SETTING_KEYS)
 // amountPaid / paymentStatus are absent: they follow from supplier payments
 // (allocateSupplierPayment), never from a device's absolute copy.
 const PURCHASE_FIELDS = ['purchaseDate', 'referenceNo', 'totalAmount', 'discount', 'status', 'note', 'createdBy']
+const CREDITOR_FIELDS = [
+  'name', 'phone', 'amount', 'currency', 'returnType', 'productNote', 'receivedAt', 'dueDate',
+  'remindDays', 'status', 'returnedAt', 'note', 'reminderSentAt', 'overdueSentAt', 'createdBy',
+]
 
 const PUSH_HANDLERS: Record<string, PushHandler> = {
   contacts: async (tx, device, { syncId, op, data, clientUpdatedAt }) => {
@@ -784,6 +796,25 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
         totalPaid: Number(data.totalPaid ?? 0),
         createdBy: Number.isInteger(clearedBy) && clearedBy > 0 ? clearedBy : null,
       },
+    })
+    return { serverId: created.id, status: 'applied' }
+  },
+
+  // Money owed back to customers — edited on any device, last writer wins.
+  creditors: async (tx, device, { syncId, op, data, clientUpdatedAt }) => {
+    const fields = pick(data, CREDITOR_FIELDS)
+    const existing = await tx.creditor.findUnique({ where: { syncId } })
+    if (existing) {
+      if (isStale(existing.updatedAt, clientUpdatedAt)) return { serverId: existing.id, status: 'skipped-stale' }
+      await tx.creditor.update({
+        where: { syncId },
+        data: op === 'delete' ? { deletedAt: new Date() } : (fields as never),
+      })
+      return { serverId: existing.id, status: 'applied' }
+    }
+    if (op === 'delete') return { serverId: 0, status: 'applied' }
+    const created = await tx.creditor.create({
+      data: { syncId, storeId: device.storeId, ...fields } as never,
     })
     return { serverId: created.id, status: 'applied' }
   },

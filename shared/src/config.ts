@@ -19,4 +19,5 @@ export const DEFAULT_SERVER_URL = 'https://barakapos-server.onrender.com'
 export const SHARED_SETTING_KEYS: readonly string[] = [
   'receipt_template', 'telegram_config', 'sms_config', 'auto_reminder_config',
   'debt_sale_notify_config', 'owner_expense_pin', 'scale_barcode_config',
+  'creditor_reminder_config',
 ]

@@ -50,6 +50,11 @@ interface DebtPaymentNotifyConfig {
   enabled: boolean
 }
 
+interface CreditorReminderConfig {
+  enabled: boolean
+  ownerPhone: string
+}
+
 interface ReceiptSettings {
   header: string; footer: string; show_logo: boolean
   show_cashier: boolean; copies: number
@@ -131,6 +136,8 @@ export default function SettingsScreen() {
   const [debtSaleNotify, setDebtSaleNotify] = useState<DebtSaleNotifyConfig>({ enabled: true })
   // Default on — matches debtNotify.service.ts's DEFAULT_PAYMENT_CONFIG.
   const [debtPaymentNotify, setDebtPaymentNotify] = useState<DebtPaymentNotifyConfig>({ enabled: true })
+  // Default on — matches creditorReminder.service.ts's DEFAULT_CONFIG.
+  const [creditorReminder, setCreditorReminder] = useState<CreditorReminderConfig>({ enabled: true, ownerPhone: '' })
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [storeName, setStoreName] = useState('')
   const [storeAddress, setStoreAddress] = useState('')
@@ -214,6 +221,9 @@ export default function SettingsScreen() {
     if (map.debt_payment_notify_config) {
       try { setDebtPaymentNotify({ enabled: true, ...JSON.parse(map.debt_payment_notify_config) }) } catch {}
     }
+    if (map.creditor_reminder_config) {
+      try { setCreditorReminder({ enabled: true, ownerPhone: '', ...JSON.parse(map.creditor_reminder_config) }) } catch {}
+    }
     const scaleCfg = readScaleConfig(map[SCALE_SETTING_KEY])
     setScale(scaleCfg)
     setScalePrefixes(scaleCfg.prefixes.join(', '))
@@ -262,6 +272,7 @@ export default function SettingsScreen() {
       await saveSetting('auto_reminder_config', JSON.stringify(autoReminder))
       await saveSetting('debt_sale_notify_config', JSON.stringify(debtSaleNotify))
       await saveSetting('debt_payment_notify_config', JSON.stringify(debtPaymentNotify))
+      await saveSetting('creditor_reminder_config', JSON.stringify(creditorReminder))
       const prefixes = splitPrefixes(scalePrefixes)
       await saveSetting(SCALE_SETTING_KEY, JSON.stringify({ ...scale, prefixes: prefixes.length ? prefixes : DEFAULT_SCALE_CONFIG.prefixes }))
       window.electronAPI.sync.pushPending().catch(() => {})
@@ -616,6 +627,32 @@ export default function SettingsScreen() {
             />
             {t('settings.debtPaymentNotifyEnabled')}
           </label>
+        </div>
+
+        {/* Creditors' due dates — creditorReminder.service.ts warns the owner
+            (Windows notification + SMS) once in the reminder window, once on the day. */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm flex items-center gap-2"><BellRing size={15} /> {t('creditors.settingsTitle')}</h2>
+          <p className="text-xs text-gray-500">{t('creditors.settingsHint')}</p>
+          <label className="flex items-center gap-2 text-sm text-gray-300">
+            <input
+              type="checkbox"
+              checked={creditorReminder.enabled}
+              onChange={(e) => setCreditorReminder((p) => ({ ...p, enabled: e.target.checked }))}
+              className="w-4 h-4"
+            />
+            {t('creditors.settingsEnabled')}
+          </label>
+          <div>
+            <label className={LABEL_CLS}>{t('creditors.ownerPhone')}</label>
+            <input
+              value={creditorReminder.ownerPhone}
+              onChange={(e) => setCreditorReminder((p) => ({ ...p, ownerPhone: e.target.value }))}
+              placeholder={storePhone || '+998 90 123 45 67'}
+              className={INPUT_CLS}
+            />
+            <p className="text-xs text-gray-500 mt-1">{t('creditors.ownerPhoneHint')}</p>
+          </div>
         </div>
         </>)}
 

@@ -17,6 +17,7 @@ import { registerSmsIpc } from './ipc/sms.ipc'
 import { registerNotifyIpc } from './ipc/notify.ipc'
 import { startTelegramPolling } from './services/telegram.service'
 import { startAutoReminderScheduler } from './services/autoReminder.service'
+import { startCreditorReminderScheduler } from './services/creditorReminder.service'
 
 // Deliberately the SAME name as main.ts: for now POS and Office are meant to
 // share one local SQLite replica on a single machine (so data added in one
@@ -114,6 +115,7 @@ app.whenReady().then(async () => {
   registerNotifyIpc()
   startTelegramPolling()
   startAutoReminderScheduler()
+  startCreditorReminderScheduler()
 
   ipcMain.handle('app:getLogPath', () => logger.getLogPath())
   ipcMain.handle('app:openLogs', () => shell.showItemInFolder(logger.getLogPath()))
