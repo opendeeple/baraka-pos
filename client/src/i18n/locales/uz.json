@@ -987,6 +987,8 @@
     "addedChanged": "{{count}} ta mahsulot qo'shildi",
     "barcodesAssigned": "{{count}} ta mahsulotga barcode berildi",
     "perKg": "/ kg",
+    "perBox": "/ karobka",
+    "perPiece": "/ dona",
     "currency": "so'm",
     "printed": "{{count}} ta etiketka printerga yuborildi"
   },

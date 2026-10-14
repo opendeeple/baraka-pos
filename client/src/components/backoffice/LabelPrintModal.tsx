@@ -9,7 +9,10 @@ import { useBarcodeScanner } from '../../hooks/useBarcode'
 import { barcodeSvg, generateInternalBarcode, labelsHtml, LABEL_SIZES, type LabelSize } from '../../lib/labels'
 import { loadBarcodeAliasMap } from '../../lib/productBarcodes'
 
-interface Row { id: number; name: string; barcode: string | null; unit: string | null; price: number; sync_id: string | null }
+interface Row {
+  id: number; name: string; barcode: string | null; unit: string | null; price: number; sync_id: string | null
+  units_per_package: number | null; piece_price: number | null
+}
 interface Pick { product: Row; copies: number }
 
 /**
@@ -33,12 +36,16 @@ export function LabelPrintModal({ onClose }: { onClose: () => void }) {
 
   async function load() {
     const rows = await window.electronAPI.db.query(
-      `SELECT p.id, p.name, p.barcode, p.unit, p.sync_id, COALESCE(pb.price, 0) AS price
+      `SELECT p.id, p.name, p.barcode, p.unit, p.sync_id, p.units_per_package, p.piece_price, COALESCE(pb.price, 0) AS price
        FROM products p
        LEFT JOIN product_batches pb ON pb.id = (SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1)
        WHERE p.deleted_at IS NULL AND p.is_active = 1 ORDER BY p.name`, []
     ) as Row[]
-    const list = rows.map((r) => ({ ...r, price: Number(r.price) }))
+    const list = rows.map((r) => ({
+      ...r, price: Number(r.price),
+      units_per_package: r.units_per_package != null ? Number(r.units_per_package) : null,
+      piece_price: r.piece_price != null ? Number(r.piece_price) : null,
+    }))
     setProducts(list)
     setPicks((prev) => prev.map((p) => ({ ...p, product: list.find((r) => r.id === p.product.id) ?? p.product })))
   }
@@ -95,9 +102,12 @@ export function LabelPrintModal({ onClose }: { onClose: () => void }) {
   }
 
   const html = (items: Pick[]) => labelsHtml(
-    items.map((p) => ({ name: p.product.name, price: p.product.price, barcode: p.product.barcode, unit: p.product.unit, copies: p.copies })),
+    items.map((p) => ({
+      name: p.product.name, price: p.product.price, barcode: p.product.barcode, unit: p.product.unit, copies: p.copies,
+      unitsPerPackage: p.product.units_per_package, piecePrice: p.product.piece_price,
+    })),
     size,
-    { storeName: showStore ? store?.name ?? '' : '', perKg: t('labels.perKg'), currency: t('labels.currency') }
+    { storeName: showStore ? store?.name ?? '' : '', perKg: t('labels.perKg'), perBox: t('labels.perBox'), perPiece: t('labels.perPiece'), currency: t('labels.currency') }
   )
 
   async function print() {

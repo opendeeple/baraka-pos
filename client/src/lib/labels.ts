@@ -65,7 +65,12 @@ export function generateInternalBarcode(): string {
   return body + ean13CheckDigit(body)
 }
 
-export interface LabelItem { name: string; price: number; barcode: string | null; unit: string | null; copies: number }
+export interface LabelItem {
+  name: string; price: number; barcode: string | null; unit: string | null; copies: number
+  /** Box only: pieces per box, and its own per-piece price (null = box price ÷ unitsPerPackage). */
+  unitsPerPackage?: number | null
+  piecePrice?: number | null
+}
 export type LabelSize = '58x40' | '40x30' | '30x20'
 
 export const LABEL_SIZES: Record<LabelSize, { w: number; h: number; module: number; bar: number; name: number; price: number }> = {
@@ -80,16 +85,30 @@ function esc(s: string): string {
 
 const money = (n: number) => Math.round(n).toLocaleString('ru-RU').replace(/ /g, ' ')
 
-export function labelsHtml(items: LabelItem[], size: LabelSize, opts: { storeName?: string; perKg: string; currency: string }): string {
+export function labelsHtml(
+  items: LabelItem[],
+  size: LabelSize,
+  opts: { storeName?: string; perKg: string; perBox: string; perPiece: string; currency: string }
+): string {
   const s = LABEL_SIZES[size]
   const pages: string[] = []
   for (const it of items) {
     const svg = barcodeSvg(it.barcode, s.module, s.bar)
-    const unit = it.unit === 'kg' ? ` <span class="unit">${esc(opts.perKg)}</span>` : ''
+    let priceHtml: string
+    if (it.unit === 'box') {
+      const perPiece = it.piecePrice && it.piecePrice > 0
+        ? it.piecePrice
+        : (it.unitsPerPackage && it.unitsPerPackage > 0 ? it.price / it.unitsPerPackage : null)
+      priceHtml = `<div class="price">${money(it.price)} <span class="cur">${esc(opts.currency)}</span> <span class="unit">${esc(opts.perBox)}</span></div>`
+        + (perPiece ? `<div class="subprice">${money(perPiece)} <span class="cur">${esc(opts.currency)}</span> <span class="unit">${esc(opts.perPiece)}</span></div>` : '')
+    } else {
+      const unit = it.unit === 'kg' ? ` <span class="unit">${esc(opts.perKg)}</span>` : ''
+      priceHtml = `<div class="price">${money(it.price)} <span class="cur">${esc(opts.currency)}</span>${unit}</div>`
+    }
     const page = `<div class="label">
       ${opts.storeName ? `<div class="store">${esc(opts.storeName)}</div>` : ''}
       <div class="name">${esc(it.name)}</div>
-      <div class="price">${money(it.price)} <span class="cur">${esc(opts.currency)}</span>${unit}</div>
+      ${priceHtml}
       ${svg ? `<div class="code">${svg}</div>` : ''}
     </div>`
     for (let i = 0; i < Math.max(1, it.copies); i++) pages.push(page)
@@ -104,6 +123,7 @@ export function labelsHtml(items: LabelItem[], size: LabelSize, opts: { storeNam
     .store { font-size: ${(s.name * 0.7).toFixed(2)}mm; color: #333; text-transform: uppercase; letter-spacing: 0.1mm; }
     .name { font-size: ${s.name}mm; font-weight: 700; line-height: 1.15; max-height: ${(s.name * 2.35).toFixed(2)}mm; overflow: hidden; }
     .price { font-size: ${s.price}mm; font-weight: 800; line-height: 1.1; margin-top: auto; white-space: nowrap; }
+    .subprice { font-size: ${(s.price * 0.55).toFixed(2)}mm; font-weight: 700; line-height: 1.1; white-space: nowrap; margin-top: 0.3mm; }
     .cur, .unit { font-size: ${(s.price * 0.42).toFixed(2)}mm; font-weight: 600; }
     .code { text-align: center; margin-top: 0.6mm; }
     .code svg { display: block; margin: 0 auto; max-width: 100%; }

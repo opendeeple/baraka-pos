@@ -1002,6 +1002,8 @@
     "addedChanged": "Добавлено товаров: {{count}}",
     "barcodesAssigned": "Штрихкод присвоен {{count}} товарам",
     "perKg": "/ кг",
+    "perBox": "/ короб.",
+    "perPiece": "/ шт.",
     "currency": "сум",
     "printed": "Отправлено на печать: {{count}}"
   },

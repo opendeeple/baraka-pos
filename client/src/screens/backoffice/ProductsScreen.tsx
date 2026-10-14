@@ -11,7 +11,8 @@ import { logAudit } from '../../lib/audit'
 import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader, Select } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { resizeImageDataUrl } from '../../lib/image'
-import { generateInternalBarcode } from '../../lib/labels'
+import { generateInternalBarcode, labelsHtml } from '../../lib/labels'
+import { useAuthStore } from '../../store/auth.store'
 
 interface Product {
   id: number; name: string; sku: string | null; barcode: string | null
@@ -37,6 +38,7 @@ const EMPTY_FORM: ProductForm = {
 
 export default function ProductsScreen() {
   const { t } = useTranslation()
+  const { store } = useAuthStore()
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [search, setSearch] = useState('')
@@ -54,6 +56,7 @@ export default function ProductsScreen() {
   const [extraBarcodes, setExtraBarcodes] = useState<string[]>([])
   const [originalExtraBarcodes, setOriginalExtraBarcodes] = useState<string[]>([])
   const [newExtraBarcode, setNewExtraBarcode] = useState('')
+  const [printingLabel, setPrintingLabel] = useState(false)
   const navigate = useNavigate()
   const debouncedSearch = useDebouncedValue(search)
   // setSaving/setDeleting only disable the button on the *next* render — a
@@ -145,6 +148,26 @@ export default function ProductsScreen() {
       code = generateInternalBarcode()
     }
     f('barcode', code)
+  }
+
+  // Quick single-label print right from the edit form — the full "Narx
+  // etiketkasi" screen (size picker, multiple products) stays for bulk runs.
+  async function printThisLabel() {
+    if (!form.barcode.trim()) { toast.error(t('labels.noBarcode')); return }
+    setPrintingLabel(true)
+    try {
+      const html = labelsHtml(
+        [{
+          name: form.name, price: Number(form.price) || 0, barcode: form.barcode.trim(), unit: form.unit, copies: 1,
+          unitsPerPackage: Number(form.units_per_package) || null, piecePrice: Number(form.piece_price) || null,
+        }],
+        '58x40',
+        { storeName: store?.name ?? '', perKg: t('labels.perKg'), perBox: t('labels.perBox'), perPiece: t('labels.perPiece'), currency: t('labels.currency') }
+      )
+      const res = await window.electronAPI.printer.printBadge(html)
+      if (res.success) toast.success(t('labels.printed', { count: 1 }))
+      else if (res.error) toast.error(res.error)
+    } finally { setPrintingLabel(false) }
   }
 
   async function saveProduct() {
@@ -430,6 +453,10 @@ export default function ProductsScreen() {
                   <button type="button" title={t('products.generateBarcode')} onClick={generateBarcode}
                     className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-dark-border text-gray-400 hover:text-white hover:border-primary">
                     <Barcode size={16} />
+                  </button>
+                  <button type="button" title={t('labels.print')} onClick={printThisLabel} disabled={printingLabel || !form.barcode.trim()}
+                    className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-dark-border text-gray-400 hover:text-white hover:border-primary disabled:opacity-40 disabled:hover:text-gray-400 disabled:hover:border-dark-border">
+                    <Tag size={16} />
                   </button>
                 </div>
                 <div className="col-span-2 space-y-1.5">

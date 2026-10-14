@@ -992,6 +992,8 @@
     "addedChanged": "Added {{count}} products",
     "barcodesAssigned": "Barcode assigned to {{count}} products",
     "perKg": "/ kg",
+    "perBox": "/ box",
+    "perPiece": "/ piece",
     "currency": "UZS",
     "printed": "{{count}} labels sent to the printer"
   },
