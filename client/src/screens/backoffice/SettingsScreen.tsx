@@ -6,6 +6,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { DEFAULT_SCALE_CONFIG, SCALE_SETTING_KEY, parseScaleBarcode, readScaleConfig, type ScaleConfig } from '../../lib/scaleBarcode'
+import { LABEL_SIZES, type LabelSize } from '../../lib/labels'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 import { toast } from 'sonner'
@@ -53,6 +54,11 @@ interface DebtPaymentNotifyConfig {
 interface CreditorReminderConfig {
   enabled: boolean
   ownerPhone: string
+}
+
+interface ReceivingLabelConfig {
+  mode: 'sticker' | 'roll'
+  size: LabelSize
 }
 
 interface ReceiptSettings {
@@ -138,6 +144,7 @@ export default function SettingsScreen() {
   const [debtPaymentNotify, setDebtPaymentNotify] = useState<DebtPaymentNotifyConfig>({ enabled: true })
   // Default on — matches creditorReminder.service.ts's DEFAULT_CONFIG.
   const [creditorReminder, setCreditorReminder] = useState<CreditorReminderConfig>({ enabled: true, ownerPhone: '' })
+  const [receivingLabel, setReceivingLabel] = useState<ReceivingLabelConfig>({ mode: 'sticker', size: '58x40' })
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [storeName, setStoreName] = useState('')
   const [storeAddress, setStoreAddress] = useState('')
@@ -224,6 +231,9 @@ export default function SettingsScreen() {
     if (map.creditor_reminder_config) {
       try { setCreditorReminder({ enabled: true, ownerPhone: '', ...JSON.parse(map.creditor_reminder_config) }) } catch {}
     }
+    if (map.receiving_label_config) {
+      try { setReceivingLabel({ mode: 'sticker', size: '58x40', ...JSON.parse(map.receiving_label_config) }) } catch {}
+    }
     const scaleCfg = readScaleConfig(map[SCALE_SETTING_KEY])
     setScale(scaleCfg)
     setScalePrefixes(scaleCfg.prefixes.join(', '))
@@ -273,6 +283,7 @@ export default function SettingsScreen() {
       await saveSetting('debt_sale_notify_config', JSON.stringify(debtSaleNotify))
       await saveSetting('debt_payment_notify_config', JSON.stringify(debtPaymentNotify))
       await saveSetting('creditor_reminder_config', JSON.stringify(creditorReminder))
+      await saveSetting('receiving_label_config', JSON.stringify(receivingLabel))
       const prefixes = splitPrefixes(scalePrefixes)
       await saveSetting(SCALE_SETTING_KEY, JSON.stringify({ ...scale, prefixes: prefixes.length ? prefixes : DEFAULT_SCALE_CONFIG.prefixes }))
       window.electronAPI.sync.pushPending().catch(() => {})
@@ -761,6 +772,38 @@ export default function SettingsScreen() {
           <div className="flex items-center gap-2 mt-1">
             <Printer size={14} className="text-gray-500" />
             <span className="text-xs text-gray-500">{t('settings.printerAppliesNow')}</span>
+          </div>
+        </div>
+
+        {/* Receiving labels — when a delivery is received (ReceivePurchaseModal),
+            a barcode-less product gets one generated and this decides how the
+            label prints: a pre-cut sticker (its own page size) or a line on
+            the regular receipt roll. */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm">{t('settings.receivingLabelTitle')}</h2>
+          <p className="text-xs text-gray-500 -mt-2">{t('settings.receivingLabelHint')}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL_CLS}>{t('settings.receivingLabelMode')}</label>
+              <Select
+                value={receivingLabel.mode}
+                onChange={(v) => setReceivingLabel((prev) => ({ ...prev, mode: v as ReceivingLabelConfig['mode'] }))}
+                options={[
+                  { value: 'sticker', label: t('settings.receivingLabelModeSticker') },
+                  { value: 'roll', label: t('settings.receivingLabelModeRoll') },
+                ]}
+              />
+            </div>
+            {receivingLabel.mode === 'sticker' && (
+              <div>
+                <label className={LABEL_CLS}>{t('settings.receivingLabelSize')}</label>
+                <Select
+                  value={receivingLabel.size}
+                  onChange={(v) => setReceivingLabel((prev) => ({ ...prev, size: v as LabelSize }))}
+                  options={(Object.keys(LABEL_SIZES) as LabelSize[]).map((k) => ({ value: k, label: `${k.replace('x', ' × ')} mm` }))}
+                />
+              </div>
+            )}
           </div>
         </div>
 

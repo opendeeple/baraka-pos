@@ -8,7 +8,7 @@ import { useBarcodeScanner } from '../../hooks/useBarcode'
 import { receivePurchaseOrder, type StockLocation } from '../../lib/purchases'
 import { fmtUZS } from '../../lib/currency'
 import { loadBarcodeAliasMap, generateUniqueBarcode } from '../../lib/productBarcodes'
-import { labelsHtml } from '../../lib/labels'
+import { labelsHtml, type LabelSize } from '../../lib/labels'
 
 interface Line {
   id: number; product_id: number; name: string; barcode: string | null; quantity: number; unit_cost: number
@@ -144,13 +144,13 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
     const toPrint: Array<{ name: string; price: number; barcode: string; unit: string | null; copies: number; unitsPerPackage: number | null; piecePrice: number | null }> = []
     for (const line of lines) {
       const check = checks[line.id]
-      if (!check || check.qty <= 0 || line.unit === 'kg') continue
-      let barcode = line.barcode
-      if (!barcode) {
-        barcode = await generateUniqueBarcode()
-        await window.electronAPI.db.exec(`UPDATE products SET barcode=?, updated_at=? WHERE id=?`, [barcode, now, line.product_id])
-        if (line.sync_id) await window.electronAPI.sync.enqueue('products', line.sync_id, 'upsert')
-      }
+      // Only a product that had no barcode of its own gets one minted and
+      // labelled here — one already carrying a real (or earlier-generated)
+      // barcode doesn't need another sticker just because more arrived.
+      if (!check || check.qty <= 0 || line.unit === 'kg' || line.barcode) continue
+      const barcode = await generateUniqueBarcode()
+      await window.electronAPI.db.exec(`UPDATE products SET barcode=?, updated_at=? WHERE id=?`, [barcode, now, line.product_id])
+      if (line.sync_id) await window.electronAPI.sync.enqueue('products', line.sync_id, 'upsert')
       toPrint.push({
         name: line.name, price: line.price, barcode, unit: line.unit, copies: Math.max(1, Math.round(check.qty)),
         unitsPerPackage: line.units_per_package, piecePrice: line.piece_price,
@@ -158,12 +158,43 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
     }
     if (!toPrint.length) return
     window.electronAPI.sync.pushPending().catch(() => {})
-    const html = labelsHtml(toPrint, '58x40', {
-      storeName: store?.name ?? '', perKg: t('labels.perKg'), perBox: t('labels.perBox'), perPiece: t('labels.perPiece'), currency: t('labels.currency'),
+    const total = toPrint.reduce((s, p) => s + p.copies, 0)
+
+    const [cfgRow] = await window.electronAPI.db.query(
+      `SELECT meta_value FROM settings WHERE meta_key='receiving_label_config'`, []
+    ) as Array<{ meta_value: string }>
+    let mode: 'sticker' | 'roll' = 'sticker'
+    let size: LabelSize = '58x40'
+    if (cfgRow?.meta_value) {
+      try {
+        const parsed = JSON.parse(cfgRow.meta_value)
+        if (parsed.mode === 'roll' || parsed.mode === 'sticker') mode = parsed.mode
+        if (parsed.size) size = parsed.size
+      } catch { /* malformed setting — stick with the defaults above */ }
+    }
+
+    if (mode === 'sticker') {
+      const html = labelsHtml(toPrint, size, {
+        storeName: store?.name ?? '', perKg: t('labels.perKg'), perBox: t('labels.perBox'), perPiece: t('labels.perPiece'), currency: t('labels.currency'),
+      })
+      const res = await window.electronAPI.printer.printBadge(html)
+      if (res.success) { toast.success(t('labels.printed', { count: total })); return }
+      // Sticker stock jammed, wrong printer selected, etc. — the barcodes
+      // are already minted and saved; fall back to a plain text listing so
+      // that work isn't lost even though nothing came out of the printer.
+    }
+
+    const reportRes = await window.electronAPI.printer.printReport({
+      title: t('labels.title'),
+      lines: toPrint.flatMap((p, i) => [
+        ...(i > 0 ? [{ divider: true as const }] : []),
+        { label: p.name, bold: true },
+        { label: t('products.barcode'), value: p.barcode },
+        { label: t('common.quantity'), value: String(p.copies) },
+      ]),
     })
-    const res = await window.electronAPI.printer.printBadge(html)
-    if (res.success) toast.success(t('labels.printed', { count: toPrint.reduce((s, p) => s + p.copies, 0) }))
-    else if (res.error) toast.error(res.error)
+    if (reportRes.success) toast.success(t('labels.printed', { count: total }))
+    else if (reportRes.error) toast.error(reportRes.error)
   }
 
   async function accept() {
