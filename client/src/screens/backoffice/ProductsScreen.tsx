@@ -58,6 +58,10 @@ export default function ProductsScreen() {
   const [originalExtraBarcodes, setOriginalExtraBarcodes] = useState<string[]>([])
   const [newExtraBarcode, setNewExtraBarcode] = useState('')
   const [printingLabel, setPrintingLabel] = useState(false)
+  // Asked once per product, only while it has no barcode yet: whether to
+  // type/scan one or have one generated. Once answered, the normal editable
+  // barcode field shows either way — this only decides how it starts out.
+  const [barcodeChoice, setBarcodeChoice] = useState<'yes' | 'no' | null>(null)
   const navigate = useNavigate()
   const debouncedSearch = useDebouncedValue(search)
   // setSaving/setDeleting only disable the button on the *next* render — a
@@ -107,10 +111,12 @@ export default function ProductsScreen() {
 
   function openCreate() {
     setEditId(null); setForm(EMPTY_FORM); setExtraBarcodes([]); setOriginalExtraBarcodes([]); setNewExtraBarcode('')
+    setBarcodeChoice(null)
     setShowForm(true)
   }
   async function openEdit(p: Product) {
     setEditId(p.id)
+    setBarcodeChoice(p.barcode ? 'yes' : null)
     setForm({ name: p.name, sku: p.sku ?? '', barcode: p.barcode ?? '',
       category_id: p.category_id ? String(p.category_id) : '',
       price: String(p.price), cost: String(p.cost),
@@ -437,6 +443,21 @@ export default function ProductsScreen() {
                 </div>
                 <Input label={t('products.sku')} placeholder={t('products.auto')}
                   value={form.sku} onChange={(e) => f('sku', e.target.value)} />
+                {barcodeChoice === null ? (
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">{t('products.hasBarcodeQuestion')}</label>
+                    <div className="flex gap-1.5">
+                      <button type="button" onClick={() => setBarcodeChoice('yes')}
+                        className="flex-1 h-10 rounded-lg border border-dark-border text-sm text-gray-300 hover:text-white hover:border-primary">
+                        {t('products.hasBarcodeYes')}
+                      </button>
+                      <button type="button" onClick={async () => { setBarcodeChoice('no'); f('barcode', await generateUniqueBarcode()) }}
+                        className="flex-1 h-10 rounded-lg border border-dark-border text-sm text-gray-300 hover:text-white hover:border-primary">
+                        {t('products.hasBarcodeNo')}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                 <div className="flex items-end gap-1.5">
                   <div className="flex-1">
                     <Input label={t('products.barcode')} placeholder={t('products.scanOrType')}
@@ -451,6 +472,7 @@ export default function ProductsScreen() {
                     <Tag size={16} />
                   </button>
                 </div>
+                )}
                 <div className="col-span-2 space-y-1.5">
                   <label className="text-xs text-gray-400 block">{t('products.extraBarcodes')}</label>
                   {extraBarcodes.map((code) => (
