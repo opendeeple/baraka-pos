@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, ImagePlus, X, Tag, Tags, Barcode } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Package, AlertTriangle, ImagePlus, X, Tag, Tags } from 'lucide-react'
 import { LabelPrintModal } from '../../components/backoffice/LabelPrintModal'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
@@ -58,6 +58,7 @@ export default function ProductsScreen() {
   const [originalExtraBarcodes, setOriginalExtraBarcodes] = useState<string[]>([])
   const [newExtraBarcode, setNewExtraBarcode] = useState('')
   const [printingLabel, setPrintingLabel] = useState(false)
+  const [noBarcodeToggle, setNoBarcodeToggle] = useState(false)
   const navigate = useNavigate()
   const debouncedSearch = useDebouncedValue(search)
   // setSaving/setDeleting only disable the button on the *next* render — a
@@ -107,10 +108,12 @@ export default function ProductsScreen() {
 
   function openCreate() {
     setEditId(null); setForm(EMPTY_FORM); setExtraBarcodes([]); setOriginalExtraBarcodes([]); setNewExtraBarcode('')
+    setNoBarcodeToggle(false)
     setShowForm(true)
   }
   async function openEdit(p: Product) {
     setEditId(p.id)
+    setNoBarcodeToggle(false)
     setForm({ name: p.name, sku: p.sku ?? '', barcode: p.barcode ?? '',
       category_id: p.category_id ? String(p.category_id) : '',
       price: String(p.price), cost: String(p.cost),
@@ -138,15 +141,13 @@ export default function ProductsScreen() {
     setNewExtraBarcode('')
   }
 
-  async function generateBarcode() {
-    f('barcode', await generateUniqueBarcode())
-  }
-
-  // The barcode field doubles as its own on/off switch: empty = "no
-  // barcode" (switching on mints one), filled = "has one" (switching off
-  // clears it back out).
-  async function toggleHasBarcode() {
-    f('barcode', form.barcode.trim() ? '' : await generateUniqueBarcode())
+  // A plain action switch, not a persisted state: flipping it on mints a
+  // barcode right away (then it's just an ordinary editable field again,
+  // same as one that was typed or scanned in).
+  async function toggleNoBarcode() {
+    const next = !noBarcodeToggle
+    setNoBarcodeToggle(next)
+    if (next) f('barcode', await generateUniqueBarcode())
   }
 
   // Quick single-label print right from the edit form — the full "Narx
@@ -448,10 +449,10 @@ export default function ProductsScreen() {
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-gray-400">{t('products.barcode')}</label>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <span className="text-xs text-gray-400">{t('products.hasBarcodeQuestion')}</span>
-                      <button type="button" onClick={toggleHasBarcode}
-                        className={`w-10 h-5 rounded-full transition-colors relative ${form.barcode.trim() ? 'bg-primary' : 'bg-dark-border'}`}>
-                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${form.barcode.trim() ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      <span className="text-xs text-gray-400">{t('products.noBarcodeQuestion')}</span>
+                      <button type="button" onClick={toggleNoBarcode}
+                        className={`w-10 h-5 rounded-full transition-colors relative ${noBarcodeToggle ? 'bg-primary' : 'bg-dark-border'}`}>
+                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${noBarcodeToggle ? 'translate-x-5' : 'translate-x-0.5'}`} />
                       </button>
                     </label>
                   </div>
@@ -460,10 +461,6 @@ export default function ProductsScreen() {
                       <Input placeholder={t('products.scanOrType')}
                         value={form.barcode} onChange={(e) => f('barcode', e.target.value)} />
                     </div>
-                    <button type="button" title={t('products.generateBarcode')} onClick={generateBarcode}
-                      className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-dark-border text-gray-400 hover:text-white hover:border-primary">
-                      <Barcode size={16} />
-                    </button>
                     <button type="button" title={t('labels.print')} onClick={printThisLabel} disabled={printingLabel || !form.barcode.trim()}
                       className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-dark-border text-gray-400 hover:text-white hover:border-primary disabled:opacity-40 disabled:hover:text-gray-400 disabled:hover:border-dark-border">
                       <Tag size={16} />
