@@ -1,6 +1,7 @@
 import { fmtUZS } from '../../lib/currency'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { ArrowLeft, Trash2, Search, UserPlus, X, User, Tag } from 'lucide-react'
 import { useCartStore, cartLineTotal } from '../../store/cart.store'
 import { DiscountModal } from '../../components/pos/DiscountModal'
@@ -275,7 +276,9 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
 
       // Post-transaction: fire-and-forget side effects
       if (cashPayments.length > 0) {
-        window.electronAPI.printer.openCashDrawer().catch(console.error)
+        window.electronAPI.printer.openCashDrawer()
+          .then((r) => { if (!r.success) toast.error(r.error || t('settings.drawerFailed')) })
+          .catch(console.error)
       }
       window.electronAPI.sync.pushPending().catch(console.error)
       // Tells the debtor what they just took and their new total debt —
