@@ -28,3 +28,15 @@ export async function generateUniqueBarcode(): Promise<string> {
   }
   return code
 }
+
+/**
+ * True for a code this app minted itself: generateInternalBarcode() always
+ * starts with "20", GS1's reserved in-store range that a real manufacturer
+ * code never uses. Lets a caller tell "this product's own packaging has no
+ * barcode printed on it" apart from "someone typed or scanned a real one" —
+ * the first case still needs fresh stickers on every new delivery, the
+ * second doesn't.
+ */
+export function isGeneratedBarcode(code: string | null | undefined): boolean {
+  return !!code && /^20\d{11}$/.test(code)
+}

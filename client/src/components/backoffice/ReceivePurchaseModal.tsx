@@ -7,7 +7,7 @@ import { useAuthStore } from '../../store/auth.store'
 import { useBarcodeScanner } from '../../hooks/useBarcode'
 import { receivePurchaseOrder, type StockLocation } from '../../lib/purchases'
 import { fmtUZS } from '../../lib/currency'
-import { loadBarcodeAliasMap, generateUniqueBarcode } from '../../lib/productBarcodes'
+import { loadBarcodeAliasMap, generateUniqueBarcode, isGeneratedBarcode } from '../../lib/productBarcodes'
 import { labelsHtml, type LabelSize } from '../../lib/labels'
 
 interface Line {
@@ -144,13 +144,18 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
     const toPrint: Array<{ name: string; price: number; barcode: string; unit: string | null; copies: number; unitsPerPackage: number | null; piecePrice: number | null }> = []
     for (const line of lines) {
       const check = checks[line.id]
-      // Only a product that had no barcode of its own gets one minted and
-      // labelled here — one already carrying a real (or earlier-generated)
-      // barcode doesn't need another sticker just because more arrived.
-      if (!check || check.qty <= 0 || line.unit === 'kg' || line.barcode) continue
-      const barcode = await generateUniqueBarcode()
-      await window.electronAPI.db.exec(`UPDATE products SET barcode=?, updated_at=? WHERE id=?`, [barcode, now, line.product_id])
-      if (line.sync_id) await window.electronAPI.sync.enqueue('products', line.sync_id, 'upsert')
+      if (!check || check.qty <= 0 || line.unit === 'kg') continue
+      // A real (typed or scanned) barcode means the packaging already
+      // carries one — nothing to print. A system-generated code means this
+      // product's own packaging never had one, so every new delivery still
+      // needs fresh stickers, reusing that same code rather than minting a
+      // new one each time.
+      if (line.barcode && !isGeneratedBarcode(line.barcode)) continue
+      const barcode = line.barcode ?? await generateUniqueBarcode()
+      if (!line.barcode) {
+        await window.electronAPI.db.exec(`UPDATE products SET barcode=?, updated_at=? WHERE id=?`, [barcode, now, line.product_id])
+        if (line.sync_id) await window.electronAPI.sync.enqueue('products', line.sync_id, 'upsert')
+      }
       toPrint.push({
         name: line.name, price: line.price, barcode, unit: line.unit, copies: Math.max(1, Math.round(check.qty)),
         unitsPerPackage: line.units_per_package, piecePrice: line.piece_price,
