@@ -58,10 +58,6 @@ export default function ProductsScreen() {
   const [originalExtraBarcodes, setOriginalExtraBarcodes] = useState<string[]>([])
   const [newExtraBarcode, setNewExtraBarcode] = useState('')
   const [printingLabel, setPrintingLabel] = useState(false)
-  // Asked once per product, only while it has no barcode yet: whether to
-  // type/scan one or have one generated. Once answered, the normal editable
-  // barcode field shows either way — this only decides how it starts out.
-  const [barcodeChoice, setBarcodeChoice] = useState<'yes' | 'no' | null>(null)
   const navigate = useNavigate()
   const debouncedSearch = useDebouncedValue(search)
   // setSaving/setDeleting only disable the button on the *next* render — a
@@ -111,12 +107,10 @@ export default function ProductsScreen() {
 
   function openCreate() {
     setEditId(null); setForm(EMPTY_FORM); setExtraBarcodes([]); setOriginalExtraBarcodes([]); setNewExtraBarcode('')
-    setBarcodeChoice(null)
     setShowForm(true)
   }
   async function openEdit(p: Product) {
     setEditId(p.id)
-    setBarcodeChoice(p.barcode ? 'yes' : null)
     setForm({ name: p.name, sku: p.sku ?? '', barcode: p.barcode ?? '',
       category_id: p.category_id ? String(p.category_id) : '',
       price: String(p.price), cost: String(p.cost),
@@ -146,6 +140,13 @@ export default function ProductsScreen() {
 
   async function generateBarcode() {
     f('barcode', await generateUniqueBarcode())
+  }
+
+  // The barcode field doubles as its own on/off switch: empty = "no
+  // barcode" (switching on mints one), filled = "has one" (switching off
+  // clears it back out).
+  async function toggleHasBarcode() {
+    f('barcode', form.barcode.trim() ? '' : await generateUniqueBarcode())
   }
 
   // Quick single-label print right from the edit form — the full "Narx
@@ -443,36 +444,32 @@ export default function ProductsScreen() {
                 </div>
                 <Input label={t('products.sku')} placeholder={t('products.auto')}
                   value={form.sku} onChange={(e) => f('sku', e.target.value)} />
-                {barcodeChoice === null ? (
-                  <div>
-                    <label className="text-xs text-gray-400 mb-1 block">{t('products.hasBarcodeQuestion')}</label>
-                    <div className="flex gap-1.5">
-                      <button type="button" onClick={() => setBarcodeChoice('yes')}
-                        className="flex-1 h-10 rounded-lg border border-dark-border text-sm text-gray-300 hover:text-white hover:border-primary">
-                        {t('products.hasBarcodeYes')}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400">{t('products.barcode')}</label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <span className="text-xs text-gray-400">{t('products.hasBarcodeQuestion')}</span>
+                      <button type="button" onClick={toggleHasBarcode}
+                        className={`w-10 h-5 rounded-full transition-colors relative ${form.barcode.trim() ? 'bg-primary' : 'bg-dark-border'}`}>
+                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${form.barcode.trim() ? 'translate-x-5' : 'translate-x-0.5'}`} />
                       </button>
-                      <button type="button" onClick={async () => { setBarcodeChoice('no'); f('barcode', await generateUniqueBarcode()) }}
-                        className="flex-1 h-10 rounded-lg border border-dark-border text-sm text-gray-300 hover:text-white hover:border-primary">
-                        {t('products.hasBarcodeNo')}
-                      </button>
+                    </label>
+                  </div>
+                  <div className="flex items-end gap-1.5">
+                    <div className="flex-1">
+                      <Input placeholder={t('products.scanOrType')}
+                        value={form.barcode} onChange={(e) => f('barcode', e.target.value)} />
                     </div>
+                    <button type="button" title={t('products.generateBarcode')} onClick={generateBarcode}
+                      className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-dark-border text-gray-400 hover:text-white hover:border-primary">
+                      <Barcode size={16} />
+                    </button>
+                    <button type="button" title={t('labels.print')} onClick={printThisLabel} disabled={printingLabel || !form.barcode.trim()}
+                      className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-dark-border text-gray-400 hover:text-white hover:border-primary disabled:opacity-40 disabled:hover:text-gray-400 disabled:hover:border-dark-border">
+                      <Tag size={16} />
+                    </button>
                   </div>
-                ) : (
-                <div className="flex items-end gap-1.5">
-                  <div className="flex-1">
-                    <Input label={t('products.barcode')} placeholder={t('products.scanOrType')}
-                      value={form.barcode} onChange={(e) => f('barcode', e.target.value)} />
-                  </div>
-                  <button type="button" title={t('products.generateBarcode')} onClick={generateBarcode}
-                    className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-dark-border text-gray-400 hover:text-white hover:border-primary">
-                    <Barcode size={16} />
-                  </button>
-                  <button type="button" title={t('labels.print')} onClick={printThisLabel} disabled={printingLabel || !form.barcode.trim()}
-                    className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-dark-border text-gray-400 hover:text-white hover:border-primary disabled:opacity-40 disabled:hover:text-gray-400 disabled:hover:border-dark-border">
-                    <Tag size={16} />
-                  </button>
                 </div>
-                )}
                 <div className="col-span-2 space-y-1.5">
                   <label className="text-xs text-gray-400 block">{t('products.extraBarcodes')}</label>
                   {extraBarcodes.map((code) => (
