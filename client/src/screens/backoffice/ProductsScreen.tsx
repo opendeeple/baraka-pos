@@ -143,11 +143,13 @@ export default function ProductsScreen() {
 
   // A plain action switch, not a persisted state: flipping it on mints a
   // barcode right away (then it's just an ordinary editable field again,
-  // same as one that was typed or scanned in).
+  // same as one that was typed or scanned in). Flipping it back off clears
+  // that generated code back out — switched on by mistake, or changed their
+  // mind, shouldn't leave a barcode behind that nobody actually typed.
   async function toggleNoBarcode() {
     const next = !noBarcodeToggle
     setNoBarcodeToggle(next)
-    if (next) f('barcode', await generateUniqueBarcode())
+    f('barcode', next ? await generateUniqueBarcode() : '')
   }
 
   // Quick single-label print right from the edit form — the full "Narx
