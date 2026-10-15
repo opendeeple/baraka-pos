@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { logAudit } from './audit'
 import { averageCost, stockOnHand } from './stock'
+import { generateUniqueBarcode, isGeneratedBarcode } from './productBarcodes'
 
 // Purchase orders (Back office > Xaridlar): ordered → 'pending' (waiting for
 // the delivery) → checked line by line → 'received' into the shop or the
@@ -183,6 +184,56 @@ export async function receivePurchaseOrder(
     },
   })
   window.electronAPI.sync.pushPending().catch(() => {})
+}
+
+export interface LabelCandidate {
+  productId: number; name: string; barcode: string; unit: string | null
+  price: number; unitsPerPackage: number | null; piecePrice: number | null; qty: number
+}
+
+/**
+ * Products from a received order that still need a barcode sticker:
+ * one with no barcode of its own gets one minted and saved right here (so
+ * it's done once, whether this runs straight after receiving or later from
+ * a reprint); one whose code was only ever system-generated — the GS1
+ * "20…" in-store range, never a real manufacturer code — is included again
+ * too, since its packaging still never carries one. Loose kg goods are
+ * weighed and labelled at the scale when sold, never pre-stickered.
+ */
+export async function buildReceivingLabelCandidates(purchaseId: number): Promise<LabelCandidate[]> {
+  const now = new Date().toISOString()
+  const rows = await window.electronAPI.db.query(
+    `SELECT p.id AS product_id, p.name, p.barcode, p.sync_id, p.unit, p.units_per_package, p.piece_price,
+            pi.received_quantity,
+            COALESCE((SELECT price FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1), 0) AS price
+     FROM purchase_items pi JOIN products p ON p.id = pi.product_id
+     WHERE pi.purchase_id = ? AND pi.received_quantity IS NOT NULL AND pi.received_quantity > 0`,
+    [purchaseId]
+  ) as Array<{
+    product_id: number; name: string; barcode: string | null; sync_id: string | null
+    unit: string | null; units_per_package: number | null; piece_price: number | null
+    received_quantity: number; price: number
+  }>
+
+  const candidates: LabelCandidate[] = []
+  for (const row of rows) {
+    if (row.unit === 'kg') continue
+    if (row.barcode && !isGeneratedBarcode(row.barcode)) continue
+    const barcode = row.barcode ?? await generateUniqueBarcode()
+    if (!row.barcode) {
+      await window.electronAPI.db.exec(`UPDATE products SET barcode=?, updated_at=? WHERE id=?`, [barcode, now, row.product_id])
+      if (row.sync_id) await window.electronAPI.sync.enqueue('products', row.sync_id, 'upsert')
+    }
+    candidates.push({
+      productId: row.product_id, name: row.name, barcode, unit: row.unit,
+      price: Number(row.price),
+      unitsPerPackage: row.units_per_package != null ? Number(row.units_per_package) : null,
+      piecePrice: row.piece_price != null ? Number(row.piece_price) : null,
+      qty: Math.max(1, Math.round(Number(row.received_quantity))),
+    })
+  }
+  if (candidates.length) window.electronAPI.sync.pushPending().catch(() => {})
+  return candidates
 }
 
 /** Received orders of a supplier not yet fully paid, oldest first. */

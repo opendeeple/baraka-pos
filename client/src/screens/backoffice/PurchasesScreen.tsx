@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Plus, Search, Truck, PackageCheck, Printer, X, Banknote } from 'lucide-react'
+import { Plus, Search, Truck, PackageCheck, Printer, X, Banknote, Tag } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 import { Button, EmptyState, PageHeader } from '../../components/ui'
@@ -9,7 +9,8 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { PurchaseOrderModal } from '../../components/backoffice/PurchaseOrderModal'
 import { ReceivePurchaseModal } from '../../components/backoffice/ReceivePurchaseModal'
 import { SupplierPayModal } from '../../components/backoffice/SupplierPayModal'
-import { printPurchaseOrder } from '../../lib/purchases'
+import { ReceivingLabelsConfirmModal } from '../../components/backoffice/ReceivingLabelsConfirmModal'
+import { printPurchaseOrder, buildReceivingLabelCandidates, type LabelCandidate } from '../../lib/purchases'
 
 interface Purchase {
   id: number; reference_number: string; vendor_name: string | null; vendor_id: number | null
@@ -36,6 +37,8 @@ export default function PurchasesScreen() {
   const [receiving, setReceiving] = useState<Purchase | null>(null)
   const [paying, setPaying] = useState<{ id: number; name: string } | null>(null)
   const [printing, setPrinting] = useState(false)
+  const [labelCandidates, setLabelCandidates] = useState<LabelCandidate[] | null>(null)
+  const [buildingLabels, setBuildingLabels] = useState(false)
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search)
 
@@ -76,6 +79,18 @@ export default function PurchasesScreen() {
       if (res.success) toast.success(t('purchases.printed'))
       else toast.error(t('purchases.printFailed', { error: res.error ?? '' }))
     } finally { setPrinting(false) }
+  }
+
+  // A print that failed (or was skipped) earlier isn't lost — this rebuilds
+  // the same candidate list for an already-received order and reopens the
+  // same confirm step.
+  async function reprintLabels(po: Purchase) {
+    setBuildingLabels(true)
+    try {
+      const candidates = await buildReceivingLabelCandidates(po.id)
+      if (!candidates.length) { toast.info(t('labels.noneToLabel')); return }
+      setLabelCandidates(candidates)
+    } finally { setBuildingLabels(false) }
   }
 
   const placeName = (loc: string | null) =>
@@ -221,6 +236,12 @@ export default function PurchasesScreen() {
                 className="w-full flex items-center justify-center gap-2 border border-dark-border text-gray-300 hover:text-white rounded-xl py-2.5 text-sm transition-colors disabled:opacity-40">
                 <Printer size={14} /> {t('purchases.reprint')}
               </button>
+              {selected.status === 'received' && (
+                <button onClick={() => reprintLabels(selected)} disabled={buildingLabels}
+                  className="w-full flex items-center justify-center gap-2 border border-dark-border text-gray-300 hover:text-white rounded-xl py-2.5 text-sm transition-colors disabled:opacity-40">
+                  <Tag size={14} /> {t('labels.button')}
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -243,13 +264,17 @@ export default function PurchasesScreen() {
           purchaseId={receiving.id}
           reference={receiving.reference_number}
           onClose={() => setReceiving(null)}
-          onReceived={() => {
+          onReceived={(candidates) => {
             const po = receiving
             setReceiving(null)
             loadPurchases()
             if (po) openPurchase({ ...po, status: 'received' })
+            if (candidates.length) setLabelCandidates(candidates)
           }}
         />
+      )}
+      {labelCandidates && (
+        <ReceivingLabelsConfirmModal items={labelCandidates} onClose={() => setLabelCandidates(null)} />
       )}
     </BackOfficeLayout>
   )
