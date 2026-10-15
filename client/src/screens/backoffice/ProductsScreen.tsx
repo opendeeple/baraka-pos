@@ -445,27 +445,22 @@ export default function ProductsScreen() {
                 </div>
                 <Input label={t('products.sku')} placeholder={t('products.auto')}
                   value={form.sku} onChange={(e) => f('sku', e.target.value)} />
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-gray-400">{t('products.barcode')}</label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <span className="text-xs text-gray-400">{t('products.noBarcodeQuestion')}</span>
-                      <button type="button" onClick={toggleNoBarcode}
-                        className={`w-10 h-5 rounded-full transition-colors relative ${noBarcodeToggle ? 'bg-primary' : 'bg-dark-border'}`}>
-                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${noBarcodeToggle ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                      </button>
-                    </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-gray-400">{t('products.noBarcodeQuestion')}</label>
+                  <button type="button" onClick={toggleNoBarcode}
+                    className={`w-10 h-5 rounded-full transition-colors relative ${noBarcodeToggle ? 'bg-primary' : 'bg-dark-border'}`}>
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${noBarcodeToggle ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+                <div className="col-span-2 flex items-end gap-1.5">
+                  <div className="flex-1">
+                    <Input label={t('products.barcode')} placeholder={t('products.scanOrType')}
+                      value={form.barcode} onChange={(e) => f('barcode', e.target.value)} />
                   </div>
-                  <div className="flex items-end gap-1.5">
-                    <div className="flex-1">
-                      <Input placeholder={t('products.scanOrType')}
-                        value={form.barcode} onChange={(e) => f('barcode', e.target.value)} />
-                    </div>
-                    <button type="button" title={t('labels.print')} onClick={printThisLabel} disabled={printingLabel || !form.barcode.trim()}
-                      className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-dark-border text-gray-400 hover:text-white hover:border-primary disabled:opacity-40 disabled:hover:text-gray-400 disabled:hover:border-dark-border">
-                      <Tag size={16} />
-                    </button>
-                  </div>
+                  <button type="button" title={t('labels.print')} onClick={printThisLabel} disabled={printingLabel || !form.barcode.trim()}
+                    className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-dark-border text-gray-400 hover:text-white hover:border-primary disabled:opacity-40 disabled:hover:text-gray-400 disabled:hover:border-dark-border">
+                    <Tag size={16} />
+                  </button>
                 </div>
                 <div className="col-span-2 space-y-1.5">
                   <label className="text-xs text-gray-400 block">{t('products.extraBarcodes')}</label>
