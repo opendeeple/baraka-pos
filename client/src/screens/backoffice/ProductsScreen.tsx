@@ -11,7 +11,8 @@ import { logAudit } from '../../lib/audit'
 import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader, Select } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { resizeImageDataUrl } from '../../lib/image'
-import { generateInternalBarcode, labelsHtml } from '../../lib/labels'
+import { labelsHtml } from '../../lib/labels'
+import { generateUniqueBarcode } from '../../lib/productBarcodes'
 import { useAuthStore } from '../../store/auth.store'
 
 interface Product {
@@ -138,16 +139,7 @@ export default function ProductsScreen() {
   }
 
   async function generateBarcode() {
-    let code = generateInternalBarcode()
-    for (let i = 0; i < 5; i++) {
-      const [dup] = await window.electronAPI.db.query(
-        `SELECT 1 AS x FROM products WHERE barcode = ? UNION SELECT 1 FROM product_barcodes WHERE barcode = ? AND deleted_at IS NULL`,
-        [code, code]
-      ) as unknown[]
-      if (!dup) break
-      code = generateInternalBarcode()
-    }
-    f('barcode', code)
+    f('barcode', await generateUniqueBarcode())
   }
 
   // Quick single-label print right from the edit form — the full "Narx

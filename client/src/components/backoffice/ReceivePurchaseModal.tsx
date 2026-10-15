@@ -7,9 +7,13 @@ import { useAuthStore } from '../../store/auth.store'
 import { useBarcodeScanner } from '../../hooks/useBarcode'
 import { receivePurchaseOrder, type StockLocation } from '../../lib/purchases'
 import { fmtUZS } from '../../lib/currency'
-import { loadBarcodeAliasMap } from '../../lib/productBarcodes'
+import { loadBarcodeAliasMap, generateUniqueBarcode } from '../../lib/productBarcodes'
+import { labelsHtml } from '../../lib/labels'
 
-interface Line { id: number; product_id: number; name: string; barcode: string | null; quantity: number; unit_cost: number }
+interface Line {
+  id: number; product_id: number; name: string; barcode: string | null; quantity: number; unit_cost: number
+  sync_id: string | null; unit: string | null; units_per_package: number | null; piece_price: number | null; price: number
+}
 interface Check { qty: number; note: string | null }
 
 interface Props {
@@ -31,7 +35,7 @@ interface Props {
  */
 export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceived }: Props) {
   const { t } = useTranslation()
-  const { user } = useAuthStore()
+  const { user, store } = useAuthStore()
   const [location, setLocation] = useState<StockLocation | null>(null)
   const [lines, setLines] = useState<Line[]>([])
   const [checks, setChecks] = useState<Record<number, Check>>({})
@@ -50,11 +54,19 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
   useEffect(() => {
     loadBarcodeAliasMap().then(setAliasMap)
     window.electronAPI.db.query(
-      `SELECT pi.id, p.id AS product_id, p.name, p.barcode, pi.quantity, COALESCE(pi.unit_cost, 0) AS unit_cost FROM purchase_items pi
+      `SELECT pi.id, p.id AS product_id, p.name, p.barcode, pi.quantity, COALESCE(pi.unit_cost, 0) AS unit_cost,
+              p.sync_id, p.unit, p.units_per_package, p.piece_price,
+              COALESCE((SELECT price FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1), 0) AS price
+       FROM purchase_items pi
        JOIN products p ON p.id = pi.product_id WHERE pi.purchase_id = ? ORDER BY pi.id`,
       [purchaseId]
     ).then((rows) => {
-      const list = (rows as Line[]).map((r) => ({ ...r, quantity: Number(r.quantity), unit_cost: Number(r.unit_cost) }))
+      const list = (rows as Line[]).map((r) => ({
+        ...r, quantity: Number(r.quantity), unit_cost: Number(r.unit_cost),
+        units_per_package: r.units_per_package != null ? Number(r.units_per_package) : null,
+        piece_price: r.piece_price != null ? Number(r.piece_price) : null,
+        price: Number(r.price),
+      }))
       setLines(list)
       setPrices(Object.fromEntries(list.map((l) => [l.id, String(l.unit_cost)])))
     })
@@ -122,6 +134,38 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
   }
   const invoiceTotal = lines.reduce((s, l) => s + (checks[l.id]?.qty ?? 0) * priceOf(l), 0)
 
+  // Barcode-less products get one minted on arrival (so the delivery is
+  // scannable right away); one sticker per physical unit received — a box
+  // product carries box-level stock, so one label per box, not per piece
+  // inside it. Loose kg goods are weighed and labelled at the scale when
+  // sold, never pre-stickered, so they're skipped here.
+  async function printReceivingLabels() {
+    const now = new Date().toISOString()
+    const toPrint: Array<{ name: string; price: number; barcode: string; unit: string | null; copies: number; unitsPerPackage: number | null; piecePrice: number | null }> = []
+    for (const line of lines) {
+      const check = checks[line.id]
+      if (!check || check.qty <= 0 || line.unit === 'kg') continue
+      let barcode = line.barcode
+      if (!barcode) {
+        barcode = await generateUniqueBarcode()
+        await window.electronAPI.db.exec(`UPDATE products SET barcode=?, updated_at=? WHERE id=?`, [barcode, now, line.product_id])
+        if (line.sync_id) await window.electronAPI.sync.enqueue('products', line.sync_id, 'upsert')
+      }
+      toPrint.push({
+        name: line.name, price: line.price, barcode, unit: line.unit, copies: Math.max(1, Math.round(check.qty)),
+        unitsPerPackage: line.units_per_package, piecePrice: line.piece_price,
+      })
+    }
+    if (!toPrint.length) return
+    window.electronAPI.sync.pushPending().catch(() => {})
+    const html = labelsHtml(toPrint, '58x40', {
+      storeName: store?.name ?? '', perKg: t('labels.perKg'), perBox: t('labels.perBox'), perPiece: t('labels.perPiece'), currency: t('labels.currency'),
+    })
+    const res = await window.electronAPI.printer.printBadge(html)
+    if (res.success) toast.success(t('labels.printed', { count: toPrint.reduce((s, p) => s + p.copies, 0) }))
+    else if (res.error) toast.error(res.error)
+  }
+
   async function accept() {
     if (!location || !allChecked) return
     setSaving(true)
@@ -137,6 +181,7 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
       )
       toast.success(t('purchases.receivedInto', { place: placeName }))
       onReceived()
+      printReceivingLabels().catch((e) => toast.error(e instanceof Error ? e.message : String(e)))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
     } finally {

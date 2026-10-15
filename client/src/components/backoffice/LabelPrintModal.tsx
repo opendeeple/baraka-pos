@@ -6,8 +6,8 @@ import { Modal, Button, Select } from '../ui'
 import { fmtUZS } from '../../lib/currency'
 import { useAuthStore } from '../../store/auth.store'
 import { useBarcodeScanner } from '../../hooks/useBarcode'
-import { barcodeSvg, generateInternalBarcode, labelsHtml, LABEL_SIZES, type LabelSize } from '../../lib/labels'
-import { loadBarcodeAliasMap } from '../../lib/productBarcodes'
+import { barcodeSvg, labelsHtml, LABEL_SIZES, type LabelSize } from '../../lib/labels'
+import { loadBarcodeAliasMap, generateUniqueBarcode } from '../../lib/productBarcodes'
 
 interface Row {
   id: number; name: string; barcode: string | null; unit: string | null; price: number; sync_id: string | null
@@ -87,12 +87,7 @@ export function LabelPrintModal({ onClose }: { onClose: () => void }) {
   async function assignBarcodes() {
     const now = new Date().toISOString()
     for (const p of missing) {
-      let code = generateInternalBarcode()
-      for (let i = 0; i < 5; i++) {
-        const [dup] = await window.electronAPI.db.query(`SELECT 1 AS x FROM products WHERE barcode = ?`, [code]) as unknown[]
-        if (!dup) break
-        code = generateInternalBarcode()
-      }
+      const code = await generateUniqueBarcode()
       await window.electronAPI.db.exec(`UPDATE products SET barcode = ?, updated_at = ? WHERE id = ?`, [code, now, p.product.id])
       if (p.product.sync_id) await window.electronAPI.sync.enqueue('products', p.product.sync_id, 'upsert')
     }
