@@ -786,6 +786,7 @@
   "debt": {
     "enterValidAmount": "Введите корректную сумму",
     "cannotExceed": "Не более {{amount}}",
+    "changeDue": "Сдача: {{amount}}",
     "paymentFailed": "Оплата не прошла — попробуйте ещё раз",
     "totalDebt": "Общий долг",
     "repaymentAmount": "Сумма погашения (UZS)",

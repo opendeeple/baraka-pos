@@ -776,6 +776,7 @@
   "debt": {
     "enterValidAmount": "Enter a valid amount",
     "cannotExceed": "Cannot exceed {{amount}}",
+    "changeDue": "Change: {{amount}}",
     "paymentFailed": "Payment failed — please retry",
     "totalDebt": "Total Debt",
     "repaymentAmount": "Repayment Amount (UZS)",

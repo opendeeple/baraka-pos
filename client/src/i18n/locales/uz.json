@@ -771,6 +771,7 @@
   "debt": {
     "enterValidAmount": "To'g'ri summani kiriting",
     "cannotExceed": "{{amount}} dan oshmasin",
+    "changeDue": "Qaytim: {{amount}}",
     "paymentFailed": "To'lov amalga oshmadi — qaytadan urinib ko'ring",
     "totalDebt": "Jami qarz",
     "repaymentAmount": "To'lov summasi (UZS)",

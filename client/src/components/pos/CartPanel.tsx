@@ -148,8 +148,7 @@ export default function CartPanel({ onCheckout, onCloseRegister, onProductTap }:
             contact={selectedDebtor}
             onClose={() => setSelectedDebtor(null)}
             onPaymentComplete={loadDebtors}
-            onCleared={() => { setSelectedDebtor(null); loadDebtors() }}
-            onDeleted={() => { setSelectedDebtor(null); loadDebtors() }}
+            allowAdminActions={false}
           />
         ) : items.length === 0 ? (
           <>
