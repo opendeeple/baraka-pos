@@ -126,13 +126,14 @@ export default function PurchasesScreen() {
         <div className="flex-1 overflow-auto">
           <table className="w-full">
             <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-              <tr>{[t('purchases.poNumber'), t('suppliers.supplier'), t('purchases.amount'), t('common.status'), t('suppliers.payment'), t('common.date'), ''].map((h) => (
-                <th key={h} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
+              <tr>{['№', t('purchases.poNumber'), t('suppliers.supplier'), t('purchases.amount'), t('common.status'), t('suppliers.payment'), t('common.date'), ''].map((h, i) => (
+                <th key={i} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
               ))}</tr>
             </thead>
             <tbody className="divide-y divide-dark-border">
-              {purchases.map((po) => (
+              {purchases.map((po, i) => (
                 <tr key={po.id} onClick={() => openPurchase(po)} className="hover:bg-dark-card/40 cursor-pointer group">
+                  <td className="px-4 py-3 text-gray-500 text-sm">{i + 1}</td>
                   <td className="px-4 py-3 text-primary text-sm font-mono font-medium">{po.reference_number}</td>
                   <td className="px-4 py-3 text-gray-300 text-sm">{po.vendor_name ?? '—'}</td>
                   <td className="px-4 py-3 text-white text-sm font-semibold">UZS {fmtUZS(Number(po.total_amount))}</td>

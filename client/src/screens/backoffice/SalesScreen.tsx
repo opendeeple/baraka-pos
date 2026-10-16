@@ -291,14 +291,15 @@ export default function SalesScreen() {
         <div className="flex-1 overflow-auto">
           <table className="w-full">
             <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-              <tr>{[t('sales.invoice'), t('common.date'), t('sales.customer'), t('sales.cashier'), t('common.total'), t('common.status'), ''].map((h) => (
-                <th key={h} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
+              <tr>{['№', t('sales.invoice'), t('common.date'), t('sales.customer'), t('sales.cashier'), t('common.total'), t('common.status'), ''].map((h, i) => (
+                <th key={i} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
               ))}</tr>
             </thead>
             <tbody className="divide-y divide-dark-border">
-              {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={7} />)}
-              {!loading && sales.map((sale) => (
+              {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={8} />)}
+              {!loading && sales.map((sale, i) => (
                 <tr key={sale.id} onClick={() => loadDetail(sale.id)} className="hover:bg-dark-card/40 cursor-pointer group">
+                  <td className="px-4 py-3 text-gray-500 text-sm">{i + 1}</td>
                   <td className="px-4 py-3 text-primary text-sm font-mono font-medium">{sale.invoice_number}</td>
                   <td className="px-4 py-3 text-gray-400 text-sm">{sale.sale_date} <span className="text-gray-600 text-xs">
                     {new Date(sale.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></td>
@@ -452,6 +453,7 @@ export default function SalesScreen() {
               <table className="w-full text-sm mb-4">
                 <thead>
                   <tr className="text-gray-500 text-xs border-b border-dark-border">
+                    <th className="text-left pb-2 w-8">№</th>
                     <th className="text-left pb-2">{t('nav.products')}</th>
                     <th className="text-center pb-2 w-16">{t('sales.sold')}</th>
                     <th className="text-center pb-2 w-20">{t('sales.canReturn')}</th>
@@ -461,6 +463,7 @@ export default function SalesScreen() {
                 <tbody className="divide-y divide-dark-card">
                   {returnItems.map((item, i) => (
                     <tr key={item.saleItemId} className={item.maxQty === 0 ? 'opacity-40' : ''}>
+                      <td className="py-2.5 text-gray-500">{i + 1}</td>
                       <td className="py-2.5 text-gray-300">
                         {item.name}
                         <p className="text-xs text-gray-500">UZS {fmtUZS(item.refundEach)}</p>

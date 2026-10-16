@@ -280,14 +280,15 @@ export default function WarehouseScreen() {
       <div className="flex-1 overflow-auto">
         <table className="w-full">
           <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-            <tr>{[t('common.name'), t('common.category'), t('warehouse.expiry'), t('warehouse.shopQty'), t('warehouse.warehouseQty'), t('warehouse.value'), ''].map((h, i) => (
+            <tr>{['№', t('common.name'), t('common.category'), t('warehouse.expiry'), t('warehouse.shopQty'), t('warehouse.warehouseQty'), t('warehouse.value'), ''].map((h, i) => (
               <th key={i} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
             ))}</tr>
           </thead>
           <tbody className="divide-y divide-dark-border">
-            {loading && Array.from({ length: 6 }, (_, i) => <SkeletonRow key={i} cols={7} />)}
-            {!loading && displayRows.map((r) => (
+            {loading && Array.from({ length: 6 }, (_, i) => <SkeletonRow key={i} cols={8} />)}
+            {!loading && displayRows.map((r, i) => (
               <tr key={r.id} className="hover:bg-dark-card/40 group">
+                <td className="px-4 py-3 text-gray-500 text-sm">{i + 1}</td>
                 <td className="px-4 py-3 text-white text-sm font-medium">{r.name}</td>
                 <td className="px-4 py-3 text-gray-400 text-sm">{r.category_name ?? '—'}</td>
                 <td className="px-4 py-3 text-gray-400 text-sm">{r.expiry_date ? r.expiry_date.slice(0, 10) : '—'}</td>

@@ -144,14 +144,15 @@ export default function CategoriesScreen() {
       <div className="flex-1 overflow-auto">
         <table className="w-full">
           <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-            <tr>{[t('common.name'), t('common.description'), t('nav.products'), ''].map((h) => (
-              <th key={h} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
+            <tr>{['№', t('common.name'), t('common.description'), t('nav.products'), ''].map((h, i) => (
+              <th key={i} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
             ))}</tr>
           </thead>
           <tbody className="divide-y divide-dark-border">
-            {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={4} />)}
-            {!loading && categories.map((c) => (
+            {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={5} />)}
+            {!loading && categories.map((c, i) => (
               <tr key={c.id} className="hover:bg-dark-card/40 group">
+                <td className="px-4 py-3 text-gray-500 text-sm">{i + 1}</td>
                 <td className="px-4 py-3 text-white text-sm font-medium">{c.name}</td>
                 <td className="px-4 py-3 text-gray-400 text-sm">{c.description || '—'}</td>
                 <td className="px-4 py-3 text-gray-400 text-sm">{c.product_count}</td>

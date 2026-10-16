@@ -93,13 +93,14 @@ export default function SuppliersScreen() {
         <div className="flex-1 overflow-auto">
           <table className="w-full">
             <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-              <tr>{[t('suppliers.name'), t('common.phone'), t('suppliers.orders'), t('suppliers.bought'), t('suppliers.weOwe'), ''].map((h) => (
-                <th key={h} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
+              <tr>{['№', t('suppliers.name'), t('common.phone'), t('suppliers.orders'), t('suppliers.bought'), t('suppliers.weOwe'), ''].map((h, i) => (
+                <th key={i} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
               ))}</tr>
             </thead>
             <tbody className="divide-y divide-dark-border">
-              {rows.map((s) => (
+              {rows.map((s, i) => (
                 <tr key={s.id} onClick={() => open(s)} className={`cursor-pointer hover:bg-dark-card/40 ${selected?.id === s.id ? 'bg-dark-card/60' : ''}`}>
+                  <td className="px-4 py-3 text-gray-500 text-sm">{i + 1}</td>
                   <td className="px-4 py-3 text-white text-sm font-medium">{s.name}</td>
                   <td className="px-4 py-3 text-gray-400 text-sm">{s.phone ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-400 text-sm">{s.orders}</td>

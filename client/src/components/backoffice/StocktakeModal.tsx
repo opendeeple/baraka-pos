@@ -180,6 +180,7 @@ export function StocktakeModal({ onClose, onDone }: Props) {
             <table className="w-full">
               <thead className="sticky top-0 bg-dark-surface">
                 <tr className="text-left text-xs text-gray-500">
+                  <th className="py-2 font-medium w-8">№</th>
                   <th className="py-2 font-medium">{t('common.name')}</th>
                   <th className="py-2 font-medium text-right w-24">{t('stocktake.system')}</th>
                   <th className="py-2 font-medium text-right w-32">{t('stocktake.counted')}</th>
@@ -187,10 +188,11 @@ export function StocktakeModal({ onClose, onDone }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-dark-border/60">
-                {visible.map((r) => {
+                {visible.map((r, i) => {
                   const d = diffOf(r)
                   return (
                     <tr key={r.id}>
+                      <td className="py-2 pr-2 text-sm text-gray-500">{i + 1}</td>
                       <td className="py-2 pr-2 text-sm text-white truncate max-w-0 w-full">{r.name}</td>
                       <td className="py-2 text-sm text-gray-400 text-right">{r.system}</td>
                       <td className="py-1.5 pl-3">

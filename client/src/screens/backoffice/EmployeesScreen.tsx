@@ -355,6 +355,7 @@ export default function EmployeesScreen() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="text-gray-500 border-b border-dark-border">
+                        <th className="text-left pb-2">№</th>
                         <th className="text-left pb-2">{t('employees.period')}</th>
                         <th className="text-right pb-2">{t('common.amount')}</th>
                         <th className="text-right pb-2">{t('employees.paidAt')}</th>
@@ -362,8 +363,9 @@ export default function EmployeesScreen() {
                       </tr>
                     </thead>
                     <tbody>
-                      {salaryRecords.map((r) => (
+                      {salaryRecords.map((r, i) => (
                         <tr key={r.id} className="border-b border-dark-card">
+                          <td className="py-2 text-gray-500">{i + 1}</td>
                           <td className="py-2 text-gray-300">{r.period_from} — {r.period_to}</td>
                           <td className="py-2 text-right text-white font-medium">UZS {fmtUZS(Number(r.amount))}</td>
                           <td className="py-2 text-right text-gray-400">{r.paid_at.split('T')[0]}</td>

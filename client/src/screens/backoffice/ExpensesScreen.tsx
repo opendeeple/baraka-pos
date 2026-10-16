@@ -129,13 +129,14 @@ export default function ExpensesScreen() {
       <div className="flex-1 overflow-auto">
         <table className="w-full">
           <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-            <tr>{[t('common.date'), t('common.category'), t('common.description'), t('expenses.payment'), t('common.amount')].map((h) => (
-              <th key={h} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
+            <tr>{['№', t('common.date'), t('common.category'), t('common.description'), t('expenses.payment'), t('common.amount')].map((h, i) => (
+              <th key={i} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
             ))}</tr>
           </thead>
           <tbody className="divide-y divide-dark-border">
-            {expenses.map((e) => (
+            {expenses.map((e, i) => (
               <tr key={e.id} className="hover:bg-dark-card/40">
+                <td className="px-4 py-3 text-gray-500 text-sm">{i + 1}</td>
                 <td className="px-4 py-3 text-gray-400 text-sm">{e.expense_date}</td>
                 <td className="px-4 py-3">
                   <span className="text-xs px-2 py-0.5 rounded-full bg-dark-card text-gray-300 border border-dark-border">{tCategory(e.category)}</span>

@@ -321,6 +321,7 @@ export default function ReportsScreen() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-gray-500 border-b border-dark-border">
+                    <th className="text-left pb-2">№</th>
                     <th className="text-left pb-2">{t('nav.products')}</th>
                     <th className="text-left pb-2">{t('products.sku')}</th>
                     <th className="text-center pb-2">{t('common.stock')}</th>
@@ -328,8 +329,9 @@ export default function ReportsScreen() {
                   </tr>
                 </thead>
                 <tbody>
-                  {lowStock.map((item) => (
+                  {lowStock.map((item, i) => (
                     <tr key={item.productId} className="border-b border-dark-card">
+                      <td className="py-2 text-gray-500">{i + 1}</td>
                       <td className="py-2 text-white">{item.name}</td>
                       <td className="py-2 text-gray-400">{item.sku ?? '—'}</td>
                       <td className="py-2 text-center">

@@ -146,13 +146,14 @@ export function ProductAnalysis({ dateFrom, dateTo }: { dateFrom: string; dateTo
           <div>
             <table className="w-full">
               <thead className="bg-dark-surface">
-                <tr>{['', t('common.name'), t('analysis.sold'), t('dashboard.revenue'), t('analysis.share'), t('analysis.profit')].map((h, i) => (
+                <tr>{['№', '', t('common.name'), t('analysis.sold'), t('dashboard.revenue'), t('analysis.share'), t('analysis.profit')].map((h, i) => (
                   <th key={i} className="text-left px-3 py-2 text-xs text-gray-400 font-medium">{h}</th>
                 ))}</tr>
               </thead>
               <tbody className="divide-y divide-dark-border">
-                {shown.slice(0, abcLimit).map((r) => (
+                {shown.slice(0, abcLimit).map((r, i) => (
                   <tr key={r.id}>
+                    <td className="px-3 py-2 text-gray-500 text-sm">{i + 1}</td>
                     <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded text-xs font-bold ${tone[r.cls]}`}>{r.cls}</span></td>
                     <td className="px-3 py-2 text-white text-sm">{r.name}</td>
                     <td className="px-3 py-2 text-gray-300 text-sm">{Math.round(r.qty * 1000) / 1000}</td>

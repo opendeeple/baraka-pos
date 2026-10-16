@@ -229,15 +229,16 @@ export default function CreditorsScreen() {
       <div className="flex-1 overflow-auto">
         <table className="w-full">
           <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-            <tr>{[t('common.name'), t('common.phone'), t('common.amount'), t('creditors.returnAs'), t('creditors.receivedAt'),
+            <tr>{['№', t('common.name'), t('common.phone'), t('common.amount'), t('creditors.returnAs'), t('creditors.receivedAt'),
               t('creditors.dueDate'), t('creditors.remaining'), ''].map((h, i) => (
               <th key={i} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
             ))}</tr>
           </thead>
           <tbody className="divide-y divide-dark-border">
-            {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={8} />)}
-            {!loading && rows.map((c) => (
+            {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={9} />)}
+            {!loading && rows.map((c, i) => (
               <tr key={c.id} className="hover:bg-dark-card/40">
+                <td className="px-4 py-3 text-gray-500 text-sm">{i + 1}</td>
                 <td className="px-4 py-3 text-sm">
                   <p className="text-white font-medium">{c.name}</p>
                   {c.note && <p className="text-xs text-gray-500 truncate max-w-[220px]" title={c.note}>{c.note}</p>}

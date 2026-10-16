@@ -101,14 +101,15 @@ export default function DebtorsScreen() {
       <div className="flex-1 overflow-auto">
         <table className="w-full">
           <thead className="sticky top-0 bg-dark-surface border-b border-dark-border">
-            <tr>{[t('common.name'), t('common.phone'), t('debtors.lastPurchase'), t('customers.balanceCol'), t('debtors.telegramCol'), t('debtors.reminderInterval'), ''].map((h) => (
-              <th key={h} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
+            <tr>{['№', t('common.name'), t('common.phone'), t('debtors.lastPurchase'), t('customers.balanceCol'), t('debtors.telegramCol'), t('debtors.reminderInterval'), ''].map((h, i) => (
+              <th key={i} className="text-left px-4 py-3 text-xs text-gray-400 font-medium uppercase tracking-wider">{h}</th>
             ))}</tr>
           </thead>
           <tbody className="divide-y divide-dark-border">
-            {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={7} />)}
-            {!loading && debtors.map((d) => (
+            {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={8} />)}
+            {!loading && debtors.map((d, i) => (
               <tr key={d.id} className="hover:bg-dark-card/40 group">
+                <td className="px-4 py-3 text-gray-500 text-sm">{i + 1}</td>
                 <td className="px-4 py-3 text-white text-sm font-medium">{d.name}</td>
                 <td className="px-4 py-3 text-gray-400 text-sm">{d.phone ?? '—'}</td>
                 <td className="px-4 py-3 text-gray-400 text-sm">
