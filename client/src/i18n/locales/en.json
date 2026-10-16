@@ -72,6 +72,9 @@
     "debtSaleNotify": "Automatic Message on Debt Sales",
     "debtSaleNotifyHint": "When a customer buys on credit, they immediately get the list of items and their total debt. Sent via Telegram if connected, otherwise by SMS to their phone number.",
     "debtSaleNotifyEnabled": "Send a message on debt sales",
+    "debtOverdueTitle": "Debt overdue threshold",
+    "debtOverdueHint": "If a customer goes this many days with no payment and no new credit purchase, they're flagged as overdue — shown red in Debtors/Customers, and warned about in POS before giving them more credit.",
+    "debtOverdueDays": "Days",
     "debtPaymentNotify": "Automatic Message on Debt Payment",
     "debtPaymentNotifyHint": "When a customer repays (fully or partially), they immediately get how much they paid and how much debt remains. Sent via Telegram if connected, otherwise by SMS to their phone number.",
     "debtPaymentNotifyEnabled": "Send a message on debt repayment",
@@ -413,6 +416,7 @@
     "lastDiffer": "⚠ {{name}}: {{qty}} arrived — {{note}}"
   },
   "debtors": {
+    "overdue": "Overdue",
     "sortBalanceDesc": "Debt (highest first)",
     "sortBalanceAsc": "Debt (lowest first)",
     "sortName": "By name",
@@ -742,6 +746,7 @@
     "methodClick": "Click",
     "methodDebt": "Debt",
     "currentDebt": "Current debt: {{amount}}",
+    "overdueDebtorWarning": "Warning: this customer has fallen behind — no payment or new credit purchase in a while. Think it over before extending more credit.",
     "searchNameOrPhone": "Search by name or phone...",
     "createNewContact": "Create new contact",
     "debtAmount": "Debt: {{amount}}",

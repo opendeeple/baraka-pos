@@ -142,6 +142,7 @@ export default function SettingsScreen() {
   const [debtSaleNotify, setDebtSaleNotify] = useState<DebtSaleNotifyConfig>({ enabled: true })
   // Default on — matches debtNotify.service.ts's DEFAULT_PAYMENT_CONFIG.
   const [debtPaymentNotify, setDebtPaymentNotify] = useState<DebtPaymentNotifyConfig>({ enabled: true })
+  const [debtOverdueDays, setDebtOverdueDays] = useState('30')
   // Default on — matches creditorReminder.service.ts's DEFAULT_CONFIG.
   const [creditorReminder, setCreditorReminder] = useState<CreditorReminderConfig>({ enabled: true, ownerPhone: '' })
   const [receivingLabel, setReceivingLabel] = useState<ReceivingLabelConfig>({ mode: 'sticker', size: '58x40' })
@@ -228,6 +229,7 @@ export default function SettingsScreen() {
     if (map.debt_payment_notify_config) {
       try { setDebtPaymentNotify({ enabled: true, ...JSON.parse(map.debt_payment_notify_config) }) } catch {}
     }
+    if (map.debt_overdue_days) setDebtOverdueDays(map.debt_overdue_days)
     if (map.creditor_reminder_config) {
       try { setCreditorReminder({ enabled: true, ownerPhone: '', ...JSON.parse(map.creditor_reminder_config) }) } catch {}
     }
@@ -282,6 +284,7 @@ export default function SettingsScreen() {
       await saveSetting('auto_reminder_config', JSON.stringify(autoReminder))
       await saveSetting('debt_sale_notify_config', JSON.stringify(debtSaleNotify))
       await saveSetting('debt_payment_notify_config', JSON.stringify(debtPaymentNotify))
+      await saveSetting('debt_overdue_days', String(Number(debtOverdueDays) > 0 ? Number(debtOverdueDays) : 30))
       await saveSetting('creditor_reminder_config', JSON.stringify(creditorReminder))
       await saveSetting('receiving_label_config', JSON.stringify(receivingLabel))
       const prefixes = splitPrefixes(scalePrefixes)
@@ -622,6 +625,18 @@ export default function SettingsScreen() {
             />
             {t('settings.debtSaleNotifyEnabled')}
           </label>
+        </div>
+
+        {/* Flags a debtor as overdue (red in Debtors/Customers, a warning in
+            POS before giving them more credit) once this many days pass with
+            no payment and no new debt sale — see lib/debt.ts isOverdueSql. */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm flex items-center gap-2"><BellRing size={15} /> {t('settings.debtOverdueTitle')}</h2>
+          <p className="text-xs text-gray-500">{t('settings.debtOverdueHint')}</p>
+          <div className="max-w-[200px]">
+            <label className={LABEL_CLS}>{t('settings.debtOverdueDays')}</label>
+            <input type="number" min={1} value={debtOverdueDays} onChange={(e) => setDebtOverdueDays(e.target.value)} className={INPUT_CLS} />
+          </div>
         </div>
 
         {/* Instant debt-payment confirmation — sent by debtNotify.service.ts

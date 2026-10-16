@@ -72,6 +72,9 @@
     "debtSaleNotify": "Qarzga savdoda avtomatik xabar",
     "debtSaleNotifyHint": "Mijoz qarzga xarid qilganda unga darhol olgan narsalari ro'yxati va umumiy qarzi yuboriladi. Telegram ulangan bo'lsa Telegram orqali, aks holda telefon raqamiga SMS orqali yuboriladi.",
     "debtSaleNotifyEnabled": "Qarzga savdoda xabar yuborish",
+    "debtOverdueTitle": "Qarz kechikish muddati",
+    "debtOverdueHint": "Mijoz shuncha kun ichida to'lov qilmasa yoki yangi qarz olmasa, u \"kechikkan\" deb belgilanadi — Qarzdorlar/Mijozlar jadvalida qizil bo'lib chiqadi, POS'da esa unga yana qarz berishdan oldin ogohlantiradi.",
+    "debtOverdueDays": "Kun",
     "debtPaymentNotify": "Qarz to'langanda avtomatik xabar",
     "debtPaymentNotifyHint": "Mijoz qarzini (to'liq yoki qisman) to'laganda, unga qancha to'lagani va qancha qarzi qolganini darhol xabar qiladi. Telegram ulangan bo'lsa Telegram orqali, aks holda telefon raqamiga SMS orqali yuboriladi.",
     "debtPaymentNotifyEnabled": "Qarz to'langanda xabar yuborish",
@@ -409,6 +412,7 @@
     "lastDiffer": "⚠ {{name}}: {{qty}} ta keldi — {{note}}"
   },
   "debtors": {
+    "overdue": "Kechikkan",
     "sortBalanceDesc": "Qarz (ko'pdan kamga)",
     "sortBalanceAsc": "Qarz (kamdan ko'pga)",
     "sortName": "Ism bo'yicha",
@@ -737,6 +741,7 @@
     "methodClick": "Click",
     "methodDebt": "Nasiya",
     "currentDebt": "Joriy qarz: {{amount}}",
+    "overdueDebtorWarning": "Diqqat: bu mijoz to'lovlarni kechiktirgan — qarzini uzoq vaqtdan beri to'lamagan yoki yangi qarz olmagan. Yana qarzga sotishdan oldin yaxshilab o'ylab ko'ring.",
     "searchNameOrPhone": "Ism yoki telefon bo'yicha qidiring...",
     "createNewContact": "Yangi mijoz qo'shish",
     "debtAmount": "Qarz: {{amount}}",

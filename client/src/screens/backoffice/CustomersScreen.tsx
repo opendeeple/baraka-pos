@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useTranslation } from 'react-i18next'
-import { Search, Plus, X, Star, ShoppingBag, Users, Edit2, Banknote, MessageCircle } from 'lucide-react'
+import { Search, Plus, X, Star, ShoppingBag, Users, Edit2, Banknote, MessageCircle, AlertTriangle } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { DebtHistoryPanel } from '../../components/pos/DebtHistoryDrawer'
 import { SendMessageModal } from '../../components/backoffice/SendMessageModal'
+import { isOverdueSql, loadDebtOverdueDays } from '../../lib/debt'
 
 interface Customer {
   id: number; name: string; phone: string | null; email: string | null
   balance: number; loyalty_points_balance: number; type: string; created_at: string
-  total_sales: number; sale_count: number; server_id: number | null
+  total_sales: number; sale_count: number; server_id: number | null; is_overdue: number
 }
 
 interface CustomerForm { name: string; phone: string; email: string; address: string }
@@ -36,11 +37,13 @@ export default function CustomersScreen() {
   useEffect(() => { loadCustomers() }, [debouncedSearch])
 
   async function loadCustomers() {
+    const overdueDays = await loadDebtOverdueDays()
     let sql = `
       SELECT c.id, c.name, c.phone, c.email, c.balance, c.loyalty_points_balance, c.type, c.created_at,
              c.server_id,
              COALESCE(SUM(s.total_amount), 0) as total_sales,
-             COUNT(s.id) as sale_count
+             COUNT(s.id) as sale_count,
+             ${isOverdueSql('c.id', 'c.balance', overdueDays)} as is_overdue
       FROM contacts c
       LEFT JOIN sales s ON s.contact_id = c.id AND s.status != 'cancelled'
       WHERE c.type IN ('customer','both') AND c.deleted_at IS NULL`
@@ -142,10 +145,17 @@ export default function CustomersScreen() {
             <tbody className="divide-y divide-dark-border">
               {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={8} />)}
               {!loading && customers.map((c, i) => (
-                <tr key={c.id} onClick={() => openCustomer(c)} className="hover:bg-dark-card/40 cursor-pointer group">
+                <tr key={c.id} onClick={() => openCustomer(c)} className={`cursor-pointer group hover:bg-dark-card/40 ${c.is_overdue ? 'bg-red-500/10 hover:bg-red-500/15' : ''}`}>
                   <td className="px-4 py-3 text-gray-500 text-sm">{i + 1}</td>
                   <td className="px-4 py-3">
-                    <p className="text-white text-sm font-medium">{c.name}</p>
+                    <p className="text-white text-sm font-medium">
+                      {c.name}
+                      {!!c.is_overdue && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded-full align-middle">
+                          <AlertTriangle size={10} /> {t('debtors.overdue')}
+                        </span>
+                      )}
+                    </p>
                     {c.email && <p className="text-gray-500 text-xs">{c.email}</p>}
                   </td>
                   <td className="px-4 py-3 text-gray-400 text-sm">{c.phone ?? '—'}</td>

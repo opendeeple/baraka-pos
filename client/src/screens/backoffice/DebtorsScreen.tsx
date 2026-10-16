@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, Users2, MessageCircle, CheckCircle2, XCircle, History } from 'lucide-react'
+import { Search, Users2, MessageCircle, CheckCircle2, XCircle, History, AlertTriangle } from 'lucide-react'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
-import { OPEN_DEBT_CONDITION } from '../../lib/debt'
+import { OPEN_DEBT_CONDITION, isOverdueSql, loadDebtOverdueDays } from '../../lib/debt'
 import { PageHeader, EmptyState, SkeletonRow, Select, Modal } from '../../components/ui'
 import { SendMessageModal } from '../../components/backoffice/SendMessageModal'
 import { DebtHistoryPanel } from '../../components/pos/DebtHistoryDrawer'
@@ -12,7 +12,7 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 interface Debtor {
   id: number; server_id: number | null; name: string; phone: string | null
   balance: number; last_sale_at: string | null; telegram_chat_id: string | null
-  reminder_interval_days: number | null
+  reminder_interval_days: number | null; is_overdue: number
 }
 
 type SortBy = 'balance_desc' | 'balance_asc' | 'name'
@@ -41,9 +41,11 @@ export default function DebtorsScreen() {
   }, [debouncedSearch, sortBy])
 
   async function loadDebtors(silent = false) {
+    const overdueDays = await loadDebtOverdueDays()
     let sql = `
       SELECT c.id, c.server_id, c.name, c.phone, c.balance, c.telegram_chat_id, c.reminder_interval_days,
-             (SELECT MAX(s.created_at) FROM sales s WHERE s.contact_id = c.id) as last_sale_at
+             (SELECT MAX(s.created_at) FROM sales s WHERE s.contact_id = c.id) as last_sale_at,
+             ${isOverdueSql('c.id', 'c.balance', overdueDays)} as is_overdue
       FROM contacts c
       WHERE c.type IN ('customer','both') AND c.deleted_at IS NULL AND ${OPEN_DEBT_CONDITION}`
     const params: unknown[] = []
@@ -108,9 +110,16 @@ export default function DebtorsScreen() {
           <tbody className="divide-y divide-dark-border">
             {loading && Array.from({ length: 5 }, (_, i) => <SkeletonRow key={i} cols={8} />)}
             {!loading && debtors.map((d, i) => (
-              <tr key={d.id} className="hover:bg-dark-card/40 group">
+              <tr key={d.id} className={`group hover:bg-dark-card/40 ${d.is_overdue ? 'bg-red-500/10 hover:bg-red-500/15' : ''}`}>
                 <td className="px-4 py-3 text-gray-500 text-sm">{i + 1}</td>
-                <td className="px-4 py-3 text-white text-sm font-medium">{d.name}</td>
+                <td className="px-4 py-3 text-white text-sm font-medium">
+                  {d.name}
+                  {!!d.is_overdue && (
+                    <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded-full align-middle">
+                      <AlertTriangle size={10} /> {t('debtors.overdue')}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-gray-400 text-sm">{d.phone ?? '—'}</td>
                 <td className="px-4 py-3 text-gray-400 text-sm">
                   {d.last_sale_at ? new Date(d.last_sale_at).toLocaleDateString() : '—'}

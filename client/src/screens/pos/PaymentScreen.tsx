@@ -2,7 +2,7 @@ import { fmtUZS } from '../../lib/currency'
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { ArrowLeft, Trash2, Search, UserPlus, X, User, Tag } from 'lucide-react'
+import { ArrowLeft, Trash2, Search, UserPlus, X, User, Tag, AlertTriangle } from 'lucide-react'
 import { useCartStore, cartLineTotal } from '../../store/cart.store'
 import { DiscountModal } from '../../components/pos/DiscountModal'
 import { logAudit } from '../../lib/audit'
@@ -14,6 +14,7 @@ import { NumPad } from '../../components/pos/NumPad'
 import { ReceiptModal } from '../../components/pos/ReceiptModal'
 import { v4 as uuidv4 } from 'uuid'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import { isOverdueSql, loadDebtOverdueDays } from '../../lib/debt'
 
 const PAYMENT_METHODS: { method: PaymentMethod; labelKey: string; icon: string }[] = [
   { method: 'Cash',  labelKey: 'payment.methodCash',  icon: '💵' },
@@ -27,6 +28,7 @@ interface ContactResult {
   name: string
   phone: string | null
   balance: number
+  is_overdue?: number
 }
 
 interface Props {
@@ -57,6 +59,8 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
   const [newContactPhone, setNewContactPhone] = useState('')
   const [savingContact, setSavingContact] = useState(false)
   const debouncedContactSearch = useDebouncedValue(contactSearch)
+  const [overdueDays, setOverdueDays] = useState(30)
+  useEffect(() => { loadDebtOverdueDays().then(setOverdueDays) }, [])
 
   const total = getFinalTotal()
   const subtotal = getSubtotal()
@@ -64,7 +68,9 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
   const paid = payments.reduce((s, p) => s + p.amount, 0)
   const remaining = Math.max(0, total - paid)
   const change = Math.max(0, paid - total)
-  const isFullyPaid = paid >= total && payments.length > 0
+  // A fully-discounted cart (total 0) needs no payment entry at all to
+  // complete — nothing is being collected either way.
+  const isFullyPaid = total === 0 || (paid >= total && payments.length > 0)
   const hasDebtPayment = payments.some((p) => p.paymentMethod === 'Debt')
   const canComplete = isFullyPaid && (!hasDebtPayment || debtContact !== null)
 
@@ -82,12 +88,13 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
   useEffect(() => {
     if (selectedMethod !== 'Debt' || debtContact) return
     const q = debouncedContactSearch.trim()
+    const overdueCol = `, ${isOverdueSql('c.id', 'c.balance', overdueDays)} as is_overdue`
     const sql = q
-      ? `SELECT id, name, phone, balance FROM contacts WHERE type IN ('customer','both') AND deleted_at IS NULL AND (name LIKE ? OR phone LIKE ?) ORDER BY name LIMIT 20`
-      : `SELECT id, name, phone, balance FROM contacts WHERE type IN ('customer','both') AND deleted_at IS NULL ORDER BY name LIMIT 20`
+      ? `SELECT c.id, c.name, c.phone, c.balance${overdueCol} FROM contacts c WHERE c.type IN ('customer','both') AND c.deleted_at IS NULL AND (c.name LIKE ? OR c.phone LIKE ?) ORDER BY c.name LIMIT 20`
+      : `SELECT c.id, c.name, c.phone, c.balance${overdueCol} FROM contacts c WHERE c.type IN ('customer','both') AND c.deleted_at IS NULL ORDER BY c.name LIMIT 20`
     window.electronAPI.db.query(sql, q ? [`%${q}%`, `%${q}%`] : [])
       .then((rows) => setContactResults(rows as ContactResult[]))
-  }, [debouncedContactSearch, selectedMethod, debtContact])
+  }, [debouncedContactSearch, selectedMethod, debtContact, overdueDays])
 
   function addPayment() {
     if (selectedMethod === 'Debt' && !debtContact) {
@@ -161,7 +168,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
   async function processPayment(overridePayments?: PaymentEntry[]) {
     const effectivePayments = overridePayments ?? payments
     const effectivePaid = effectivePayments.reduce((s, p) => s + p.amount, 0)
-    const effectiveFullyPaid = effectivePaid >= total && effectivePayments.length > 0
+    const effectiveFullyPaid = total === 0 || (effectivePaid >= total && effectivePayments.length > 0)
     const effectiveHasDebt = effectivePayments.some((p) => p.paymentMethod === 'Debt')
 
     if (!effectiveFullyPaid) { setError(t('payment.insufficientAmount')); return }
@@ -505,12 +512,19 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                     setDebtContact(null)
                     setPayments((prev) => prev.filter((p) => p.paymentMethod !== 'Debt'))
                   }}
-                  className="text-gray-500 hover:text-red-400 transition-colors ml-2 shrink-0"
+                  className="text-gray-500 hover:text-red-400 transition-colors ml-2 shrink-0 self-start"
                 >
                   <X size={16} />
                 </button>
               </div>
-            ) : (
+            ) : null}
+            {debtContact && !!debtContact.is_overdue && (
+              <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/40 rounded-xl p-3 shrink-0">
+                <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-red-300">{t('payment.overdueDebtorWarning')}</p>
+              </div>
+            )}
+            {!debtContact && (
               /* Contact search + create */
               <>
                 <div className="flex gap-2 shrink-0">
@@ -549,9 +563,18 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
                           setContactResults([])
                           setShowCreateContact(false)
                         }}
-                        className="w-full text-left bg-dark-card border border-dark-border hover:border-primary/40 rounded-xl px-3 py-2.5 transition-colors"
+                        className={`w-full text-left border rounded-xl px-3 py-2.5 transition-colors ${
+                          c.is_overdue ? 'bg-red-500/10 border-red-500/40 hover:border-red-400/60' : 'bg-dark-card border-dark-border hover:border-primary/40'
+                        }`}
                       >
-                        <p className="text-white text-sm font-medium">{c.name}</p>
+                        <p className="text-white text-sm font-medium">
+                          {c.name}
+                          {!!c.is_overdue && (
+                            <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-semibold text-red-400 bg-red-500/15 px-1.5 py-0.5 rounded-full align-middle">
+                              <AlertTriangle size={10} /> {t('debtors.overdue')}
+                            </span>
+                          )}
+                        </p>
                         {c.phone && <p className="text-gray-400 text-xs">{c.phone}</p>}
                         {c.balance > 0 && (
                           <p className="text-yellow-400 text-xs">{t('payment.debtAmount', { amount: `UZS ${fmtUZS(c.balance)}` })}</p>
