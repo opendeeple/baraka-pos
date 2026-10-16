@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Trash2, Pause, ShoppingBag, Plus, Minus, LogOut, Tag, X, ChevronDown, Search, Zap } from 'lucide-react'
+import { Trash2, Pause, ShoppingBag, Plus, Minus, LogOut, Tag, X, ChevronDown, Search, Zap, Package } from 'lucide-react'
 import { useCartStore, cartLineTotal } from '../../store/cart.store'
 import { fmtUZS } from '../../lib/currency'
 import { HeldOrdersPanel } from './HeldOrdersDrawer'
@@ -12,6 +12,14 @@ import { Modal, Button } from '../ui'
 import { Debtor } from '../../types/pos.types'
 import { OPEN_DEBT_CONDITION } from '../../lib/debt'
 import type { LocalProduct } from './ProductGrid'
+
+// Same palette as ProductGrid's placeholder blocks, so a quick-sell card
+// without a photo still matches the main grid's look.
+const QUICK_SELL_COLORS = [
+  'bg-orange-500/20', 'bg-blue-500/20', 'bg-green-500/20',
+  'bg-purple-500/20', 'bg-pink-500/20', 'bg-yellow-500/20',
+  'bg-cyan-500/20', 'bg-red-500/20',
+]
 
 interface Props {
   onCheckout: () => void
@@ -237,10 +245,19 @@ export default function CartPanel({ onCheckout, onCloseRegister, onProductTap }:
                         <button
                           key={p.id}
                           onClick={() => onProductTap(p)}
-                          className="flex flex-col items-start bg-dark-card border border-dark-border rounded-xl px-3 py-2.5 active:border-primary/40 transition-colors text-left"
+                          className="flex items-center gap-2 bg-dark-card border border-dark-border rounded-xl px-2.5 py-2 active:border-primary/40 transition-colors text-left"
                         >
-                          <span className="text-white text-sm font-medium truncate w-full">{p.name}</span>
-                          <span className="text-primary text-xs font-semibold mt-0.5">UZS {fmtUZS(p.price ?? 0)}</span>
+                          <div className={`w-9 h-9 rounded-lg shrink-0 flex items-center justify-center overflow-hidden ${QUICK_SELL_COLORS[p.id % QUICK_SELL_COLORS.length]}`}>
+                            {p.image_url ? (
+                              <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+                            ) : (
+                              <Package size={16} className="text-white/40" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-white text-sm font-medium truncate">{p.name}</p>
+                            <p className="text-primary text-xs font-semibold">UZS {fmtUZS(p.price ?? 0)}</p>
+                          </div>
                         </button>
                       ))}
                     </div>
