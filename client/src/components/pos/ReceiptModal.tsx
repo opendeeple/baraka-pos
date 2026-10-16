@@ -10,6 +10,12 @@ interface Props {
   onClose: () => void
 }
 
+// The preview renders at the receipt's real physical paper width (so what's
+// on screen matches what prints), which on a narrow 58mm roll looks cramped
+// in a modal. Scaling it up is purely cosmetic — the print itself still goes
+// out through printer.print() at the real size, untouched by this.
+const PREVIEW_SCALE = 1.4
+
 /**
  * Always-visible confirmation that a sale went through, regardless of
  * whether a physical receipt printer is configured on this terminal. The
@@ -57,7 +63,7 @@ export function ReceiptModal({ receipt, onClose }: Props) {
       open
       onClose={onClose}
       title={t('receipt.saleComplete')}
-      maxWidth="max-w-sm"
+      maxWidth="max-w-md"
       footer={
         <>
           <Button
@@ -75,16 +81,24 @@ export function ReceiptModal({ receipt, onClose }: Props) {
     >
       <div className="max-h-[65vh] overflow-y-auto mx-4 mb-4 flex justify-center">
         {preview && (
-          // No allow-scripts: the receipt is static markup; same-origin only
-          // so onLoad can measure it and size the frame to the full receipt.
-          <iframe
-            title={t('receipt.saleComplete')}
-            srcDoc={preview.html}
-            sandbox="allow-same-origin"
-            onLoad={(e) => setPreviewHeight(e.currentTarget.contentDocument?.documentElement.scrollHeight ?? 0)}
-            className="block shrink-0 bg-white rounded-sm shadow-lg"
-            style={{ width: `${preview.paperWidthMm}mm`, height: previewHeight }}
-          />
+          <div
+            className="shrink-0"
+            style={{ width: `calc(${preview.paperWidthMm}mm * ${PREVIEW_SCALE})`, height: previewHeight * PREVIEW_SCALE }}
+          >
+            {/* No allow-scripts: the receipt is static markup; same-origin
+                only so onLoad can measure it and size the frame to the full
+                receipt. Rendered at its real paper size, then visually
+                scaled up — the html/paperWidthMm fed to the real printer
+                (handlePrint below) are untouched by this. */}
+            <iframe
+              title={t('receipt.saleComplete')}
+              srcDoc={preview.html}
+              sandbox="allow-same-origin"
+              onLoad={(e) => setPreviewHeight(e.currentTarget.contentDocument?.documentElement.scrollHeight ?? 0)}
+              className="block bg-white rounded-sm shadow-lg origin-top-left"
+              style={{ width: `${preview.paperWidthMm}mm`, height: previewHeight, transform: `scale(${PREVIEW_SCALE})` }}
+            />
+          </div>
         )}
       </div>
     </Modal>
