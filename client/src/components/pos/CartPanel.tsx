@@ -84,11 +84,13 @@ export default function CartPanel({ onCheckout, onCloseRegister, onProductTap }:
     if (items.length > 0) return
     loadDebtors()
     loadFeaturedProducts()
-    // Repayments and deleted debts also arrive from other devices via sync;
-    // a cheap local re-read keeps the list current without a click.
-    const timer = setInterval(loadDebtors, 10_000)
+    // Repayments and deleted debts also arrive from other devices via sync,
+    // and a product's "Tezkor sotuvda" flag can be flipped in Office at any
+    // time (same local database, no sync round-trip needed on one machine)
+    // — a cheap local re-read keeps both lists current without a click.
+    const timer = setInterval(() => { loadDebtors(); loadFeaturedProducts() }, 10_000)
     return () => clearInterval(timer)
-  }, [items.length, loadDebtors])
+  }, [items.length, loadDebtors, loadFeaturedProducts])
 
   return (
     <>
