@@ -27,7 +27,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   printer: {
     print: (receiptData: unknown) => ipcRenderer.invoke('printer:print', receiptData),
     receiptHtml: (receiptData: unknown) => ipcRenderer.invoke('printer:receiptHtml', receiptData),
-    printBadge: (html: string) => ipcRenderer.invoke('printer:printBadge', html),
+    printBadge: (html: string, pageSizeMm?: { width: number; height: number }) =>
+      ipcRenderer.invoke('printer:printBadge', html, pageSizeMm),
     printShoppingList: (items: Array<{ name: string; qty: number; cost: number }>, meta?: { title?: string; reference?: string }) =>
       ipcRenderer.invoke('printer:printShoppingList', items, meta),
     printReport: (doc: unknown) => ipcRenderer.invoke('printer:printReport', doc),

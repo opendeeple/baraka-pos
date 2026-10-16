@@ -62,7 +62,7 @@ export function BadgeCard({ employee, storeName, position, onChanged }: Props) {
 
   async function print() {
     if (!html) return
-    const result = await window.electronAPI.printer.printBadge(html)
+    const result = await window.electronAPI.printer.printBadge(html, { width: BADGE_WIDTH_MM, height: BADGE_HEIGHT_MM })
     if (!result.success && result.error) toast.error(result.error)
   }
 

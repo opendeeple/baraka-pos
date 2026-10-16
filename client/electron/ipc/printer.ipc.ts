@@ -673,13 +673,24 @@ export function registerPrinterIpc() {
   // usually on an office/card printer the user picks each time. The window is
   // shown (not parked off-screen like receipts) because the system dialog
   // opens over it.
-  ipcMain.handle('printer:printBadge', (event, html: string) => new Promise<{ success: boolean; error?: string }>((resolve) => {
+  ipcMain.handle('printer:printBadge', (event, html: string, pageSizeMm?: { width: number; height: number }) =>
+    new Promise<{ success: boolean; error?: string }>((resolve) => {
     const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined
     const win = new BrowserWindow({ parent, modal: !!parent, width: 420, height: 300, show: false, autoHideMenuBar: true })
     win.webContents.once('did-finish-load', () => {
       win.show()
       setTimeout(() => {
-        win.webContents.print({ silent: false, printBackground: true, margins: { marginType: 'none' } }, (success, errorType) => {
+        win.webContents.print({
+          silent: false, printBackground: true, margins: { marginType: 'none' },
+          // Without an explicit page size the print pipeline falls back to
+          // whatever paper the driver last had selected; if that differs
+          // from the label/badge's own @page size, the content gets
+          // scaled to fit — a non-integer scale factor is the other half
+          // of the barcode-bars-blur problem (the other half is bar widths
+          // not landing on whole printer dots, fixed in code39Svg/ean13Svg).
+          // Microns, per Electron's pageSize option.
+          ...(pageSizeMm ? { pageSize: { width: Math.round(pageSizeMm.width * 1000), height: Math.round(pageSizeMm.height * 1000) } } : {}),
+        }, (success, errorType) => {
           win.destroy()
           // The user closing the dialog isn't a failure worth reporting.
           resolve(success || errorType === 'cancelled' ? { success } : { success: false, error: errorType || 'Print failed' })

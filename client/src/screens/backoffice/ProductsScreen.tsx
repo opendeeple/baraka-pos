@@ -11,7 +11,7 @@ import { logAudit } from '../../lib/audit'
 import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader, Select } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { resizeImageDataUrl } from '../../lib/image'
-import { labelsHtml } from '../../lib/labels'
+import { labelsHtml, LABEL_SIZES } from '../../lib/labels'
 import { generateUniqueBarcode } from '../../lib/productBarcodes'
 import { useAuthStore } from '../../store/auth.store'
 
@@ -166,7 +166,7 @@ export default function ProductsScreen() {
         '58x40',
         { storeName: store?.name ?? '', perKg: t('labels.perKg'), perBox: t('labels.perBox'), perPiece: t('labels.perPiece'), currency: t('labels.currency') }
       )
-      const res = await window.electronAPI.printer.printBadge(html)
+      const res = await window.electronAPI.printer.printBadge(html, { width: LABEL_SIZES['58x40'].w, height: LABEL_SIZES['58x40'].h })
       if (res.success) toast.success(t('labels.printed', { count: 1 }))
       else if (res.error) toast.error(res.error)
     } finally { setPrintingLabel(false) }

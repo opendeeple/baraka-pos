@@ -1,4 +1,4 @@
-import { code39Svg } from './code39'
+import { code39Svg, snapToDot } from './code39'
 import { ean13CheckDigit, isValidEan13 } from './scaleBarcode'
 
 // Shelf / price labels (Mahsulotlar > Etiketka): product name, price and a
@@ -11,9 +11,12 @@ const G = ['0100111', '0110011', '0011011', '0100001', '0011101', '0111001', '00
 const R = ['1110010', '1100110', '1101100', '1000010', '1011100', '1001110', '1010000', '1000100', '1001000', '1110100']
 const PARITY = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL']
 
-/** EAN-13 symbol with the digits under it, sized in millimetres. */
-export function ean13Svg(code: string, moduleMm = 0.3, barMm = 14): string {
+/** EAN-13 symbol with the digits under it, sized in millimetres. Module
+ *  width is snapped to the printer's dot grid (see code39.ts) so bars don't
+ *  blur together. */
+export function ean13Svg(code: string, moduleMmInput = 0.3, barMm = 14): string {
   if (!isValidEan13(code)) throw new Error(`EAN-13: invalid code ${code}`)
+  const moduleMm = snapToDot(moduleMmInput)
   const first = Number(code[0])
   let bits = '101'
   for (let i = 1; i <= 6; i++) bits += (PARITY[first][i - 1] === 'L' ? L : G)[Number(code[i])]

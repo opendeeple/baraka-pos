@@ -105,17 +105,18 @@ export function LabelPrintModal({ onClose }: { onClose: () => void }) {
     { storeName: showStore ? store?.name ?? '' : '', perKg: t('labels.perKg'), perBox: t('labels.perBox'), perPiece: t('labels.perPiece'), currency: t('labels.currency') }
   )
 
+  const dims = LABEL_SIZES[size]
+
   async function print() {
     setPrinting(true)
     try {
-      const res = await window.electronAPI.printer.printBadge(html(picks))
+      const res = await window.electronAPI.printer.printBadge(html(picks), { width: dims.w, height: dims.h })
       if (res.success) toast.success(t('labels.printed', { count: picks.reduce((s, p) => s + p.copies, 0) }))
       else if (res.error) toast.error(res.error)
     } finally { setPrinting(false) }
   }
 
   const total = picks.reduce((s, p) => s + p.copies, 0)
-  const dims = LABEL_SIZES[size]
 
   return (
     <Modal open onClose={onClose} title={t('labels.title')} maxWidth="max-w-6xl"

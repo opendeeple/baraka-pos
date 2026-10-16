@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Modal, Button } from '../ui'
 import { useAuthStore } from '../../store/auth.store'
-import { labelsHtml, type LabelSize } from '../../lib/labels'
+import { labelsHtml, LABEL_SIZES, type LabelSize } from '../../lib/labels'
 import type { LabelCandidate } from '../../lib/purchases'
 
 interface Props {
@@ -58,7 +58,8 @@ export function ReceivingLabelsConfirmModal({ items: initial, onClose }: Props) 
           size,
           { storeName: store?.name ?? '', perKg: t('labels.perKg'), perBox: t('labels.perBox'), perPiece: t('labels.perPiece'), currency: t('labels.currency') }
         )
-        const res = await window.electronAPI.printer.printBadge(html)
+        const dims = LABEL_SIZES[size]
+        const res = await window.electronAPI.printer.printBadge(html, { width: dims.w, height: dims.h })
         if (res.success) { toast.success(t('labels.printed', { count: total })); onClose(); return }
         // Sticker stock jammed, wrong printer selected, etc. — the barcodes
         // are already minted and saved; fall back to a plain text listing so

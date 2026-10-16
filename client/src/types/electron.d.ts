@@ -52,7 +52,10 @@ export interface ElectronAPI {
     /** The exact HTML the Windows-printer path prints, for on-screen preview. */
     receiptHtml: (receiptData: unknown) => Promise<{ html: string; paperWidthMm: number }>
     /** Prints an employee badge page through the system print dialog. */
-    printBadge: (html: string) => Promise<{ success: boolean; error?: string }>
+    /** pageSizeMm pins the print job's physical page size (microns under the
+     *  hood) so the driver never scales the content to fit a different
+     *  default paper — pass the label/badge's own exact size. */
+    printBadge: (html: string, pageSizeMm?: { width: number; height: number }) => Promise<{ success: boolean; error?: string }>
     /** Prints a name/qty/estimated-cost list on the receipt printer; `meta` titles and numbers it (a purchase order prints as "BUYURTMA", No: ZK-…). */
     printShoppingList: (items: Array<{ name: string; qty: number; cost: number }>, meta?: { title?: string; reference?: string; supplier?: string | null }) => Promise<{ success: boolean; error?: string }>
     /** Label/value report on the receipt printer (X/Z shift reports, stocktake results). */
