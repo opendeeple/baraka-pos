@@ -18,7 +18,7 @@ import { useAuthStore } from '../../store/auth.store'
 interface Product {
   id: number; name: string; sku: string | null; barcode: string | null
   category_id: number | null; category_name: string | null; product_type: string
-  is_stock_managed: number; is_active: number; alert_quantity: number
+  is_stock_managed: number; is_active: number; is_featured: number; alert_quantity: number
   batch_id: number | null; price: number; cost: number; stock: number
   unit: string | null; units_per_package: number | null; piece_price: number | null; image_url: string | null
 }
@@ -27,13 +27,13 @@ interface Category { id: number; name: string }
 
 interface ProductForm {
   name: string; sku: string; barcode: string; category_id: string
-  price: string; cost: string; alert_quantity: string; is_stock_managed: boolean; is_active: boolean
+  price: string; cost: string; alert_quantity: string; is_stock_managed: boolean; is_active: boolean; is_featured: boolean
   unit: string; units_per_package: string; piece_price: string; image_url: string
 }
 
 const EMPTY_FORM: ProductForm = {
   name: '', sku: '', barcode: '', category_id: '',
-  price: '', cost: '', alert_quantity: '5', is_stock_managed: true, is_active: true,
+  price: '', cost: '', alert_quantity: '5', is_stock_managed: true, is_active: true, is_featured: false,
   unit: 'piece', units_per_package: '', piece_price: '', image_url: '',
 }
 
@@ -74,7 +74,7 @@ export default function ProductsScreen() {
     let sql = `
       SELECT p.id, p.name, p.sku, p.barcode, p.category_id,
              c.name as category_name, p.product_type,
-             p.is_stock_managed, p.is_active, p.alert_quantity,
+             p.is_stock_managed, p.is_active, p.is_featured, p.alert_quantity,
              p.unit, p.units_per_package, p.piece_price, p.image_url,
              pb.id as batch_id, pb.price, pb.cost,
              COALESCE(ps.quantity, 0) as stock
@@ -118,7 +118,7 @@ export default function ProductsScreen() {
       category_id: p.category_id ? String(p.category_id) : '',
       price: String(p.price), cost: String(p.cost),
       alert_quantity: String(p.alert_quantity), is_stock_managed: Boolean(p.is_stock_managed),
-      is_active: Boolean(p.is_active),
+      is_active: Boolean(p.is_active), is_featured: Boolean(p.is_featured),
       unit: p.unit ?? 'piece', units_per_package: p.units_per_package ? String(p.units_per_package) : '',
       piece_price: p.piece_price ? String(p.piece_price) : '',
       image_url: p.image_url ?? '' })
@@ -210,9 +210,9 @@ export default function ProductsScreen() {
       if (editId) {
         const before = products.find((x) => x.id === editId)
         await window.electronAPI.db.exec(
-          `UPDATE products SET name=?,sku=?,barcode=?,category_id=?,is_stock_managed=?,is_active=?,alert_quantity=?,unit=?,units_per_package=?,piece_price=?,image_url=?,updated_at=? WHERE id=?`,
+          `UPDATE products SET name=?,sku=?,barcode=?,category_id=?,is_stock_managed=?,is_active=?,is_featured=?,alert_quantity=?,unit=?,units_per_package=?,piece_price=?,image_url=?,updated_at=? WHERE id=?`,
           [form.name, form.sku || null, form.barcode || null, form.category_id || null,
-           form.is_stock_managed ? 1 : 0, form.is_active ? 1 : 0, Number(form.alert_quantity) || 0,
+           form.is_stock_managed ? 1 : 0, form.is_active ? 1 : 0, form.is_featured ? 1 : 0, Number(form.alert_quantity) || 0,
            form.unit, form.unit === 'box' ? (Number(form.units_per_package) || null) : null,
            form.unit === 'box' ? (Number(form.piece_price) || null) : null,
            form.image_url || null, now, editId])
@@ -238,10 +238,10 @@ export default function ProductsScreen() {
         const productSyncId = uuidv4()
         const batchSyncId = uuidv4()
         await window.electronAPI.db.exec(
-          `INSERT INTO products (sync_id,name,sku,barcode,category_id,is_stock_managed,alert_quantity,is_active,product_type,unit,units_per_package,piece_price,image_url,created_at,updated_at)
-           VALUES (?,?,?,?,?,?,?,1,'simple',?,?,?,?,?,?)`,
+          `INSERT INTO products (sync_id,name,sku,barcode,category_id,is_stock_managed,alert_quantity,is_active,is_featured,product_type,unit,units_per_package,piece_price,image_url,created_at,updated_at)
+           VALUES (?,?,?,?,?,?,?,1,?,'simple',?,?,?,?,?,?)`,
           [productSyncId, form.name, form.sku || null, form.barcode || null, form.category_id || null,
-           form.is_stock_managed ? 1 : 0, Number(form.alert_quantity) || 0,
+           form.is_stock_managed ? 1 : 0, Number(form.alert_quantity) || 0, form.is_featured ? 1 : 0,
            form.unit, form.unit === 'box' ? (Number(form.units_per_package) || null) : null,
            form.unit === 'box' ? (Number(form.piece_price) || null) : null,
            form.image_url || null, now, now])
@@ -578,6 +578,13 @@ export default function ProductsScreen() {
                       <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${form.is_active ? 'translate-x-5' : 'translate-x-0.5'}`} />
                     </button>
                     <span className="text-sm text-gray-400">{t('common.active')}</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <button onClick={() => f('is_featured', !form.is_featured)}
+                      className={`w-10 h-5 rounded-full transition-colors relative ${form.is_featured ? 'bg-primary' : 'bg-dark-border'}`}>
+                      <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${form.is_featured ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                    <span className="text-sm text-gray-400">{t('products.featuredToggle')}</span>
                   </label>
                 </div>
               </div>

@@ -263,7 +263,7 @@ if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
             <ProductGrid products={products} onAddToCart={handleProductTap} />
           </div>
         </div>
-        <CartPanel onCheckout={() => setShowPayment(true)} onCloseRegister={() => navigate('/session/close')} />
+        <CartPanel onCheckout={() => setShowPayment(true)} onCloseRegister={() => navigate('/session/close')} onProductTap={handleProductTap} />
 
         {openApps.map((app) => (
           <AppWebView

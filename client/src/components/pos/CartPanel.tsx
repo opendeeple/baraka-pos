@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Trash2, Pause, ShoppingBag, Plus, Minus, LogOut, Tag, X } from 'lucide-react'
+import { Trash2, Pause, ShoppingBag, Plus, Minus, LogOut, Tag, X, ChevronDown, Search, Zap } from 'lucide-react'
 import { useCartStore, cartLineTotal } from '../../store/cart.store'
 import { fmtUZS } from '../../lib/currency'
 import { HeldOrdersPanel } from './HeldOrdersDrawer'
@@ -11,13 +11,18 @@ import { DiscountModal } from './DiscountModal'
 import { Modal, Button } from '../ui'
 import { Debtor } from '../../types/pos.types'
 import { OPEN_DEBT_CONDITION } from '../../lib/debt'
+import type { LocalProduct } from './ProductGrid'
 
 interface Props {
   onCheckout: () => void
   onCloseRegister: () => void
+  /** Tapping a featured quick-sell product routes through the same handler
+   *  as the main grid (kg/box products open the unit calculator instead of
+   *  adding a flat quantity of 1). */
+  onProductTap: (product: LocalProduct) => void
 }
 
-export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
+export default function CartPanel({ onCheckout, onCloseRegister, onProductTap }: Props) {
   const { t } = useTranslation()
   const {
     items, charges, heldCarts,
@@ -28,6 +33,12 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
   const [debtors, setDebtors] = useState<Debtor[]>([])
   const [selectedDebtor, setSelectedDebtor] = useState<Debtor | null>(null)
   const [activePanel, setActivePanel] = useState<'held' | null>(null)
+  // Closed by default — the debtor list used to take the whole idle panel;
+  // now it's a search dropdown you open only when you need it, leaving the
+  // space for quick-sell instead.
+  const [debtorsOpen, setDebtorsOpen] = useState(false)
+  const [debtorSearch, setDebtorSearch] = useState('')
+  const [featuredProducts, setFeaturedProducts] = useState<LocalProduct[]>([])
 
   const subtotal = getSubtotal()
   const chargeAmount = getTotalChargeAmount()
@@ -42,9 +53,37 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
     ).then((rows) => setDebtors(rows as Debtor[]))
   }, [])
 
+  // Products the owner picked in Office (Mahsulotlar > "Tezkor sotuvda") —
+  // tapping one adds it straight to the cart, same as the main grid.
+  const loadFeaturedProducts = useCallback(() => {
+    window.electronAPI.db.query(
+      `SELECT p.id, p.name, p.barcode, p.image_url, p.is_stock_managed, p.unit, p.units_per_package, p.piece_price,
+              pb.id as batch_id, pb.price, pb.cost,
+              COALESCE(ps.quantity, 0) as stock
+       FROM products p
+       LEFT JOIN product_batches pb ON pb.id = (
+         SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
+       )
+       LEFT JOIN product_stocks ps ON ps.id = (
+         SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id AND location = 'shop' ORDER BY id DESC LIMIT 1
+       )
+       WHERE p.is_featured = 1 AND p.is_active = 1 AND p.deleted_at IS NULL
+       ORDER BY p.name LIMIT 12`,
+      []
+    ).then((rows) => setFeaturedProducts(rows as LocalProduct[]))
+  }, [])
+
+  const filteredDebtors = debtorSearch.trim()
+    ? debtors.filter((d) => {
+        const q = debtorSearch.trim().toLowerCase()
+        return d.name.toLowerCase().includes(q) || (d.phone ?? '').includes(q)
+      })
+    : debtors
+
   useEffect(() => {
     if (items.length > 0) return
     loadDebtors()
+    loadFeaturedProducts()
     // Repayments and deleted debts also arrive from other devices via sync;
     // a cheap local re-read keeps the list current without a click.
     const timer = setInterval(loadDebtors, 10_000)
@@ -105,48 +144,106 @@ export default function CartPanel({ onCheckout, onCloseRegister }: Props) {
         ) : items.length === 0 ? (
           <>
             <div className="flex-1 overflow-y-auto overflow-x-hidden">
-              <div className="px-4 pt-4 pb-2">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs text-gray-500 uppercase tracking-wider">{t('pos.outstandingDebts')}</p>
-                  {heldCarts.length > 0 && (
+              <div className="px-4 pt-4 pb-2 space-y-4">
+                {/* Debtors — a closed-by-default search dropdown instead of a
+                    permanently open list, so the space below is free for
+                    quick-sell. */}
+                <div>
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setActivePanel('held')}
-                      className="relative flex items-center gap-1.5 h-8 px-3 text-xs bg-dark-card border border-dark-border text-gray-400 active:text-white rounded-lg transition-colors"
+                      onClick={() => setDebtorsOpen((v) => !v)}
+                      className="flex-1 flex items-center justify-between bg-dark-card border border-dark-border rounded-xl px-3 py-2.5 active:border-primary/40 transition-colors"
                     >
-                      {t('pos.held')}
-                      <span className="bg-yellow-500 text-black text-xs w-4 h-4 flex items-center justify-center rounded-full font-bold">
-                        {heldCarts.length}
-                      </span>
-                    </button>
-                  )}
-                </div>
-                {debtors.length === 0 ? (
-                  <p className="text-gray-600 text-sm text-center py-6">{t('pos.noOutstandingDebts')}</p>
-                ) : (
-                  <div className="space-y-2">
-                    {debtors.map((d) => (
-                      <button
-                        key={d.id}
-                        onClick={() => setSelectedDebtor(d)}
-                        className="w-full flex items-center justify-between bg-dark-card border border-dark-border rounded-xl px-3 py-2.5 active:border-yellow-500/40 transition-colors text-left"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-white text-sm font-medium truncate">{d.name}</p>
-                          {d.phone && <p className="text-gray-500 text-xs">{d.phone}</p>}
-                        </div>
-                        {d.balance > 0 ? (
-                          <span className="text-yellow-400 text-sm font-semibold whitespace-nowrap ml-2">
-                            UZS {fmtUZS(d.balance)}
-                          </span>
-                        ) : (
-                          <span className="text-green-400 text-xs font-semibold whitespace-nowrap ml-2">
-                            {t('debt.paidBadge')}
+                      <span className="flex items-center gap-2 text-sm text-gray-300">
+                        <Search size={14} className="text-gray-500" />
+                        {t('pos.outstandingDebts')}
+                        {debtors.length > 0 && (
+                          <span className="bg-yellow-500/20 text-yellow-400 text-xs px-1.5 py-0.5 rounded-full font-semibold">
+                            {debtors.length}
                           </span>
                         )}
+                      </span>
+                      <ChevronDown size={16} className={`text-gray-500 transition-transform ${debtorsOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {heldCarts.length > 0 && (
+                      <button
+                        onClick={() => setActivePanel('held')}
+                        className="relative flex items-center gap-1.5 h-[42px] px-3 text-xs bg-dark-card border border-dark-border text-gray-400 active:text-white rounded-xl transition-colors shrink-0"
+                      >
+                        {t('pos.held')}
+                        <span className="bg-yellow-500 text-black text-xs w-4 h-4 flex items-center justify-center rounded-full font-bold">
+                          {heldCarts.length}
+                        </span>
                       </button>
-                    ))}
+                    )}
                   </div>
-                )}
+                  {debtorsOpen && (
+                    <div className="mt-2 space-y-2">
+                      <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                        <input
+                          value={debtorSearch}
+                          onChange={(e) => setDebtorSearch(e.target.value)}
+                          placeholder={t('pos.searchDebtor')}
+                          autoFocus
+                          className="w-full bg-dark-card border border-dark-border rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                      {filteredDebtors.length === 0 ? (
+                        <p className="text-gray-600 text-sm text-center py-4">{t('pos.noOutstandingDebts')}</p>
+                      ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {filteredDebtors.map((d) => (
+                            <button
+                              key={d.id}
+                              onClick={() => { setSelectedDebtor(d); setDebtorsOpen(false); setDebtorSearch('') }}
+                              className="w-full flex items-center justify-between bg-dark-card border border-dark-border rounded-xl px-3 py-2.5 active:border-yellow-500/40 transition-colors text-left"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-white text-sm font-medium truncate">{d.name}</p>
+                                {d.phone && <p className="text-gray-500 text-xs">{d.phone}</p>}
+                              </div>
+                              {d.balance > 0 ? (
+                                <span className="text-yellow-400 text-sm font-semibold whitespace-nowrap ml-2">
+                                  UZS {fmtUZS(d.balance)}
+                                </span>
+                              ) : (
+                                <span className="text-green-400 text-xs font-semibold whitespace-nowrap ml-2">
+                                  {t('debt.paidBadge')}
+                                </span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick sell — products picked in Office (Mahsulotlar >
+                    "Tezkor sotuvda"), fills the space the debtor list used to
+                    take up by default. */}
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Zap size={12} /> {t('pos.quickSell')}
+                  </p>
+                  {featuredProducts.length === 0 ? (
+                    <p className="text-gray-600 text-xs text-center py-6">{t('pos.noFeaturedProducts')}</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {featuredProducts.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => onProductTap(p)}
+                          className="flex flex-col items-start bg-dark-card border border-dark-border rounded-xl px-3 py-2.5 active:border-primary/40 transition-colors text-left"
+                        >
+                          <span className="text-white text-sm font-medium truncate w-full">{p.name}</span>
+                          <span className="text-primary text-xs font-semibold mt-0.5">UZS {fmtUZS(p.price ?? 0)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div className="shrink-0 border-t border-dark-border p-4">
