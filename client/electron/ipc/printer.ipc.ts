@@ -668,18 +668,28 @@ export function registerPrinterIpc() {
     }
   })
 
-  // Employee badges (Back office > Employees) go through the normal print
-  // dialog rather than the till's receipt printer: they're printed rarely and
-  // usually on an office/card printer the user picks each time. The window is
-  // shown (not parked off-screen like receipts) because the system dialog
-  // opens over it.
-  ipcMain.handle('printer:printBadge', (event, html: string) => new Promise<{ success: boolean; error?: string }>((resolve) => {
+  // Price labels and employee badges. With a label printer chosen in Settings
+  // (label_printer_config) they go straight to it, silently, at the exact
+  // sticker size — the system dialog would otherwise start from the driver's
+  // default stock, and the page comes out scaled, rotated and spread over two
+  // stickers. Without one, the normal print dialog opens (the window is shown,
+  // not parked off-screen like receipts, because the dialog opens over it).
+  // `pageMm` is the sticker/card size.
+  ipcMain.handle('printer:printBadge', (event, html: string, pageMm?: { w: number; h: number }) => new Promise<{ success: boolean; error?: string }>((resolve) => {
     const parent = BrowserWindow.fromWebContents(event.sender) ?? undefined
-    const win = new BrowserWindow({ parent, modal: !!parent, width: 420, height: 300, show: false, autoHideMenuBar: true })
+    const labelPrinter = getLabelPrinterName()
+    const win = new BrowserWindow({ parent, modal: !!parent && !labelPrinter, width: 420, height: 300, show: false, autoHideMenuBar: true })
+    const pageSize = pageMm && pageMm.w > 0 && pageMm.h > 0
+      ? { width: Math.round(pageMm.w * 1000), height: Math.round(pageMm.h * 1000) }
+      : undefined
     win.webContents.once('did-finish-load', () => {
-      win.show()
+      if (!labelPrinter) win.show()
       setTimeout(() => {
-        win.webContents.print({ silent: false, printBackground: true, margins: { marginType: 'none' } }, (success, errorType) => {
+        win.webContents.print({
+          silent: !!labelPrinter, ...(labelPrinter ? { deviceName: labelPrinter } : {}),
+          printBackground: true, margins: { marginType: 'none' },
+          ...(pageSize ? { pageSize, landscape: false, scaleFactor: 100 } : {}),
+        }, (success, errorType) => {
           win.destroy()
           // The user closing the dialog isn't a failure worth reporting.
           resolve(success || errorType === 'cancelled' ? { success } : { success: false, error: errorType || 'Print failed' })
@@ -718,9 +728,34 @@ export function registerPrinterIpc() {
     }
   })
 
-  ipcMain.handle('printer:listPrinters', async () => {
-    // Return available USB printers (simplified)
-    return []
+  // Teaches a TSPL label printer (Xprinter XP-365B and the like) the sticker
+  // stock: size, gap mode, then GAPDETECT feeds a few stickers to measure the
+  // real label and gap lengths. The printer keeps these, and its Seagull driver
+  // prints with the printer's current settings — without this it treats the
+  // roll as continuous paper and labels drift across stickers.
+  ipcMain.handle('printer:calibrateLabels', async (_event, pageMm: { w: number; h: number }) => {
+    const name = getLabelPrinterName()
+    if (!name) return { success: false, error: 'no_label_printer' }
+    const w = Math.round(Number(pageMm?.w) * 10) / 10
+    const h = Math.round(Number(pageMm?.h) * 10) / 10
+    if (!(w >= 15 && w <= 200 && h >= 15 && h <= 200)) return { success: false, error: 'bad_size' }
+    const tspl = Buffer.from(`SIZE ${w} mm,${h} mm\r\nGAP 3 mm,0 mm\r\nGAPDETECT\r\n`, 'ascii')
+    try {
+      await sendRawToWindowsPrinter(name, tspl, tspl)
+      return { success: true }
+    } catch (err: unknown) {
+      return { success: false, error: err instanceof Error ? err.message : 'Calibration failed' }
+    }
+  })
+
+  // Names of the printers installed in Windows (for picking the label printer).
+  ipcMain.handle('printer:listPrinters', async (event) => {
+    try {
+      const printers = await event.sender.getPrintersAsync()
+      return printers.map((p) => p.name)
+    } catch {
+      return []
+    }
   })
 
   ipcMain.handle('printer:testPrint', async () => {
@@ -781,6 +816,18 @@ export function registerPrinterIpc() {
     // Config saved to SQLite via db:exec from renderer
     return { success: true }
   })
+}
+
+/** The Windows printer labels/badges go to silently; '' = ask with the print dialog. */
+function getLabelPrinterName(): string {
+  try {
+    const rows = dbQuery(
+      `SELECT meta_value FROM settings WHERE meta_key='label_printer_config' LIMIT 1`,
+      []
+    ) as Array<{ meta_value: string }>
+    if (rows.length > 0) return String((JSON.parse(rows[0].meta_value) as { name?: string }).name ?? '').trim()
+  } catch { /* empty */ }
+  return ''
 }
 
 function getPrinterConfig(): PrinterConfig {

@@ -6,7 +6,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { DEFAULT_SCALE_CONFIG, SCALE_SETTING_KEY, parseScaleBarcode, readScaleConfig, type ScaleConfig } from '../../lib/scaleBarcode'
-import { LABEL_SIZES, type LabelSize } from '../../lib/labels'
+import { LABEL_PRESETS, DEFAULT_LABEL_SIZE, labelGeometry, parseStickerSize, type LabelSize } from '../../lib/labels'
+import { StickerSizeSelect } from '../../components/backoffice/StickerSizeSelect'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
 import { toast } from 'sonner'
@@ -56,8 +57,14 @@ interface CreditorReminderConfig {
   ownerPhone: string
 }
 
+/** Sticker size comes from LabelPrinterConfig, shared by every label. */
 interface ReceivingLabelConfig {
   mode: 'sticker' | 'roll'
+}
+
+/** Where price labels and badges print silently ('' = system print dialog), and on what stock. */
+interface LabelPrinterConfig {
+  name: string
   size: LabelSize
 }
 
@@ -144,7 +151,10 @@ export default function SettingsScreen() {
   const [debtPaymentNotify, setDebtPaymentNotify] = useState<DebtPaymentNotifyConfig>({ enabled: true })
   // Default on — matches creditorReminder.service.ts's DEFAULT_CONFIG.
   const [creditorReminder, setCreditorReminder] = useState<CreditorReminderConfig>({ enabled: true, ownerPhone: '' })
-  const [receivingLabel, setReceivingLabel] = useState<ReceivingLabelConfig>({ mode: 'sticker', size: '58x40' })
+  const [receivingLabel, setReceivingLabel] = useState<ReceivingLabelConfig>({ mode: 'sticker' })
+  const [labelPrinter, setLabelPrinter] = useState<LabelPrinterConfig>({ name: '', size: DEFAULT_LABEL_SIZE })
+  const [systemPrinters, setSystemPrinters] = useState<string[]>([])
+  const [calibrating, setCalibrating] = useState(false)
   const [charges, setCharges] = useState<ChargeRow[]>([])
   const [storeName, setStoreName] = useState('')
   const [storeAddress, setStoreAddress] = useState('')
@@ -170,6 +180,9 @@ export default function SettingsScreen() {
   const { t, i18n } = useTranslation()
 
   useEffect(() => { loadSettings() }, [])
+  useEffect(() => {
+    window.electronAPI.printer.listPrinters().then(setSystemPrinters).catch(() => {})
+  }, [])
   useEffect(() => {
     window.electronAPI.window.isFullscreen().then((r) => setFullscreen(r.fullscreen))
   }, [])
@@ -232,7 +245,19 @@ export default function SettingsScreen() {
       try { setCreditorReminder({ enabled: true, ownerPhone: '', ...JSON.parse(map.creditor_reminder_config) }) } catch {}
     }
     if (map.receiving_label_config) {
-      try { setReceivingLabel({ mode: 'sticker', size: '58x40', ...JSON.parse(map.receiving_label_config) }) } catch {}
+      try { setReceivingLabel({ mode: JSON.parse(map.receiving_label_config).mode === 'roll' ? 'roll' : 'sticker' }) } catch {}
+    }
+    {
+      // Before the size lived here, receiving labels had their own — carry it over.
+      let size: LabelSize = DEFAULT_LABEL_SIZE
+      let name = ''
+      try { const r = JSON.parse(map.receiving_label_config ?? '{}'); if (parseStickerSize(r.size)) size = r.size } catch {}
+      try {
+        const c = JSON.parse(map.label_printer_config ?? '{}')
+        name = String(c.name ?? '')
+        if (parseStickerSize(c.size)) size = c.size
+      } catch {}
+      setLabelPrinter({ name, size })
     }
     const scaleCfg = readScaleConfig(map[SCALE_SETTING_KEY])
     setScale(scaleCfg)
@@ -284,11 +309,24 @@ export default function SettingsScreen() {
       await saveSetting('debt_payment_notify_config', JSON.stringify(debtPaymentNotify))
       await saveSetting('creditor_reminder_config', JSON.stringify(creditorReminder))
       await saveSetting('receiving_label_config', JSON.stringify(receivingLabel))
+      await saveSetting('label_printer_config', JSON.stringify(labelPrinter))
       const prefixes = splitPrefixes(scalePrefixes)
       await saveSetting(SCALE_SETTING_KEY, JSON.stringify({ ...scale, prefixes: prefixes.length ? prefixes : DEFAULT_SCALE_CONFIG.prefixes }))
       window.electronAPI.sync.pushPending().catch(() => {})
       toast.success(t('settings.saved'))
     } finally { setSaving(false) }
+  }
+
+  // The printer is saved first: the main process reads it from settings.
+  async function calibrateLabels() {
+    if (!labelPrinter.name) { toast.error(t('settings.labelPrinterNone')); return }
+    setCalibrating(true)
+    try {
+      await saveSetting('label_printer_config', JSON.stringify(labelPrinter))
+      const res = await window.electronAPI.printer.calibrateLabels(labelGeometry(labelPrinter.size))
+      if (res.success) toast.success(t('settings.labelCalibrateDone'))
+      else toast.error(res.error === 'no_label_printer' ? t('settings.labelPrinterNone') : res.error || t('settings.labelCalibrateFailed'))
+    } finally { setCalibrating(false) }
   }
 
   /** The store name/address/phone print on every till's receipt and show in
@@ -775,6 +813,39 @@ export default function SettingsScreen() {
           </div>
         </div>
 
+        {/* Label printer — price labels and employee badges print here
+            silently at the exact sticker size, instead of through the system
+            dialog (which starts from the driver's default stock). */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm">{t('settings.labelPrinterTitle')}</h2>
+          <p className="text-xs text-gray-500 -mt-2">{t('settings.labelPrinterHint')}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={LABEL_CLS}>{t('settings.labelPrinterName')}</label>
+              <Select
+                value={labelPrinter.name}
+                onChange={(v) => setLabelPrinter((prev) => ({ ...prev, name: v }))}
+                options={[
+                  { value: '', label: t('settings.labelPrinterAsk') },
+                  ...Array.from(new Set([...systemPrinters, ...(labelPrinter.name ? [labelPrinter.name] : [])]))
+                    .map((n) => ({ value: n, label: n })),
+                ]}
+              />
+            </div>
+            <div>
+              <label className={LABEL_CLS}>{t('settings.labelStickerSize')}</label>
+              <StickerSizeSelect value={labelPrinter.size} onChange={(v) => setLabelPrinter((prev) => ({ ...prev, size: v }))} presets={LABEL_PRESETS} />
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={calibrateLabels} disabled={calibrating || !labelPrinter.name}
+              className="flex items-center gap-2 border border-dark-border text-gray-300 hover:text-white disabled:opacity-50 px-3 py-1.5 rounded-lg text-xs transition-colors">
+              <Printer size={13} /> {calibrating ? '…' : t('settings.labelCalibrate')}
+            </button>
+            <p className="text-xs text-gray-500">{t('settings.labelCalibrateHint')}</p>
+          </div>
+        </div>
+
         {/* Receiving labels — when a delivery is received (ReceivePurchaseModal),
             a barcode-less product gets one generated and this decides how the
             label prints: a pre-cut sticker (its own page size) or a line on
@@ -794,16 +865,6 @@ export default function SettingsScreen() {
                 ]}
               />
             </div>
-            {receivingLabel.mode === 'sticker' && (
-              <div>
-                <label className={LABEL_CLS}>{t('settings.receivingLabelSize')}</label>
-                <Select
-                  value={receivingLabel.size}
-                  onChange={(v) => setReceivingLabel((prev) => ({ ...prev, size: v as LabelSize }))}
-                  options={(Object.keys(LABEL_SIZES) as LabelSize[]).map((k) => ({ value: k, label: `${k.replace('x', ' × ')} mm` }))}
-                />
-              </div>
-            )}
           </div>
         </div>
 

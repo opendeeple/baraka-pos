@@ -71,12 +71,65 @@ export interface LabelItem {
   unitsPerPackage?: number | null
   piecePrice?: number | null
 }
-export type LabelSize = '58x40' | '40x30' | '30x20'
+/** Sticker size as "<width>x<height>" in mm, e.g. "58x40" — a preset or one typed in by hand. */
+export type LabelSize = string
 
-export const LABEL_SIZES: Record<LabelSize, { w: number; h: number; module: number; bar: number; name: number; price: number }> = {
+export const LABEL_PRESETS: LabelSize[] = ['58x40', '58x30', '60x30', '40x30', '30x20', '100x60']
+export const DEFAULT_LABEL_SIZE: LabelSize = '58x40'
+
+const MIN_MM = 15
+const MAX_MM = 200
+
+/** Width/height of a "WxH" size; null when it isn't one or is outside 15–200 mm. */
+export function parseStickerSize(size: string | null | undefined): { w: number; h: number } | null {
+  const m = /^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/.exec(String(size ?? '').trim())
+  if (!m) return null
+  const w = Number(m[1]), h = Number(m[2])
+  if (!(w >= MIN_MM && w <= MAX_MM && h >= MIN_MM && h <= MAX_MM)) return null
+  return { w, h }
+}
+
+export interface LabelGeometry { w: number; h: number; module: number; bar: number; name: number; price: number }
+
+// Hand-tuned for the small stock; any other size is scaled from 58×40.
+const TUNED: Record<string, LabelGeometry> = {
   '58x40': { w: 58, h: 40, module: 0.3, bar: 11, name: 3.4, price: 7 },
   '40x30': { w: 40, h: 30, module: 0.25, bar: 8, name: 2.8, price: 5 },
   '30x20': { w: 30, h: 20, module: 0.2, bar: 6, name: 2.2, price: 3.6 },
+}
+
+/** Page and type sizes for a sticker; an invalid size falls back to 58×40. */
+export function labelGeometry(size: LabelSize): LabelGeometry {
+  if (TUNED[size]) return TUNED[size]
+  const dims = parseStickerSize(size)
+  if (!dims) return TUNED[DEFAULT_LABEL_SIZE]
+  const { w, h } = dims
+  const k = Math.min(w / 58, h / 40)
+  const r = (n: number) => Math.round(n * 100) / 100
+  return {
+    w, h,
+    // An EAN-13 is ~111 modules wide; keep it well inside the sticker.
+    module: r(Math.min(0.4, Math.max(0.2, (w - 3) / 180))),
+    bar: r(Math.max(6, 11 * k)),
+    name: r(Math.max(2.2, 3.4 * k)),
+    price: r(Math.max(3.6, 7 * k)),
+  }
+}
+
+/**
+ * This computer's sticker size, set next to the label printer in Settings
+ * (label_printer_config). Kept in the settings table, not localStorage, so the
+ * POS and Office apps — separate origins — print on the same stock.
+ */
+export async function loadLabelSize(): Promise<LabelSize> {
+  try {
+    const [row] = await window.electronAPI.db.query(
+      `SELECT meta_value FROM settings WHERE meta_key='label_printer_config' LIMIT 1`, []
+    ) as Array<{ meta_value: string }>
+    const size = row ? (JSON.parse(row.meta_value) as { size?: string }).size : null
+    if (size && parseStickerSize(size)) return size
+  } catch { /* missing or malformed — default below */ }
+  return DEFAULT_LABEL_SIZE
 }
 
 function esc(s: string): string {
@@ -90,7 +143,7 @@ export function labelsHtml(
   size: LabelSize,
   opts: { storeName?: string; perKg: string; perBox: string; perPiece: string; currency: string }
 ): string {
-  const s = LABEL_SIZES[size]
+  const s = labelGeometry(size)
   const pages: string[] = []
   for (const it of items) {
     const svg = barcodeSvg(it.barcode, s.module, s.bar)
@@ -105,9 +158,12 @@ export function labelsHtml(
       const unit = it.unit === 'kg' ? ` <span class="unit">${esc(opts.perKg)}</span>` : ''
       priceHtml = `<div class="price">${money(it.price)} <span class="cur">${esc(opts.currency)}</span>${unit}</div>`
     }
+    // A box label carries a second price line; on short stock (≤ 35 mm) the
+    // name gets one line so the barcode still fits on the sticker.
+    const oneLine = it.unit === 'box' && s.h <= 35
     const page = `<div class="label">
       ${opts.storeName ? `<div class="store">${esc(opts.storeName)}</div>` : ''}
-      <div class="name">${esc(it.name)}</div>
+      <div class="name${oneLine ? ' one-line' : ''}">${esc(it.name)}</div>
       ${priceHtml}
       ${svg ? `<div class="code">${svg}</div>` : ''}
     </div>`
@@ -120,8 +176,10 @@ export function labelsHtml(
     .label { width: ${s.w}mm; height: ${s.h}mm; padding: 1.2mm 1.5mm; overflow: hidden;
       display: flex; flex-direction: column; page-break-after: always; break-after: page; }
     .label:last-child { page-break-after: auto; break-after: auto; }
-    .store { font-size: ${(s.name * 0.7).toFixed(2)}mm; color: #333; text-transform: uppercase; letter-spacing: 0.1mm; }
+    .store { font-size: ${(s.name * 0.7).toFixed(2)}mm; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1mm; }
     .name { font-size: ${s.name}mm; font-weight: 700; line-height: 1.15; max-height: ${(s.name * 2.35).toFixed(2)}mm; overflow: hidden; }
+    .name.one-line { white-space: nowrap; text-overflow: ellipsis; max-height: none; }
+    .store { white-space: nowrap; overflow: hidden; }
     .price { font-size: ${s.price}mm; font-weight: 800; line-height: 1.1; margin-top: auto; white-space: nowrap; }
     .subprice { font-size: ${(s.price * 0.55).toFixed(2)}mm; font-weight: 700; line-height: 1.1; white-space: nowrap; margin-top: 0.3mm; }
     .cur, .unit { font-size: ${(s.price * 0.42).toFixed(2)}mm; font-weight: 600; }

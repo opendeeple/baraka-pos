@@ -3,8 +3,20 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ScanBarcode, Printer, RefreshCw, CloudOff } from 'lucide-react'
 import { Modal, Button } from '../ui'
-import { badgeHtml, BADGE_WIDTH_MM, BADGE_HEIGHT_MM } from '../../lib/badge'
+import { badgeHtml, badgeDims, BADGE_PRESETS, type BadgeSize } from '../../lib/badge'
+import { parseStickerSize } from '../../lib/labels'
 import { generateBadgeCode } from '../../lib/code39'
+import { StickerSizeSelect } from '../backoffice/StickerSizeSelect'
+
+const SIZE_KEY = 'badgePrintSize'
+
+function savedSize(): BadgeSize {
+  try {
+    const v = localStorage.getItem(SIZE_KEY)
+    if (v && (v === 'card' || parseStickerSize(v))) return v
+  } catch { /* storage unavailable */ }
+  return '58x40'
+}
 
 export interface BadgeEmployee {
   id: number
@@ -31,10 +43,17 @@ export function BadgeCard({ employee, storeName, position, onChanged }: Props) {
   const { t } = useTranslation()
   const [busy, setBusy] = useState(false)
   const [confirmReplace, setConfirmReplace] = useState(false)
+  const [size, setSize] = useState<BadgeSize>(savedSize)
+  const dims = badgeDims(size)
 
   const html = employee.badge_code
-    ? badgeHtml({ storeName, employeeName: employee.name, position, badgeCode: employee.badge_code })
+    ? badgeHtml({ storeName, employeeName: employee.name, position, badgeCode: employee.badge_code }, size)
     : null
+
+  function changeSize(v: BadgeSize) {
+    setSize(v)
+    try { localStorage.setItem(SIZE_KEY, v) } catch { /* storage unavailable */ }
+  }
   const notOnServer = !employee.server_id || !!employee.sync_pending
 
   async function assignNewCode() {
@@ -62,7 +81,7 @@ export function BadgeCard({ employee, storeName, position, onChanged }: Props) {
 
   async function print() {
     if (!html) return
-    const result = await window.electronAPI.printer.printBadge(html)
+    const result = await window.electronAPI.printer.printBadge(html, dims)
     if (!result.success && result.error) toast.error(result.error)
   }
 
@@ -85,12 +104,18 @@ export function BadgeCard({ employee, storeName, position, onChanged }: Props) {
 
       {html ? (
         <div className="flex flex-col items-start gap-3">
+          <div className="w-64">
+            <label className="text-xs text-gray-400 mb-1 block">{t('employees.badgeSize')}</label>
+            <StickerSizeSelect value={size} onChange={changeSize}
+              presets={BADGE_PRESETS.filter((k) => k !== 'card')}
+              extra={{ card: t('employees.badgeSizeCard') }} />
+          </div>
           <iframe
             title={t('employees.badge')}
             srcDoc={html}
             sandbox="allow-same-origin"
             className="block bg-white rounded-md shadow-lg"
-            style={{ width: `${BADGE_WIDTH_MM}mm`, height: `${BADGE_HEIGHT_MM}mm` }}
+            style={{ width: `${dims.w}mm`, height: `${dims.h}mm` }}
           />
           <p className="text-xs text-gray-500">{t('employees.badgeHint')}</p>
           {notOnServer && (

@@ -65,6 +65,11 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
     ).then((rows) => setOwnerPin((rows as Array<{ meta_value: string }>)[0]?.meta_value ?? ''))
   }, [])
 
+  // Cash handed over beyond the debt is change, given back from the drawer —
+  // only the debt itself is recorded. Card/Click can't give change.
+  const entered = parseFloat(payAmount) || 0
+  const payChange = payMethod === 'Cash' ? Math.max(0, entered - Math.max(0, currentBalance)) : 0
+
   const totalDebt = debts.reduce((s, d) => s + Number(d.amount), 0)
   const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0)
   const fullyPaid = currentBalance <= 0
@@ -102,9 +107,13 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
   }
 
   async function confirmPayment() {
-    const amt = parseFloat(payAmount)
-    if (!amt || amt <= 0) { setPayError(t('debt.enterValidAmount')); return }
-    if (amt > currentBalance) { setPayError(t('debt.cannotExceed', { amount: `UZS ${fmtUZS(currentBalance)}` })); return }
+    const received = parseFloat(payAmount)
+    if (!received || received <= 0) { setPayError(t('debt.enterValidAmount')); return }
+    if (payMethod !== 'Cash' && received > currentBalance) { setPayError(t('debt.cannotExceed', { amount: `UZS ${fmtUZS(currentBalance)}` })); return }
+    // What goes against the debt; the rest of the cash is change.
+    const amt = Math.min(received, currentBalance)
+    const change = received - amt
+    if (amt <= 0) { setPayError(t('debt.enterValidAmount')); return }
     setPaying(true)
     setPayError('')
     try {
@@ -138,7 +147,7 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
           params: [cashLogSyncId, now],
         },
       ])
-      await logAudit('debt_payment', { entity: 'contact', entityId: contact.id, details: { customer: contact.name, amount: amt, method: payMethod, balanceAfter: newBalance } })
+      await logAudit('debt_payment', { entity: 'contact', entityId: contact.id, details: { customer: contact.name, amount: amt, method: payMethod, balanceAfter: newBalance, ...(change > 0 ? { received, change } : {}) } })
       window.electronAPI.sync.pushPending().catch(() => {})
       window.electronAPI.notify.debtPayment(contact.id, amt).catch(console.error)
       window.electronAPI.printer.printReport({
@@ -147,7 +156,9 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
         lines: [
           { label: t('common.customer'), value: contact.name },
           { divider: true },
+          ...(change > 0 ? [{ label: t('debt.received'), value: `UZS ${fmtUZS(received)}` }] : []),
           { label: t('debt.payment'), value: `UZS ${fmtUZS(amt)}`, bold: true },
+          ...(change > 0 ? [{ label: t('payment.change'), value: `UZS ${fmtUZS(change)}`, bold: true }] : []),
           newBalance > 0
             ? { label: t('debt.remaining'), value: `UZS ${fmtUZS(newBalance)}`, bold: true }
             : { label: t('debt.fullyPaid') },
@@ -262,6 +273,18 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
               ))}
             </div>
             <NumPad value={payAmount} onChange={setPayAmount} label={t('debt.repaymentAmount')} />
+            {payChange > 0 && (
+              <div className="shrink-0 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">{t('debt.payment')}</span>
+                  <span className="text-white font-semibold">UZS {fmtUZS(currentBalance)}</span>
+                </div>
+                <div className="flex justify-between text-base">
+                  <span className="text-green-300 font-semibold">{t('payment.change')}</span>
+                  <span className="text-green-400 font-bold">UZS {fmtUZS(payChange)}</span>
+                </div>
+              </div>
+            )}
           </div>
           {payError && (
             <p className="text-red-400 text-xs px-4 pb-2">{payError}</p>

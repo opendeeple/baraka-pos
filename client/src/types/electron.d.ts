@@ -51,15 +51,18 @@ export interface ElectronAPI {
     print: (receiptData: unknown) => Promise<{ success: boolean; error?: string }>
     /** The exact HTML the Windows-printer path prints, for on-screen preview. */
     receiptHtml: (receiptData: unknown) => Promise<{ html: string; paperWidthMm: number }>
-    /** Prints an employee badge page through the system print dialog. */
-    printBadge: (html: string) => Promise<{ success: boolean; error?: string }>
+    /** Prints a badge / label page through the system print dialog; `pageMm` sets the paper (sticker) size. */
+    printBadge: (html: string, pageMm?: { w: number; h: number }) => Promise<{ success: boolean; error?: string }>
+    /** Sets the label printer's sticker size/gap mode and runs its gap auto-detect (TSPL). Error 'no_label_printer' = none saved in Settings. */
+    calibrateLabels: (pageMm: { w: number; h: number }) => Promise<{ success: boolean; error?: string }>
     /** Prints a name/qty/estimated-cost list on the receipt printer; `meta` titles and numbers it (a purchase order prints as "BUYURTMA", No: ZK-…). */
     printShoppingList: (items: Array<{ name: string; qty: number; cost: number }>, meta?: { title?: string; reference?: string; supplier?: string | null }) => Promise<{ success: boolean; error?: string }>
     /** Label/value report on the receipt printer (X/Z shift reports, stocktake results). */
     printReport: (doc: ReportDoc) => Promise<{ success: boolean; error?: string }>
     openCashDrawer: () => Promise<{ success: boolean; error?: string }>
     testPrint: () => Promise<{ success: boolean; message?: string }>
-    listPrinters: () => Promise<unknown[]>
+    /** Names of the printers installed in Windows. */
+    listPrinters: () => Promise<string[]>
     configure: (config: unknown) => Promise<{ success: boolean }>
   }
   session: {

@@ -11,7 +11,7 @@ import { logAudit } from '../../lib/audit'
 import { Modal, Button, Input, EmptyState, SkeletonRow, PageHeader, Select } from '../../components/ui'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { resizeImageDataUrl } from '../../lib/image'
-import { labelsHtml } from '../../lib/labels'
+import { labelsHtml, labelGeometry, loadLabelSize } from '../../lib/labels'
 import { generateUniqueBarcode } from '../../lib/productBarcodes'
 import { useAuthStore } from '../../store/auth.store'
 
@@ -158,15 +158,17 @@ export default function ProductsScreen() {
     if (!form.barcode.trim()) { toast.error(t('labels.noBarcode')); return }
     setPrintingLabel(true)
     try {
+      // The sticker size set next to the label printer in Settings.
+      const size = await loadLabelSize()
       const html = labelsHtml(
         [{
           name: form.name, price: Number(form.price) || 0, barcode: form.barcode.trim(), unit: form.unit, copies: 1,
           unitsPerPackage: Number(form.units_per_package) || null, piecePrice: Number(form.piece_price) || null,
         }],
-        '58x40',
+        size,
         { storeName: store?.name ?? '', perKg: t('labels.perKg'), perBox: t('labels.perBox'), perPiece: t('labels.perPiece'), currency: t('labels.currency') }
       )
-      const res = await window.electronAPI.printer.printBadge(html)
+      const res = await window.electronAPI.printer.printBadge(html, labelGeometry(size))
       if (res.success) toast.success(t('labels.printed', { count: 1 }))
       else if (res.error) toast.error(res.error)
     } finally { setPrintingLabel(false) }
