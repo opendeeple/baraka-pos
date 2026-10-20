@@ -130,6 +130,26 @@ export default function ProductsScreen() {
     setShowForm(true)
   }
 
+  // Checked as soon as the barcode is entered (blur, or Enter from a
+  // scanner) instead of only at save time — catching a re-scanned product
+  // right away is the whole point: by the time the rest of the form is
+  // filled in and Save is pressed, retyping everything is real lost work.
+  async function checkBarcodeLive(raw: string) {
+    const code = raw.trim()
+    if (!code) return
+    const [prodDup] = await window.electronAPI.db.query(
+      `SELECT name FROM products WHERE deleted_at IS NULL AND id != ? AND barcode = ? LIMIT 1`,
+      [editId ?? -1, code]
+    ) as Array<{ name: string }>
+    if (prodDup) { toast.error(t('products.duplicateExists', { name: prodDup.name })); return }
+    const [aliasDup] = await window.electronAPI.db.query(
+      `SELECT p.name FROM product_barcodes pb JOIN products p ON p.id = pb.product_id
+       WHERE pb.deleted_at IS NULL AND pb.product_id != ? AND pb.barcode = ? LIMIT 1`,
+      [editId ?? -1, code]
+    ) as Array<{ name: string }>
+    if (aliasDup) toast.error(t('products.duplicateExists', { name: aliasDup.name }))
+  }
+
   function addExtraBarcode() {
     const code = newExtraBarcode.trim()
     if (!code) return
@@ -460,7 +480,9 @@ export default function ProductsScreen() {
                 <div className="col-span-2 flex items-end gap-1.5">
                   <div className="flex-1">
                     <Input label={t('products.barcode')} placeholder={t('products.scanOrType')}
-                      value={form.barcode} onChange={(e) => f('barcode', e.target.value)} />
+                      value={form.barcode} onChange={(e) => f('barcode', e.target.value)}
+                      onBlur={(e) => checkBarcodeLive(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') checkBarcodeLive(form.barcode) }} />
                   </div>
                   <button type="button" title={t('labels.print')} onClick={printThisLabel} disabled={printingLabel || !form.barcode.trim()}
                     className="h-10 w-10 shrink-0 flex items-center justify-center rounded-lg border border-dark-border text-gray-400 hover:text-white hover:border-primary disabled:opacity-40 disabled:hover:text-gray-400 disabled:hover:border-dark-border">
