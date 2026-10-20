@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Store, Warehouse, CheckCircle2, AlertTriangle, ScanLine } from 'lucide-react'
@@ -9,7 +9,7 @@ import { receivePurchaseOrder, buildReceivingLabelCandidates, type StockLocation
 import { fmtUZS } from '../../lib/currency'
 import { loadBarcodeAliasMap } from '../../lib/productBarcodes'
 
-interface Line { id: number; product_id: number; name: string; barcode: string | null; quantity: number; unit_cost: number }
+interface Line { id: number; product_id: number; name: string; barcode: string | null; quantity: number; unit_cost: number; category_name: string | null }
 interface Check { qty: number; note: string | null }
 
 interface Props {
@@ -51,8 +51,9 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
   useEffect(() => {
     loadBarcodeAliasMap().then(setAliasMap)
     window.electronAPI.db.query(
-      `SELECT pi.id, p.id AS product_id, p.name, p.barcode, pi.quantity, COALESCE(pi.unit_cost, 0) AS unit_cost FROM purchase_items pi
-       JOIN products p ON p.id = pi.product_id WHERE pi.purchase_id = ? ORDER BY pi.id`,
+      `SELECT pi.id, p.id AS product_id, p.name, p.barcode, c.name AS category_name, pi.quantity, COALESCE(pi.unit_cost, 0) AS unit_cost FROM purchase_items pi
+       JOIN products p ON p.id = pi.product_id LEFT JOIN collections c ON c.id = p.category_id
+       WHERE pi.purchase_id = ? ORDER BY c.name, pi.id`,
       [purchaseId]
     ).then((rows) => {
       const list = (rows as Line[]).map((r) => ({ ...r, quantity: Number(r.quantity), unit_cost: Number(r.unit_cost) }))
@@ -111,6 +112,19 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
     if (product) toast.warning(t('purchases.notInOrder', { name: product.name }))
     else toast.error(t('purchases.barcodeNotFound', { code }))
   })
+
+  // One section per category (already the query's own order), so the review
+  // step before accepting reads the same way the printed order slip does.
+  const lineGroups = useMemo(() => {
+    const order: Array<string | null> = []
+    const byCategory = new Map<string | null, Line[]>()
+    for (const l of lines) {
+      const key = l.category_name ?? null
+      if (!byCategory.has(key)) { byCategory.set(key, []); order.push(key) }
+      byCategory.get(key)!.push(l)
+    }
+    return order.map((category) => ({ category, items: byCategory.get(category)! }))
+  }, [lines])
 
   const doneCount = lines.filter((l) => checks[l.id]).length
   const allChecked = lines.length > 0 && doneCount === lines.length
@@ -280,30 +294,41 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
               <p className="text-white text-sm font-semibold">{t('purchases.invoiceStep')}</p>
               <p className="text-xs text-gray-500 mb-2">{t('purchases.invoiceHint')}</p>
               <div className="space-y-1.5 max-h-[34vh] overflow-y-auto pr-1">
-                {lines.map((l) => {
-                  const qty = checks[l.id].qty
-                  const changed = priceOf(l) !== l.unit_cost
-                  return (
-                    <div key={l.id} className="bg-dark-card border border-dark-border rounded-xl px-3 py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-white text-sm font-medium truncate">{l.name}</p>
-                        <p className="text-xs text-gray-400 shrink-0">{qty} × = <span className="text-white font-semibold">UZS {fmtUZS(qty * priceOf(l))}</span></p>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 mt-1.5">
-                        <div>
-                          <label className="text-[11px] text-gray-500 block">{t('purchases.unitPriceInvoice')}</label>
-                          <Input type="number" min={0} step="any" value={prices[l.id] ?? ''} className={changed ? 'border-yellow-500/60' : ''}
-                            onChange={(e) => setPrices((p) => ({ ...p, [l.id]: e.target.value }))} />
-                        </div>
-                        <div>
-                          <label className="text-[11px] text-gray-500 block">{t('purchases.expiryOptional')}</label>
-                          <Input type="date" value={expiries[l.id] ?? ''}
-                            onChange={(e) => setExpiries((p) => ({ ...p, [l.id]: e.target.value }))} />
-                        </div>
-                      </div>
+                {lineGroups.map((g) => (
+                  <div key={g.category ?? '—'}>
+                    {lineGroups.length > 1 && (
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wider px-1 pt-1 pb-1">
+                        {g.category ?? t('products.noCategory')}
+                      </p>
+                    )}
+                    <div className="space-y-1.5">
+                      {g.items.map((l) => {
+                        const qty = checks[l.id].qty
+                        const changed = priceOf(l) !== l.unit_cost
+                        return (
+                          <div key={l.id} className="bg-dark-card border border-dark-border rounded-xl px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-white text-sm font-medium truncate">{l.name}</p>
+                              <p className="text-xs text-gray-400 shrink-0">{qty} × = <span className="text-white font-semibold">UZS {fmtUZS(qty * priceOf(l))}</span></p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 mt-1.5">
+                              <div>
+                                <label className="text-[11px] text-gray-500 block">{t('purchases.unitPriceInvoice')}</label>
+                                <Input type="number" min={0} step="any" value={prices[l.id] ?? ''} className={changed ? 'border-yellow-500/60' : ''}
+                                  onChange={(e) => setPrices((p) => ({ ...p, [l.id]: e.target.value }))} />
+                              </div>
+                              <div>
+                                <label className="text-[11px] text-gray-500 block">{t('purchases.expiryOptional')}</label>
+                                <Input type="date" value={expiries[l.id] ?? ''}
+                                  onChange={(e) => setExpiries((p) => ({ ...p, [l.id]: e.target.value }))} />
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
-                  )
-                })}
+                  </div>
+                ))}
               </div>
               <div className="flex justify-between items-center mt-2 px-1">
                 <span className="text-sm text-gray-400">{t('purchases.invoiceTotal')}</span>
@@ -333,7 +358,10 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
                   >
                     <div className="min-w-0">
                       <p className="text-white text-sm font-medium truncate">{line.name}</p>
-                      <p className="text-gray-500 text-xs">{t('purchases.ordered', { qty: line.quantity })}</p>
+                      <p className="text-gray-500 text-xs">
+                        {t('purchases.ordered', { qty: line.quantity })}
+                        {line.category_name && ` · ${line.category_name}`}
+                      </p>
                     </div>
                     {!check ? (
                       <span className="text-xs text-gray-500 shrink-0">{t('purchases.notChecked')}</span>

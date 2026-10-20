@@ -29,7 +29,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     receiptHtml: (receiptData: unknown) => ipcRenderer.invoke('printer:receiptHtml', receiptData),
     printBadge: (html: string, pageMm?: { w: number; h: number }) => ipcRenderer.invoke('printer:printBadge', html, pageMm),
     calibrateLabels: (pageMm: { w: number; h: number }) => ipcRenderer.invoke('printer:calibrateLabels', pageMm),
-    printShoppingList: (items: Array<{ name: string; qty: number; cost: number }>, meta?: { title?: string; reference?: string }) =>
+    printShoppingList: (items: Array<{ name: string; qty: number; cost: number; category?: string | null }>, meta?: { title?: string; reference?: string; supplier?: string | null }) =>
       ipcRenderer.invoke('printer:printShoppingList', items, meta),
     printReport: (doc: unknown) => ipcRenderer.invoke('printer:printReport', doc),
     openCashDrawer: () => ipcRenderer.invoke('printer:openCashDrawer'),

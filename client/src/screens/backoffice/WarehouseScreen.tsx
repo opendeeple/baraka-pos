@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
-import { Search, Warehouse as WarehouseIcon, ArrowRightLeft, PackagePlus, Store, ClipboardCheck, PackageMinus, CalendarClock } from 'lucide-react'
+import { Search, Warehouse as WarehouseIcon, ArrowRightLeft, PackagePlus, Store, ClipboardCheck, PackageMinus, CalendarClock, Truck } from 'lucide-react'
 import { loadExpiring, EXPIRING_DAYS, type ExpiringRow } from '../../lib/expiry'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
@@ -10,6 +10,7 @@ import { moveStock, stockAt, stockOnHand, averageCost } from '../../lib/stock'
 import { logAudit } from '../../lib/audit'
 import { StocktakeModal } from '../../components/backoffice/StocktakeModal'
 import { WriteOffModal } from '../../components/backoffice/WriteOffModal'
+import { PurchaseOrderModal } from '../../components/backoffice/PurchaseOrderModal'
 import { PendingOrderPicker, loadPendingOrders, type PendingOrder } from '../../components/backoffice/PendingOrderPicker'
 import { ReceivePurchaseModal } from '../../components/backoffice/ReceivePurchaseModal'
 import { Modal, Button, Input, PageHeader, EmptyState, SkeletonRow, Select } from '../../components/ui'
@@ -58,6 +59,7 @@ export default function WarehouseScreen() {
   const [receivingOrder, setReceivingOrder] = useState<PendingOrder | null>(null)
   const [showStocktake, setShowStocktake] = useState(false)
   const [showWriteOff, setShowWriteOff] = useState(false)
+  const [showOrder, setShowOrder] = useState(false)
   const [expiring, setExpiring] = useState<ExpiringRow[]>([])
   const debouncedSearch = useDebouncedValue(search)
   useEffect(() => { loadExpiring().then(setExpiring) }, [rows])
@@ -192,6 +194,9 @@ export default function WarehouseScreen() {
         subtitle={t('pageHints.warehouse')}
         actions={
           <>
+            <Button variant="secondary" icon={Truck} onClick={() => setShowOrder(true)}>
+              {t('purchases.newOrder')}
+            </Button>
             <Button variant="secondary" icon={PackagePlus} onClick={startReceive}>
               {t('warehouse.receive')}
             </Button>
@@ -341,6 +346,9 @@ export default function WarehouseScreen() {
             loadRows(); loadAllProducts()
           }}
         />
+      )}
+      {showOrder && (
+        <PurchaseOrderModal onClose={() => setShowOrder(false)} />
       )}
       {showStocktake && (
         <StocktakeModal onClose={() => setShowStocktake(false)} onDone={() => { setShowStocktake(false); loadRows(); loadAllProducts() }} />

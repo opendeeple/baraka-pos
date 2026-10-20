@@ -127,9 +127,10 @@ function rule(above: number[] | null, below: number[] | null): string {
 /**
  * The bordered items table at `width` characters, with a Jami row. Every
  * line is exactly `width` wide (barring an oversized number), so it lines up
- * under one monospace font.
+ * under one monospace font. `startIndex` continues the № column across
+ * several tables printed one after another (grouped by category).
  */
-export function thermalItemsTable(items: DocItem[], width: number): TextLine[] {
+export function thermalItemsTable(items: DocItem[], width: number, startIndex = 0): TextLine[] {
   const withPrice = width - 6 - NO_W - QTY_W - PRICE_W - SUM_W >= MIN_NAME_W
   const nameW = withPrice
     ? width - 6 - NO_W - QTY_W - PRICE_W - SUM_W
@@ -155,7 +156,7 @@ export function thermalItemsTable(items: DocItem[], width: number): TextLine[] {
   out.push({ text: rule(widths, items.length ? widths : totalWs) })
   items.forEach((it, i) => {
     const names = wrapText(it.name, nameW)
-    out.push({ text: row(pick(String(i + 1), names[0], fmtQty(it.qty), fmtMoney(it.price), fmtMoney(lineSum(it)))) })
+    out.push({ text: row(pick(String(startIndex + i + 1), names[0], fmtQty(it.qty), fmtMoney(it.price), fmtMoney(lineSum(it)))) })
     for (const more of names.slice(1)) out.push({ text: row(pick('', more, '', '', '')) })
     out.push({ text: rule(widths, i === items.length - 1 ? totalWs : widths) })
   })
@@ -163,6 +164,22 @@ export function thermalItemsTable(items: DocItem[], width: number): TextLine[] {
   out.push({ text: row(['Jami', totalQty, totalSum], totalWs, ['l', 'r', 'r']), bold: true })
   out.push({ text: rule(totalWs, null) })
   return out
+}
+
+/**
+ * Splits items into one group per category, in the order each category was
+ * first seen; items with no category share a single `null` group. Used to
+ * print a purchase order as separate sections instead of one flat list.
+ */
+export function groupByCategory<T extends { category?: string | null }>(items: T[]): Array<{ category: string | null; items: T[] }> {
+  const order: Array<string | null> = []
+  const byCategory = new Map<string | null, T[]>()
+  for (const it of items) {
+    const key = it.category?.trim() || null
+    if (!byCategory.has(key)) { byCategory.set(key, []); order.push(key) }
+    byCategory.get(key)!.push(it)
+  }
+  return order.map((category) => ({ category, items: byCategory.get(category)! }))
 }
 
 // ─── PDF page (HTML) ───────────────────────────────────────────────────────

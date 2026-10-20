@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { dbQuery } from '../services/db.service'
 import { sendRawToWindowsPrinter, CASH_DRAWER_PULSE, CASH_DRAWER_PULSE_TSPL } from '../services/rawPrint.service'
 import type { ReceiptDoc } from '@baraka/app-core'
-import { thermalItemsTable, boxLineForPrint, fmtMoney, fmtQty, fmtDateTime, THANKS, type DocItem } from '../services/documentLayout'
+import { thermalItemsTable, boxLineForPrint, fmtMoney, fmtQty, fmtDateTime, THANKS, groupByCategory, type DocItem } from '../services/documentLayout'
 
 interface EscposPrinter {
   font: (f: string) => EscposPrinter
@@ -144,10 +144,10 @@ function padRow(left: string, right: string, width: number): string {
 // calibrated charWidth scaled to that font, so the grid fills the paper.
 // line-height:1 lets each row's │ meet the next row's, so the vertical
 // borders print as solid lines too.
-function tableLinesHtml(items: DocItem[], layout: ReceiptLayoutConfig): string[] {
+function tableLinesHtml(items: DocItem[], layout: ReceiptLayoutConfig, startIndex = 0): string[] {
   const el = layout.elements.table
   const width = Math.floor(layout.charWidth * REFERENCE_FONT_PX / el.fontPx)
-  return thermalItemsTable(items, width).map((l) =>
+  return thermalItemsTable(items, width, startIndex).map((l) =>
     `<div style="font-size:${el.fontPx}px;line-height:1;margin-left:${el.shiftPx}px;${l.bold ? 'font-weight:700;' : ''}">${escapeHtml(l.text)}</div>`)
 }
 
@@ -351,7 +351,7 @@ function printOnWindowsPrinter(deviceName: string, doc: ReceiptDoc, layout: Rece
   return silentPrintHtml(deviceName, receiptHtml(doc, layout), layout.paperWidthMm)
 }
 
-export interface ShoppingListItem { name: string; qty: number; cost: number }
+export interface ShoppingListItem { name: string; qty: number; cost: number; category?: string | null }
 
 /** A purchase order prints as a titled, numbered list ("BUYURTMA", ZK-…) for its supplier. */
 export interface ShoppingListMeta { title?: string; reference?: string; supplier?: string | null }
@@ -383,7 +383,18 @@ function shoppingListHtml(items: ShoppingListItem[], layout: ReceiptLayoutConfig
   lines.push(div('invoiceInfo', meta.reference ? `${title} № ${meta.reference}` : title, 'font-weight:700;'))
   lines.push(div('invoiceInfo', `Sana: ${fmtDateTime(new Date())}`))
   if (meta.supplier) lines.push(div('invoiceInfo', `Yetkazib beruvchi: ${meta.supplier}`, 'font-weight:700;'))
-  lines.push(...tableLinesHtml(items.map((it) => ({ name: it.name, qty: it.qty, price: it.cost })), layout))
+  const groups = groupByCategory(items)
+  let idx = 0
+  for (const g of groups) {
+    if (groups.length > 1) lines.push(div('invoiceInfo', g.category ?? "Boshqa", 'font-weight:700;margin-top:4px;'))
+    lines.push(...tableLinesHtml(g.items.map((it) => ({ name: it.name, qty: it.qty, price: it.cost })), layout, idx))
+    idx += g.items.length
+  }
+  if (groups.length > 1) {
+    const totalQty = fmtQty(items.reduce((s, it) => s + it.qty, 0))
+    const totalSum = fmtMoney(items.reduce((s, it) => s + it.qty * it.cost, 0))
+    lines.push(div('totals', `Umumiy jami: ${totalQty} dona, ${totalSum}`, 'font-weight:700;'))
+  }
   lines.push(div('totals', 'Narxlar taxminiy (tannarx bo\'yicha)'))
   lines.push(`<div class="divider"></div>`)
   if (store?.phone) lines.push(div('storeInfo', centerPad(`Tel: ${store.phone}`, W, scaleOf('storeInfo')), 'font-weight:700;'))
@@ -641,15 +652,21 @@ export function registerPrinterIpc() {
         { text: 'Narx', width: 0.2, align: 'RIGHT' },
         { text: 'Summa', width: 0.24, align: 'RIGHT' },
       ])
-      list.forEach((it, i) => {
-        printer.tableCustom([
-          { text: String(i + 1), width: 0.06 },
-          { text: it.name.slice(0, 20), width: 0.38 },
-          { text: String(it.qty), width: 0.12, align: 'RIGHT' },
-          { text: fmt(it.cost), width: 0.2, align: 'RIGHT' },
-          { text: fmt(it.qty * it.cost), width: 0.24, align: 'RIGHT' },
-        ])
-      })
+      const groups = groupByCategory(list)
+      let idx = 0
+      for (const g of groups) {
+        if (groups.length > 1) printer.style('b').text(g.category ?? 'Boshqa').style('normal')
+        g.items.forEach((it, i) => {
+          printer.tableCustom([
+            { text: String(idx + i + 1), width: 0.06 },
+            { text: it.name.slice(0, 20), width: 0.38 },
+            { text: String(it.qty), width: 0.12, align: 'RIGHT' },
+            { text: fmt(it.cost), width: 0.2, align: 'RIGHT' },
+            { text: fmt(it.qty * it.cost), width: 0.24, align: 'RIGHT' },
+          ])
+        })
+        idx += g.items.length
+      }
       printer
         .drawLine()
         .tableCustom([

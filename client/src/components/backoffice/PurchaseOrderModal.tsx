@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Search, X, Minus, Plus } from 'lucide-react'
-import { Modal, Button, Input } from '../ui'
+import { Modal, Button, Input, Select } from '../ui'
 import { fmtUZS } from '../../lib/currency'
 import { useAuthStore } from '../../store/auth.store'
 import { useBarcodeScanner } from '../../hooks/useBarcode'
@@ -13,8 +13,10 @@ import { SupplierPicker } from './SupplierPicker'
 interface PickProduct {
   id: number; name: string; barcode: string | null; batch_id: number; cost: number
   stock: number; alert_quantity: number; is_stock_managed: number
+  category_id: number | null; category_name: string | null
 }
 interface Line { key: string; product: PickProduct; qty: string; cost: string }
+interface Category { id: number; name: string }
 
 interface Props {
   onClose: () => void
@@ -35,6 +37,8 @@ export function PurchaseOrderModal({ onClose, onCreated }: Props) {
   const { t } = useTranslation()
   const { user, store } = useAuthStore()
   const [products, setProducts] = useState<PickProduct[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [catFilter, setCatFilter] = useState('')
   const [search, setSearch] = useState('')
   const [lines, setLines] = useState<Line[]>([])
   const [note, setNote] = useState('')
@@ -45,11 +49,15 @@ export function PurchaseOrderModal({ onClose, onCreated }: Props) {
   useEffect(() => {
     loadBarcodeAliasMap().then(setAliasMap)
     window.electronAPI.db.query(
-      `SELECT p.id, p.name, p.barcode, pb.id AS batch_id, COALESCE(pb.cost, 0) AS cost,
+      `SELECT id, name FROM collections WHERE collection_type='category' AND deleted_at IS NULL ORDER BY name`, []
+    ).then((rows) => setCategories(rows as Category[]))
+    window.electronAPI.db.query(
+      `SELECT p.id, p.name, p.barcode, p.category_id, c.name AS category_name, pb.id AS batch_id, COALESCE(pb.cost, 0) AS cost,
               COALESCE(p.alert_quantity, 0) AS alert_quantity, COALESCE(p.is_stock_managed, 1) AS is_stock_managed,
               COALESCE((SELECT quantity FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id AND location = 'shop' ORDER BY id DESC LIMIT 1), 0)
             + COALESCE((SELECT quantity FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id AND location = 'warehouse' ORDER BY id DESC LIMIT 1), 0) AS stock
        FROM products p
+       LEFT JOIN collections c ON c.id = p.category_id
        JOIN product_batches pb ON pb.id = (
          SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
        )
@@ -64,9 +72,24 @@ export function PurchaseOrderModal({ onClose, onCreated }: Props) {
   // Running-low products first — those are usually what's being ordered.
   const catalog = useMemo(() => {
     const q = search.trim().toLowerCase()
-    const list = q ? products.filter((p) => p.name.toLowerCase().includes(q) || p.barcode === search.trim()) : products
+    let list = q ? products.filter((p) => p.name.toLowerCase().includes(q) || p.barcode === search.trim()) : products
+    if (catFilter) list = list.filter((p) => String(p.category_id ?? '') === catFilter)
     return [...list].sort((a, b) => Number(isLow(b)) - Number(isLow(a)) || a.name.localeCompare(b.name))
-  }, [search, products])
+  }, [search, catFilter, products])
+
+  // Grouped by category so the catalog reads the same way the printed order
+  // slip does — one section per category, uncategorized products last.
+  const catalogGroups = useMemo(() => {
+    const order: Array<string | null> = []
+    const byCategory = new Map<string | null, PickProduct[]>()
+    for (const p of catalog) {
+      const key = p.category_name ?? null
+      if (!byCategory.has(key)) { byCategory.set(key, []); order.push(key) }
+      byCategory.get(key)!.push(p)
+    }
+    order.sort((a, b) => (a === null ? 1 : b === null ? -1 : 0))
+    return order.map((category) => ({ category, items: byCategory.get(category)! }))
+  }, [catalog])
 
   function addProduct(p: PickProduct) {
     setLines((prev) => {
@@ -149,50 +172,69 @@ export function PurchaseOrderModal({ onClose, onCreated }: Props) {
       <div className="p-5 grid grid-cols-5 gap-4">
         {/* Catalog */}
         <div className="col-span-2 flex flex-col min-h-0">
-          <div className="relative mb-2">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={onSearchKeyDown}
-              placeholder={t('purchases.searchOrScan')}
-              className="w-full bg-dark-card border border-dark-border rounded-lg pl-9 pr-9 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary"
+          <div className="flex items-center gap-2 mb-2">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={onSearchKeyDown}
+                placeholder={t('purchases.searchOrScan')}
+                className="w-full bg-dark-card border border-dark-border rounded-lg pl-9 pr-9 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-white">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <Select
+              value={catFilter}
+              onChange={setCatFilter}
+              className="w-36 shrink-0"
+              options={[{ value: '', label: t('common.all') }, ...categories.map((c) => ({ value: String(c.id), label: c.name }))]}
             />
-            {search && (
-              <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-white">
-                <X size={14} />
-              </button>
-            )}
           </div>
           <p className="text-xs text-gray-500 mb-2">{t('purchases.tapToAdd')}</p>
           <div className="h-[44vh] overflow-y-auto space-y-1.5 pr-1">
             {catalog.length === 0 && (
               <p className="text-center text-gray-500 text-sm py-8">{t('purchases.noProductsFound')}</p>
             )}
-            {catalog.map((p) => {
-              const inOrder = qtyById.get(p.id)
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => addProduct(p)}
-                  className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left transition-colors active:bg-primary/10 ${
-                    inOrder ? 'border-primary/60 bg-primary/5' : 'border-dark-border bg-dark-card'
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{p.name}</p>
-                    <p className={`text-xs ${isLow(p) ? 'text-red-400' : 'text-gray-500'}`}>
-                      {t('purchases.stockLeft', { qty: p.stock })} · UZS {fmtUZS(p.cost)}
-                    </p>
-                  </div>
-                  {inOrder ? (
-                    <span className="shrink-0 min-w-[2rem] h-7 px-2 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center">{inOrder}</span>
-                  ) : (
-                    <Plus size={16} className="shrink-0 text-gray-500" />
-                  )}
-                </button>
-              )
-            })}
+            {catalogGroups.map((g) => (
+              <div key={g.category ?? '—'}>
+                {catalogGroups.length > 1 && (
+                  <p className="text-[11px] text-gray-500 uppercase tracking-wider px-1 pt-1 pb-1 sticky top-0 bg-dark-surface">
+                    {g.category ?? t('products.noCategory')}
+                  </p>
+                )}
+                <div className="space-y-1.5">
+                  {g.items.map((p) => {
+                    const inOrder = qtyById.get(p.id)
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => addProduct(p)}
+                        className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-left transition-colors active:bg-primary/10 ${
+                          inOrder ? 'border-primary/60 bg-primary/5' : 'border-dark-border bg-dark-card'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-white text-sm font-medium truncate">{p.name}</p>
+                          <p className={`text-xs ${isLow(p) ? 'text-red-400' : 'text-gray-500'}`}>
+                            {t('purchases.stockLeft', { qty: p.stock })} · UZS {fmtUZS(p.cost)}
+                          </p>
+                        </div>
+                        {inOrder ? (
+                          <span className="shrink-0 min-w-[2rem] h-7 px-2 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center">{inOrder}</span>
+                        ) : (
+                          <Plus size={16} className="shrink-0 text-gray-500" />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
