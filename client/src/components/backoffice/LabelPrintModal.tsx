@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Search, X, Minus, Plus, Barcode, Tag } from 'lucide-react'
-import { Modal, Button, Select } from '../ui'
+import { Modal, Button } from '../ui'
 import { fmtUZS } from '../../lib/currency'
 import { useAuthStore } from '../../store/auth.store'
 import { useBarcodeScanner } from '../../hooks/useBarcode'
-import { barcodeSvg, labelsHtml, LABEL_SIZES, type LabelSize } from '../../lib/labels'
+import { barcodeSvg, labelsHtml, labelGeometry, loadLabelSize, DEFAULT_LABEL_SIZE, LABEL_PRESETS, type LabelSize } from '../../lib/labels'
+import { StickerSizeSelect } from './StickerSizeSelect'
 import { loadBarcodeAliasMap, generateUniqueBarcode } from '../../lib/productBarcodes'
 
 interface Row {
@@ -27,7 +28,9 @@ export function LabelPrintModal({ onClose }: { onClose: () => void }) {
   const [products, setProducts] = useState<Row[]>([])
   const [search, setSearch] = useState('')
   const [picks, setPicks] = useState<Pick[]>([])
-  const [size, setSize] = useState<LabelSize>('58x40')
+  // Starts on the sticker size set in Settings; a change here is for this run only.
+  const [size, setSize] = useState<LabelSize>(DEFAULT_LABEL_SIZE)
+  useEffect(() => { loadLabelSize().then(setSize) }, [])
   const [showStore, setShowStore] = useState(true)
   const [printing, setPrinting] = useState(false)
   const [aliasMap, setAliasMap] = useState<Map<string, number>>(new Map())
@@ -105,18 +108,19 @@ export function LabelPrintModal({ onClose }: { onClose: () => void }) {
     { storeName: showStore ? store?.name ?? '' : '', perKg: t('labels.perKg'), perBox: t('labels.perBox'), perPiece: t('labels.perPiece'), currency: t('labels.currency') }
   )
 
-  const dims = LABEL_SIZES[size]
-
   async function print() {
     setPrinting(true)
     try {
-      const res = await window.electronAPI.printer.printBadge(html(picks), { width: dims.w, height: dims.h })
+      const res = await window.electronAPI.printer.printBadge(html(picks), labelGeometry(size))
       if (res.success) toast.success(t('labels.printed', { count: picks.reduce((s, p) => s + p.copies, 0) }))
       else if (res.error) toast.error(res.error)
     } finally { setPrinting(false) }
   }
 
   const total = picks.reduce((s, p) => s + p.copies, 0)
+  const dims = labelGeometry(size)
+  // Big stock (100×60) wouldn't fit the side column at 1:1, so the preview shrinks.
+  const previewScale = Math.min(1, 80 / dims.w)
 
   return (
     <Modal open onClose={onClose} title={t('labels.title')} maxWidth="max-w-6xl"
@@ -187,8 +191,7 @@ export function LabelPrintModal({ onClose }: { onClose: () => void }) {
         <div className="col-span-4 space-y-3">
           <div>
             <label className="text-xs text-gray-400 mb-1 block">{t('labels.size')}</label>
-            <Select value={size} onChange={(v) => setSize(v as LabelSize)}
-              options={(Object.keys(LABEL_SIZES) as LabelSize[]).map((k) => ({ value: k, label: `${k.replace('x', ' × ')} mm` }))} />
+            <StickerSizeSelect value={size} onChange={setSize} presets={LABEL_PRESETS} />
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-300">
             <input type="checkbox" className="w-4 h-4" checked={showStore} onChange={(e) => setShowStore(e.target.checked)} />
@@ -203,9 +206,9 @@ export function LabelPrintModal({ onClose }: { onClose: () => void }) {
           {picks.length > 0 && (
             <div>
               <p className="text-xs text-gray-400 mb-1">{t('labels.preview')}</p>
-              <div className="bg-white rounded-lg overflow-hidden inline-block" style={{ width: `${dims.w}mm`, height: `${dims.h}mm` }}>
+              <div className="bg-white rounded-lg overflow-hidden inline-block" style={{ width: `${dims.w * previewScale}mm`, height: `${dims.h * previewScale}mm` }}>
                 <iframe title="label" srcDoc={html([{ ...picks[0], copies: 1 }])}
-                  style={{ width: `${dims.w}mm`, height: `${dims.h}mm`, border: 0 }} />
+                  style={{ width: `${dims.w}mm`, height: `${dims.h}mm`, border: 0, transform: `scale(${previewScale})`, transformOrigin: 'top left' }} />
               </div>
             </div>
           )}

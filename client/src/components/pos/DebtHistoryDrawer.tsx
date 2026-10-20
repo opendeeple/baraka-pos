@@ -69,6 +69,11 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
     ).then((rows) => setOwnerPin((rows as Array<{ meta_value: string }>)[0]?.meta_value ?? ''))
   }, [])
 
+  // Cash handed over beyond the debt is change, given back from the drawer —
+  // only the debt itself is recorded. Card/Click can't give change.
+  const entered = parseFloat(payAmount) || 0
+  const payChange = payMethod === 'Cash' ? Math.max(0, entered - Math.max(0, currentBalance)) : 0
+
   const totalDebt = debts.reduce((s, d) => s + Number(d.amount), 0)
   const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0)
   const fullyPaid = currentBalance <= 0
@@ -106,19 +111,18 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
   }
 
   async function confirmPayment() {
-    const amt = parseFloat(payAmount)
-    if (!amt || amt <= 0) { setPayError(t('debt.enterValidAmount')); return }
-    // Only cash can exceed what's owed — the difference is handed back as
-    // change, same rule as a sale's own payment screen. Card/Click settle
-    // exactly the debt; there's no "change" on an electronic payment.
-    if (payMethod !== 'Cash' && amt > currentBalance) { setPayError(t('debt.cannotExceed', { amount: `UZS ${fmtUZS(currentBalance)}` })); return }
+    const received = parseFloat(payAmount)
+    if (!received || received <= 0) { setPayError(t('debt.enterValidAmount')); return }
+    if (payMethod !== 'Cash' && received > currentBalance) { setPayError(t('debt.cannotExceed', { amount: `UZS ${fmtUZS(currentBalance)}` })); return }
+    // What goes against the debt; the rest of the cash is change.
+    const amt = Math.min(received, currentBalance)
+    const change = received - amt
+    if (amt <= 0) { setPayError(t('debt.enterValidAmount')); return }
     setPaying(true)
     setPayError('')
     try {
       const now = new Date().toISOString()
-      const appliedAmt = Math.min(amt, currentBalance)
-      const changeAmount = Math.max(0, amt - currentBalance)
-      const newBalance = Math.max(0, currentBalance - appliedAmt)
+      const newBalance = Math.max(0, currentBalance - amt)
       const cashLogSyncId = uuidv4()
       // The drawer it lands in: the till's open session (also when paying
       // from the Office on the same PC); card/Click never touch the drawer.
@@ -131,18 +135,15 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
       await window.electronAPI.db.transaction([
         {
           sql: `UPDATE contacts SET balance = MAX(0, balance - ?), updated_at = ? WHERE id = ?`,
-          params: [appliedAmt, now, contact.id],
+          params: [amt, now, contact.id],
         },
         // 'deposit' + contact = a debt repayment — the name Android and the
         // server use (older desktop rows say 'debt_payment'; both are read).
-        // The logged amount is what the debt was actually settled for, same
-        // as a sale's own cash_logs row never includes the change handed
-        // back — the drawer only ever nets the real amount kept.
         {
           sql: `INSERT INTO cash_logs (sync_id, store_id, session_id, transaction_type, amount, source, payment_method, description, reference_id, contact_id, created_by, created_at, updated_at)
                 VALUES (?, ?, ?, 'cash_in', ?, 'deposit', ?, 'Debt repayment', ?, ?, ?, ?, ?)`,
           params: [cashLogSyncId, store?.id ?? 1, current?.id ?? null,
-            appliedAmt, payMethod, contact.id, contact.id, user?.id ?? 1, now, now],
+            amt, payMethod, contact.id, contact.id, user?.id ?? 1, now, now],
         },
         {
           sql: `INSERT INTO sync_queue_local (entity_type, table_name, op, payload, sync_id, created_at, status)
@@ -150,17 +151,18 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
           params: [cashLogSyncId, now],
         },
       ])
-      await logAudit('debt_payment', { entity: 'contact', entityId: contact.id, details: { customer: contact.name, amount: appliedAmt, method: payMethod, balanceAfter: newBalance, change: changeAmount || undefined } })
+      await logAudit('debt_payment', { entity: 'contact', entityId: contact.id, details: { customer: contact.name, amount: amt, method: payMethod, balanceAfter: newBalance, ...(change > 0 ? { received, change } : {}) } })
       window.electronAPI.sync.pushPending().catch(() => {})
-      window.electronAPI.notify.debtPayment(contact.id, appliedAmt).catch(console.error)
+      window.electronAPI.notify.debtPayment(contact.id, amt).catch(console.error)
       window.electronAPI.printer.printReport({
         title: t('debt.paymentReceiptTitle'),
         subtitle: store?.name,
         lines: [
           { label: t('common.customer'), value: contact.name },
           { divider: true },
-          { label: t('debt.payment'), value: `UZS ${fmtUZS(appliedAmt)}`, bold: true },
-          ...(changeAmount > 0 ? [{ label: t('payment.change'), value: `UZS ${fmtUZS(changeAmount)}`, bold: true }] : []),
+          ...(change > 0 ? [{ label: t('debt.received'), value: `UZS ${fmtUZS(received)}` }] : []),
+          { label: t('debt.payment'), value: `UZS ${fmtUZS(amt)}`, bold: true },
+          ...(change > 0 ? [{ label: t('payment.change'), value: `UZS ${fmtUZS(change)}`, bold: true }] : []),
           newBalance > 0
             ? { label: t('debt.remaining'), value: `UZS ${fmtUZS(newBalance)}`, bold: true }
             : { label: t('debt.fullyPaid') },
@@ -275,10 +277,17 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
               ))}
             </div>
             <NumPad value={payAmount} onChange={setPayAmount} label={t('debt.repaymentAmount')} />
-            {payMethod === 'Cash' && (parseFloat(payAmount) || 0) > currentBalance && (
-              <p className="text-green-400 text-xs text-center shrink-0">
-                {t('debt.changeDue', { amount: `UZS ${fmtUZS((parseFloat(payAmount) || 0) - currentBalance)}` })}
-              </p>
+            {payChange > 0 && (
+              <div className="shrink-0 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">{t('debt.payment')}</span>
+                  <span className="text-white font-semibold">UZS {fmtUZS(currentBalance)}</span>
+                </div>
+                <div className="flex justify-between text-base">
+                  <span className="text-green-300 font-semibold">{t('payment.change')}</span>
+                  <span className="text-green-400 font-bold">UZS {fmtUZS(payChange)}</span>
+                </div>
+              </div>
             )}
           </div>
           {payError && (
@@ -381,7 +390,7 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
                 </button>
               )}
 
-              {hasHistory && allowAdminActions && (confirmClear ? (
+              {allowAdminActions && hasHistory && (confirmClear ? (
                 <div className="space-y-2">
                   <p className="text-xs text-gray-300 text-center">{t('debt.clearConfirm')}</p>
                   <div className="flex gap-2">
@@ -419,8 +428,8 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
               {/* Deletes the contact itself, debt or no debt — any open
                   balance is written off with it, which is why this asks for
                   the owner PIN (same gate as the owner-expense category)
-                  instead of a plain confirm. Office (Debtors/Customers) only
-                  — not a till action. */}
+                  instead of a plain confirm. Office-only, same as clearing
+                  debt history above. */}
               {allowAdminActions && (
                 <div className="space-y-1.5 pt-2 border-t border-dark-border/50">
                   {!fullyPaid && (

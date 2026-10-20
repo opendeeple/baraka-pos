@@ -3,8 +3,9 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Home, Package, Receipt as ReceiptIcon, Users, Truck, Wallet, Settings, ArrowLeft, BarChart2,
-  UserCog, LogOut, HandCoins, Warehouse, ScrollText, Factory, Landmark, type LucideIcon,
+  UserCog, LogOut, HandCoins, Warehouse, ScrollText, Factory, Landmark, Banknote, type LucideIcon,
 } from 'lucide-react'
+import { OpenDrawerButton } from '../pos/OpenDrawerButton'
 import { useAuthStore } from '../../store/auth.store'
 import { SyncStatusBadge } from './SyncStatusBadge'
 import { useAppMode } from '../../contexts/AppModeContext'
@@ -185,7 +186,12 @@ export function BackOfficeLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* Who's signed in */}
-        <div className="p-2 border-t border-dark-border">
+        <div className="p-2 border-t border-dark-border space-y-2">
+          <OpenDrawerButton
+            className="w-full flex items-center justify-center gap-2 h-10 rounded-lg border border-dark-border text-sm text-gray-300 hover:text-green-400 hover:border-green-400/40 disabled:opacity-40 transition-colors"
+          >
+            <Banknote size={15} /> {t('settings.openDrawer')}
+          </OpenDrawerButton>
           <div className="flex items-center gap-2 px-1">
             <div className="w-8 h-8 rounded-full bg-dark-card border border-dark-border flex items-center justify-center shrink-0">
               <span className="text-xs font-semibold text-gray-300">{user?.name?.charAt(0)}</span>

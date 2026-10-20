@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Modal, Button } from '../ui'
 import { useAuthStore } from '../../store/auth.store'
-import { labelsHtml, LABEL_SIZES, type LabelSize } from '../../lib/labels'
+import { labelsHtml, labelGeometry, loadLabelSize } from '../../lib/labels'
 import type { LabelCandidate } from '../../lib/purchases'
 
 interface Props {
@@ -40,16 +40,16 @@ export function ReceivingLabelsConfirmModal({ items: initial, onClose }: Props) 
         `SELECT meta_value FROM settings WHERE meta_key='receiving_label_config'`, []
       ) as Array<{ meta_value: string }>
       let mode: 'sticker' | 'roll' = 'sticker'
-      let size: LabelSize = '58x40'
       if (cfgRow?.meta_value) {
         try {
           const parsed = JSON.parse(cfgRow.meta_value)
           if (parsed.mode === 'roll' || parsed.mode === 'sticker') mode = parsed.mode
-          if (parsed.size) size = parsed.size
-        } catch { /* malformed setting — stick with the defaults above */ }
+        } catch { /* malformed setting — stick with the default above */ }
       }
 
       if (mode === 'sticker') {
+        // Same stock as every other label: the size set next to the label printer.
+        const size = await loadLabelSize()
         const html = labelsHtml(
           toPrint.map((p) => ({
             name: p.name, price: p.price, barcode: p.barcode, unit: p.unit, copies: Math.round(p.qty),
@@ -58,8 +58,7 @@ export function ReceivingLabelsConfirmModal({ items: initial, onClose }: Props) 
           size,
           { storeName: store?.name ?? '', perKg: t('labels.perKg'), perBox: t('labels.perBox'), perPiece: t('labels.perPiece'), currency: t('labels.currency') }
         )
-        const dims = LABEL_SIZES[size]
-        const res = await window.electronAPI.printer.printBadge(html, { width: dims.w, height: dims.h })
+        const res = await window.electronAPI.printer.printBadge(html, labelGeometry(size))
         if (res.success) { toast.success(t('labels.printed', { count: total })); onClose(); return }
         // Sticker stock jammed, wrong printer selected, etc. — the barcodes
         // are already minted and saved; fall back to a plain text listing so
