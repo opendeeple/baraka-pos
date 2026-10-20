@@ -382,7 +382,9 @@ export default function WarehouseScreen() {
       {showOrder && (
         <PurchaseOrderModal
           initialLines={orderCart}
-          onClose={() => setShowOrder(false)}
+          // Cancelling abandons the whole pick, not just the modal — otherwise
+          // the header button would keep showing a stale cart count.
+          onClose={() => { setShowOrder(false); setOrderCart([]) }}
           onCreated={() => setOrderCart([])}
         />
       )}
