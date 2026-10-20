@@ -382,9 +382,11 @@ export default function WarehouseScreen() {
       {showOrder && (
         <PurchaseOrderModal
           initialLines={orderCart}
-          // Cancelling abandons the whole pick, not just the modal — otherwise
-          // the header button would keep showing a stale cart count.
-          onClose={() => { setShowOrder(false); setOrderCart([]) }}
+          // ✕ / outside click just hides the window — the picked cart stays,
+          // so reopening the header button continues the same pick. Only
+          // "Bekor qilish" abandons it (onCancel below).
+          onClose={() => setShowOrder(false)}
+          onCancel={() => { setShowOrder(false); setOrderCart([]) }}
           onCreated={() => setOrderCart([])}
         />
       )}

@@ -25,6 +25,11 @@ interface Props {
    *  Warehouse table's per-row "qty then add" buttons) — the catalog here
    *  still works normally on top, for adding anything else to the same order. */
   initialLines?: Array<{ productId: number; qty: number }>
+  /** "Bekor qilish" — abandoning the order entirely, as opposed to just
+   *  closing this window (✕/outside click) while keeping the picked lines
+   *  for later (e.g. the Warehouse cart those initialLines came from).
+   *  Defaults to onClose when the caller has nothing extra to clean up. */
+  onCancel?: () => void
 }
 
 const isLow = (p: PickProduct) => Boolean(p.is_stock_managed) && p.alert_quantity > 0 && p.stock <= p.alert_quantity
@@ -37,7 +42,7 @@ const isLow = (p: PickProduct) => Boolean(p.is_stock_managed) && p.alert_quantit
  * prefilled from the cost price. Saving creates a waiting ('pending') order
  * and prints its slip; the delivery is checked later (ReceivePurchaseModal).
  */
-export function PurchaseOrderModal({ onClose, onCreated, initialLines }: Props) {
+export function PurchaseOrderModal({ onClose, onCreated, initialLines, onCancel }: Props) {
   const { t } = useTranslation()
   const { user, store } = useAuthStore()
   const [products, setProducts] = useState<PickProduct[]>([])
@@ -174,7 +179,7 @@ export function PurchaseOrderModal({ onClose, onCreated, initialLines }: Props) 
             <span className="text-sm text-gray-400 mr-3">{t('purchases.estimatedTotal')}</span>
             <span className="text-white text-lg font-bold">UZS {fmtUZS(total)}</span>
           </div>
-          <Button variant="secondary" className="w-40" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button variant="secondary" className="w-40" onClick={onCancel ?? onClose}>{t('common.cancel')}</Button>
           <Button className="w-56" onClick={save} loading={saving} disabled={!valid}>
             {t('purchases.saveAndPrint')}
           </Button>
