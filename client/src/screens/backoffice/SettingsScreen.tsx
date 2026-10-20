@@ -52,6 +52,11 @@ interface DebtPaymentNotifyConfig {
   enabled: boolean
 }
 
+/** Whether the drawer pops open by itself for one kind of cash movement — see lib/drawer.ts. */
+interface AutoDrawerConfig {
+  enabled: boolean
+}
+
 interface CreditorReminderConfig {
   enabled: boolean
   ownerPhone: string
@@ -149,6 +154,11 @@ export default function SettingsScreen() {
   const [debtSaleNotify, setDebtSaleNotify] = useState<DebtSaleNotifyConfig>({ enabled: true })
   // Default on — matches debtNotify.service.ts's DEFAULT_PAYMENT_CONFIG.
   const [debtPaymentNotify, setDebtPaymentNotify] = useState<DebtPaymentNotifyConfig>({ enabled: true })
+  // Default on for all four — matches lib/drawer.ts's own defaults.
+  const [autoDrawerSale, setAutoDrawerSale] = useState<AutoDrawerConfig>({ enabled: true })
+  const [autoDrawerDebtPayment, setAutoDrawerDebtPayment] = useState<AutoDrawerConfig>({ enabled: true })
+  const [autoDrawerExpense, setAutoDrawerExpense] = useState<AutoDrawerConfig>({ enabled: true })
+  const [autoDrawerSupplierPayment, setAutoDrawerSupplierPayment] = useState<AutoDrawerConfig>({ enabled: true })
   const [debtOverdueDays, setDebtOverdueDays] = useState('30')
   // Default on — matches creditorReminder.service.ts's DEFAULT_CONFIG.
   const [creditorReminder, setCreditorReminder] = useState<CreditorReminderConfig>({ enabled: true, ownerPhone: '' })
@@ -242,6 +252,18 @@ export default function SettingsScreen() {
     if (map.debt_payment_notify_config) {
       try { setDebtPaymentNotify({ enabled: true, ...JSON.parse(map.debt_payment_notify_config) }) } catch {}
     }
+    if (map.auto_drawer_sale_config) {
+      try { setAutoDrawerSale({ enabled: true, ...JSON.parse(map.auto_drawer_sale_config) }) } catch {}
+    }
+    if (map.auto_drawer_debt_payment_config) {
+      try { setAutoDrawerDebtPayment({ enabled: true, ...JSON.parse(map.auto_drawer_debt_payment_config) }) } catch {}
+    }
+    if (map.auto_drawer_expense_config) {
+      try { setAutoDrawerExpense({ enabled: true, ...JSON.parse(map.auto_drawer_expense_config) }) } catch {}
+    }
+    if (map.auto_drawer_supplier_payment_config) {
+      try { setAutoDrawerSupplierPayment({ enabled: true, ...JSON.parse(map.auto_drawer_supplier_payment_config) }) } catch {}
+    }
     if (map.debt_overdue_days) setDebtOverdueDays(map.debt_overdue_days)
     if (map.creditor_reminder_config) {
       try { setCreditorReminder({ enabled: true, ownerPhone: '', ...JSON.parse(map.creditor_reminder_config) }) } catch {}
@@ -309,6 +331,10 @@ export default function SettingsScreen() {
       await saveSetting('auto_reminder_config', JSON.stringify(autoReminder))
       await saveSetting('debt_sale_notify_config', JSON.stringify(debtSaleNotify))
       await saveSetting('debt_payment_notify_config', JSON.stringify(debtPaymentNotify))
+      await saveSetting('auto_drawer_sale_config', JSON.stringify(autoDrawerSale))
+      await saveSetting('auto_drawer_debt_payment_config', JSON.stringify(autoDrawerDebtPayment))
+      await saveSetting('auto_drawer_expense_config', JSON.stringify(autoDrawerExpense))
+      await saveSetting('auto_drawer_supplier_payment_config', JSON.stringify(autoDrawerSupplierPayment))
       await saveSetting('debt_overdue_days', String(Number(debtOverdueDays) > 0 ? Number(debtOverdueDays) : 30))
       await saveSetting('creditor_reminder_config', JSON.stringify(creditorReminder))
       await saveSetting('receiving_label_config', JSON.stringify(receivingLabel))
@@ -825,6 +851,37 @@ export default function SettingsScreen() {
           <div className="flex items-center gap-2 mt-1">
             <Printer size={14} className="text-gray-500" />
             <span className="text-xs text-gray-500">{t('settings.printerAppliesNow')}</span>
+          </div>
+        </div>
+
+        {/* Each kind of cash movement gets its own on/off, instead of one
+            blanket switch — a shop that keeps debt payments off-till (in a
+            separate ledger, say) can leave that one off without losing the
+            others. All default on; see lib/drawer.ts. */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm flex items-center gap-2"><Banknote size={15} /> {t('settings.autoDrawerTitle')}</h2>
+          <p className="text-xs text-gray-500 -mt-2">{t('settings.autoDrawerHint')}</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+            <label className="flex items-center gap-2 text-sm text-gray-300">
+              <input type="checkbox" className="w-4 h-4" checked={autoDrawerSale.enabled}
+                onChange={(e) => setAutoDrawerSale({ enabled: e.target.checked })} />
+              {t('settings.autoDrawerSale')}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-300">
+              <input type="checkbox" className="w-4 h-4" checked={autoDrawerDebtPayment.enabled}
+                onChange={(e) => setAutoDrawerDebtPayment({ enabled: e.target.checked })} />
+              {t('settings.autoDrawerDebtPayment')}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-300">
+              <input type="checkbox" className="w-4 h-4" checked={autoDrawerExpense.enabled}
+                onChange={(e) => setAutoDrawerExpense({ enabled: e.target.checked })} />
+              {t('settings.autoDrawerExpense')}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-300">
+              <input type="checkbox" className="w-4 h-4" checked={autoDrawerSupplierPayment.enabled}
+                onChange={(e) => setAutoDrawerSupplierPayment({ enabled: e.target.checked })} />
+              {t('settings.autoDrawerSupplierPayment')}
+            </label>
           </div>
         </div>
 

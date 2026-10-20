@@ -5,6 +5,7 @@ import { Modal, Button, Input } from '../ui'
 import { fmtUZS } from '../../lib/currency'
 import { useAuthStore } from '../../store/auth.store'
 import { paySupplier, UNPAID_PURCHASES_SQL, type PayMethod } from '../../lib/purchases'
+import { autoOpenDrawer } from '../../lib/drawer'
 
 interface Props {
   supplier: { id: number; name: string }
@@ -50,9 +51,11 @@ export function SupplierPayModal({ supplier, onClose, onPaid }: Props) {
     if (!valid) return
     setSaving(true)
     try {
+      const paidFromTill = method === 'Cash' && fromTill
       const res = await paySupplier(supplier.id, value, method, {
-        userId: user?.id ?? null, storeId: store?.id ?? 1, fromTill: method === 'Cash' && fromTill, note,
+        userId: user?.id ?? null, storeId: store?.id ?? 1, fromTill: paidFromTill, note,
       })
+      if (paidFromTill) autoOpenDrawer('supplierPayment', (msg) => toast.error(msg || t('settings.drawerFailed')))
       toast.success(t('suppliers.paid', { amount: fmtUZS(res.applied), name: supplier.name }))
       onPaid()
       onClose()

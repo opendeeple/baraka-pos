@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { ArrowLeft, User, Banknote, Trash2, Lock, CheckCircle2 } from 'lucide-react'
 import { fmtUZS } from '../../lib/currency'
 import { lastClearedSql, fmtDateTime, REPAYMENT_FOR_CONTACT } from '../../lib/debt'
 import { logAudit } from '../../lib/audit'
+import { autoOpenDrawer } from '../../lib/drawer'
 import { NumPad } from './NumPad'
 import { PinConfirmModal } from '../ui'
 import { useAuthStore } from '../../store/auth.store'
@@ -168,6 +170,7 @@ export function DebtHistoryPanel({ contact, onClose, onPaymentComplete, onCleare
             : { label: t('debt.fullyPaid') },
         ],
       }).catch(console.error)
+      if (payMethod === 'Cash') autoOpenDrawer('debtPayment', (msg) => toast.error(msg || t('settings.drawerFailed')))
       setCurrentBalance(newBalance)
       setShowPay(false)
       setPayAmount('0')

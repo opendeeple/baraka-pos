@@ -8,6 +8,7 @@ import { useAuthStore } from '../../store/auth.store'
 import { fmtUZS } from '../../lib/currency'
 import { Modal, Button, Input, EmptyState, PageHeader, Select, DatePicker, PinConfirmModal } from '../../components/ui'
 import { logAudit } from '../../lib/audit'
+import { autoOpenDrawer } from '../../lib/drawer'
 
 interface Expense {
   id: number; expense_date: string; category: string; description: string
@@ -93,6 +94,7 @@ export default function ExpensesScreen() {
           [cashLogSyncId, store?.id ?? 1, current?.id ?? null, Number(form.amount) * -1, form.description || form.category, user?.id ?? 1, now, now]
         )
         await window.electronAPI.sync.enqueue('cash_logs', cashLogSyncId, 'upsert')
+        autoOpenDrawer('expense', (msg) => toast.error(msg || t('settings.drawerFailed')))
       }
       await logAudit('expense', { entity: 'expense', entityId: syncId, details: { category: form.category, amount: Number(form.amount), method: form.payment_method, description: form.description } })
       window.electronAPI.sync.pushPending().catch(() => {})

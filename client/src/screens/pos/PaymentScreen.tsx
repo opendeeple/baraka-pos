@@ -15,6 +15,7 @@ import { ReceiptModal } from '../../components/pos/ReceiptModal'
 import { v4 as uuidv4 } from 'uuid'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { isOverdueSql, loadDebtOverdueDays } from '../../lib/debt'
+import { autoOpenDrawer } from '../../lib/drawer'
 
 const PAYMENT_METHODS: { method: PaymentMethod; labelKey: string; icon: string }[] = [
   { method: 'Cash',  labelKey: 'payment.methodCash',  icon: '💵' },
@@ -283,9 +284,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
 
       // Post-transaction: fire-and-forget side effects
       if (cashPayments.length > 0) {
-        window.electronAPI.printer.openCashDrawer()
-          .then((r) => { if (!r.success) toast.error(r.error || t('settings.drawerFailed')) })
-          .catch(console.error)
+        autoOpenDrawer('sale', (msg) => toast.error(msg || t('settings.drawerFailed')))
       }
       window.electronAPI.sync.pushPending().catch(console.error)
       // Tells the debtor what they just took and their new total debt —
