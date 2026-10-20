@@ -360,6 +360,9 @@
   },
   "purchases": {
     "newOrder": "Order Goods",
+    "order": "Order",
+    "confirmOrderCount": "Confirm order ({{count}})",
+    "addToCart": "Add to cart",
     "tapToAdd": "Tap a product to add it to the order. Running-low ones are on top.",
     "stockLeft": "In stock: {{qty}}",
     "noProductsFound": "No products found",

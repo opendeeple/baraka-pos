@@ -21,6 +21,10 @@ interface Category { id: number; name: string }
 interface Props {
   onClose: () => void
   onCreated?: (purchaseId: number) => void
+  /** Pre-fills the order from products already picked elsewhere (the
+   *  Warehouse table's per-row "qty then add" buttons) — the catalog here
+   *  still works normally on top, for adding anything else to the same order. */
+  initialLines?: Array<{ productId: number; qty: number }>
 }
 
 const isLow = (p: PickProduct) => Boolean(p.is_stock_managed) && p.alert_quantity > 0 && p.stock <= p.alert_quantity
@@ -33,7 +37,7 @@ const isLow = (p: PickProduct) => Boolean(p.is_stock_managed) && p.alert_quantit
  * prefilled from the cost price. Saving creates a waiting ('pending') order
  * and prints its slip; the delivery is checked later (ReceivePurchaseModal).
  */
-export function PurchaseOrderModal({ onClose, onCreated }: Props) {
+export function PurchaseOrderModal({ onClose, onCreated, initialLines }: Props) {
   const { t } = useTranslation()
   const { user, store } = useAuthStore()
   const [products, setProducts] = useState<PickProduct[]>([])
@@ -64,9 +68,18 @@ export function PurchaseOrderModal({ onClose, onCreated }: Props) {
        WHERE p.deleted_at IS NULL
        ORDER BY p.name`,
       []
-    ).then((rows) => setProducts((rows as PickProduct[]).map((r) => ({
-      ...r, cost: Number(r.cost), stock: Number(r.stock), alert_quantity: Number(r.alert_quantity),
-    }))))
+    ).then((rows) => {
+      const mapped = (rows as PickProduct[]).map((r) => ({
+        ...r, cost: Number(r.cost), stock: Number(r.stock), alert_quantity: Number(r.alert_quantity),
+      }))
+      setProducts(mapped)
+      if (initialLines?.length) {
+        setLines(initialLines.flatMap(({ productId, qty }) => {
+          const p = mapped.find((m) => m.id === productId)
+          return p && qty > 0 ? [{ key: crypto.randomUUID(), product: p, qty: String(qty), cost: String(p.cost) }] : []
+        }))
+      }
+    })
   }, [])
 
   // Running-low products first — those are usually what's being ordered.

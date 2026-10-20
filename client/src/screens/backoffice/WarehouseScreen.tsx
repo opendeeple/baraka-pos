@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
-import { Search, Warehouse as WarehouseIcon, ArrowRightLeft, PackagePlus, Store, ClipboardCheck, PackageMinus, CalendarClock, Truck } from 'lucide-react'
+import { Search, Warehouse as WarehouseIcon, ArrowRightLeft, PackagePlus, Store, ClipboardCheck, PackageMinus, CalendarClock, Truck, ShoppingCart } from 'lucide-react'
 import { loadExpiring, EXPIRING_DAYS, type ExpiringRow } from '../../lib/expiry'
 import { BackOfficeLayout } from '../../components/layout/BackOfficeLayout'
 import { fmtUZS } from '../../lib/currency'
@@ -22,6 +22,7 @@ interface StockRow {
   category_id: number | null
   category_name: string | null
   batch_id: number | null
+  unit: string | null
   cost: number
   price: number
   expiry_date: string | null
@@ -60,6 +61,10 @@ export default function WarehouseScreen() {
   const [showStocktake, setShowStocktake] = useState(false)
   const [showWriteOff, setShowWriteOff] = useState(false)
   const [showOrder, setShowOrder] = useState(false)
+  // Picked row by row from the table below (qty entered per product) before
+  // placing one order for all of them — not a separate catalog to search in.
+  const [orderCart, setOrderCart] = useState<Array<{ productId: number; qty: number }>>([])
+  const [orderQtyTarget, setOrderQtyTarget] = useState<StockRow | null>(null)
   const [expiring, setExpiring] = useState<ExpiringRow[]>([])
   const debouncedSearch = useDebouncedValue(search)
   useEffect(() => { loadExpiring().then(setExpiring) }, [rows])
@@ -102,7 +107,7 @@ export default function WarehouseScreen() {
 
   async function loadRows() {
     let sql = `
-      SELECT p.id, p.name, p.category_id, c.name as category_name,
+      SELECT p.id, p.name, p.category_id, c.name as category_name, p.unit,
              pb.id as batch_id, pb.cost, pb.price, pb.expiry_date,
              COALESCE(shop.quantity, 0) as shop_qty,
              COALESCE(wh.quantity, 0) as warehouse_qty
@@ -194,8 +199,12 @@ export default function WarehouseScreen() {
         subtitle={t('pageHints.warehouse')}
         actions={
           <>
-            <Button variant="secondary" icon={Truck} onClick={() => setShowOrder(true)}>
-              {t('purchases.newOrder')}
+            <Button
+              variant={orderCart.length ? 'primary' : 'secondary'}
+              icon={orderCart.length ? ShoppingCart : Truck}
+              onClick={() => setShowOrder(true)}
+            >
+              {orderCart.length ? t('purchases.confirmOrderCount', { count: orderCart.length }) : t('purchases.newOrder')}
             </Button>
             <Button variant="secondary" icon={PackagePlus} onClick={startReceive}>
               {t('warehouse.receive')}
@@ -304,6 +313,15 @@ export default function WarehouseScreen() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
+                    <button onClick={() => setOrderQtyTarget(r)} className={`flex items-center gap-1 text-xs hover:underline ${
+                      orderCart.some((l) => l.productId === r.id) ? 'text-primary font-semibold' : 'text-gray-400'
+                    }`}>
+                      <Truck size={13} /> {t('purchases.order')}
+                      {(() => {
+                        const inCart = orderCart.find((l) => l.productId === r.id)
+                        return inCart ? ` (${inCart.qty})` : ''
+                      })()}
+                    </button>
                     <button onClick={() => setReceiveTarget(r)} className="flex items-center gap-1 text-xs text-primary hover:underline">
                       <PackagePlus size={13} /> {t('warehouse.receive')}
                     </button>
@@ -347,8 +365,26 @@ export default function WarehouseScreen() {
           }}
         />
       )}
+      {orderQtyTarget && (
+        <OrderQtyModal
+          product={orderQtyTarget}
+          initialQty={orderCart.find((l) => l.productId === orderQtyTarget.id)?.qty ?? 0}
+          onClose={() => setOrderQtyTarget(null)}
+          onConfirm={(qty) => {
+            setOrderCart((prev) => {
+              const without = prev.filter((l) => l.productId !== orderQtyTarget.id)
+              return qty > 0 ? [...without, { productId: orderQtyTarget.id, qty }] : without
+            })
+            setOrderQtyTarget(null)
+          }}
+        />
+      )}
       {showOrder && (
-        <PurchaseOrderModal onClose={() => setShowOrder(false)} />
+        <PurchaseOrderModal
+          initialLines={orderCart}
+          onClose={() => setShowOrder(false)}
+          onCreated={() => setOrderCart([])}
+        />
       )}
       {showStocktake && (
         <StocktakeModal onClose={() => setShowStocktake(false)} onDone={() => { setShowStocktake(false); loadRows(); loadAllProducts() }} />
@@ -556,6 +592,55 @@ function TransferModal({ product, products, onClose, onConfirm }: {
         <div>
           <label className="text-xs text-gray-400 mb-1 block">{t('warehouse.quantity')}</label>
           <Input type="number" min={0} max={picked?.warehouse_qty ?? 0} step="any" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus={Boolean(product)} />
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+const unitLabel = (unit: string | null, t: (key: string) => string) =>
+  unit === 'kg' ? t('products.unitKg') : unit === 'box' ? t('products.unitBox') : t('products.unitPiece')
+
+// Adds (or edits) this one product's line in the order cart being built from
+// the table — a quick qty prompt, not the full order form (supplier/note/
+// other products still get picked in PurchaseOrderModal once "confirm" is
+// pressed). Decimal quantities work the same for kg and piece products;
+// only the unit label shown next to the input differs.
+function OrderQtyModal({ product, initialQty, onClose, onConfirm }: {
+  product: StockRow
+  initialQty: number
+  onClose: () => void
+  onConfirm: (qty: number) => void
+}) {
+  const { t } = useTranslation()
+  const [qty, setQty] = useState(initialQty > 0 ? String(initialQty) : '')
+
+  function confirm() {
+    const n = Number(qty)
+    if (!Number.isFinite(n) || n < 0) return
+    onConfirm(n)
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`${t('purchases.order')} — ${product.name}`}
+      maxWidth="max-w-sm"
+      footer={
+        <>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button className="flex-1" onClick={confirm} disabled={!qty || Number(qty) <= 0}>{t('purchases.addToCart')}</Button>
+        </>
+      }
+    >
+      <div className="p-5 space-y-4">
+        <div>
+          <label className="text-xs text-gray-400 mb-1 block">
+            {t('warehouse.quantity')} ({unitLabel(product.unit, t)})
+          </label>
+          <Input type="number" min={0} step="any" value={qty} onChange={(e) => setQty(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') confirm() }} autoFocus />
         </div>
       </div>
     </Modal>

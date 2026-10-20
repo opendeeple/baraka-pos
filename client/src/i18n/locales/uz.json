@@ -356,6 +356,9 @@
   },
   "purchases": {
     "newOrder": "Yuk buyurtma qilish",
+    "order": "Buyurtma",
+    "confirmOrderCount": "Buyurtmani tasdiqlash ({{count}})",
+    "addToCart": "Savatga qo'shish",
     "tapToAdd": "Mahsulotni bosing — buyurtmaga qo'shiladi. Kam qolganlar tepada.",
     "stockLeft": "Qoldiq: {{qty}}",
     "noProductsFound": "Mahsulot topilmadi",
