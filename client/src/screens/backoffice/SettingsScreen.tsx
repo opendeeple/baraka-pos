@@ -13,6 +13,8 @@ import { fmtUZS } from '../../lib/currency'
 import { toast } from 'sonner'
 import { Select } from '../../components/ui/Select'
 import { PinConfirmModal } from '../../components/ui/PinConfirmModal'
+import { SetPinModal } from '../../components/ui/SetPinModal'
+import { OwnerReauthModal } from '../../components/ui/OwnerReauthModal'
 import { LANGUAGES, setAppLanguage, type AppLanguage } from '../../i18n'
 import { SYNC_TABLES, pullSyncTable } from '../../hooks/useSync'
 import { SHARED_SETTING_KEYS } from '@baraka/shared'
@@ -181,6 +183,11 @@ export default function SettingsScreen() {
   const [pendingDrawerConfirm, setPendingDrawerConfirm] = useState(false)
   const [savingStoreInfo, setSavingStoreInfo] = useState(false)
   const [pendingStoreInfoConfirm, setPendingStoreInfoConfirm] = useState(false)
+  // Changing an existing PIN needs the current one; forgetting it needs the
+  // owner's own account login instead — either way ends at setting a new one.
+  const [pinChangeConfirm, setPinChangeConfirm] = useState(false)
+  const [pinForgot, setPinForgot] = useState(false)
+  const [settingNewPin, setSettingNewPin] = useState(false)
   // A caller can jump straight to a tab (e.g. the sidebar's store name, which
   // links here to edit it) by navigating with { state: { tab: '...' } }.
   const location = useLocation()
@@ -387,6 +394,17 @@ export default function SettingsScreen() {
     } finally { setSavingStoreInfo(false) }
   }
 
+  // Saved the moment it's confirmed, not deferred to the page's big Save —
+  // by the time this runs the owner already proved who they are once
+  // (current PIN or account login), so there's nothing left to double-check.
+  async function applyNewPin(pin: string) {
+    setOwnerPin(pin)
+    await saveSetting('owner_expense_pin', pin)
+    window.electronAPI.sync.pushPending().catch(() => {})
+    setSettingNewPin(false)
+    toast.success(t('settings.pinUpdated'))
+  }
+
   async function runRemindersNow() {
     setRunningReminders(true)
     try {
@@ -539,21 +557,46 @@ export default function SettingsScreen() {
         </>)}
 
         {tab === 'store' && (<>
-        {/* Owner personal-expense PIN */}
+        {/* Owner personal-expense PIN. Once one is set, it can only be
+            changed by someone who already knows it, or — if forgotten — by
+            proving ownership through the account login instead (see
+            OwnerReauthModal). Typing straight into the field was a real gap:
+            anyone with Office access could silently overwrite the PIN. */}
         <div className={SECTION_CLS}>
           <h2 className="text-white font-semibold text-sm">{t('settings.ownerExpensePin')}</h2>
           <p className="text-xs text-gray-500">{t('settings.ownerExpensePinHint')}</p>
-          <div className="max-w-xs">
-            <label className={LABEL_CLS}>{t('settings.pinCode')}</label>
-            <input
-              type="password"
-              inputMode="numeric"
-              maxLength={6}
-              value={ownerPin}
-              onChange={(e) => setOwnerPin(e.target.value.replace(/\D/g, ''))}
-              placeholder="••••"
-              className={INPUT_CLS}
-            />
+          <div className="max-w-xs space-y-2">
+            {!ownerPin ? (
+              <>
+                <label className={LABEL_CLS}>{t('settings.pinCode')}</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={ownerPin}
+                  onChange={(e) => setOwnerPin(e.target.value.replace(/\D/g, ''))}
+                  placeholder="••••"
+                  className={INPUT_CLS}
+                />
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between bg-dark-card border border-dark-border rounded-lg px-3 py-2.5">
+                  <span className="text-white tracking-[0.3em] text-sm">••••</span>
+                  <Lock size={14} className="text-gray-500" />
+                </div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setPinChangeConfirm(true)}
+                    className="flex-1 text-xs text-primary hover:underline text-left">
+                    {t('settings.pinChange')}
+                  </button>
+                  <button type="button" onClick={() => setPinForgot(true)}
+                    className="flex-1 text-xs text-gray-400 hover:text-white text-right">
+                    {t('settings.pinForgot')}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -1066,6 +1109,28 @@ export default function SettingsScreen() {
           title={t('settings.storeInformation')}
           onClose={() => setPendingStoreInfoConfirm(false)}
           onConfirmed={() => { setPendingStoreInfoConfirm(false); saveStoreInfo() }}
+        />
+      )}
+
+      {pinChangeConfirm && (
+        <PinConfirmModal
+          expectedPin={ownerPin}
+          title={t('settings.pinChange')}
+          onClose={() => setPinChangeConfirm(false)}
+          onConfirmed={() => { setPinChangeConfirm(false); setSettingNewPin(true) }}
+        />
+      )}
+      {pinForgot && (
+        <OwnerReauthModal
+          title={t('settings.pinForgot')}
+          onClose={() => setPinForgot(false)}
+          onConfirmed={() => { setPinForgot(false); setSettingNewPin(true) }}
+        />
+      )}
+      {settingNewPin && (
+        <SetPinModal
+          onClose={() => setSettingNewPin(false)}
+          onConfirmed={applyNewPin}
         />
       )}
     </BackOfficeLayout>
