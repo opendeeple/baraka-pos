@@ -720,12 +720,13 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
     })
 
     // A cash-in against a customer is a debt repayment: it reduces what the
-    // customer owes (same server-accumulated balance as debt sales).
+    // customer owes (same server-accumulated balance as debt sales). Floored
+    // at 0 in the same atomic statement (GREATEST, not a separate read) —
+    // the client already caps what it applies at the balance owed (any
+    // extra becomes change, never part of this row's amount), so this is a
+    // backstop against the balance ever going negative, not a new limit.
     if (contactId && transactionType === 'cash_in' && (data.source === 'deposit' || data.source === 'debt_payment')) {
-      await tx.contact.update({
-        where: { id: contactId },
-        data: { balance: { decrement: amount } },
-      })
+      await tx.$executeRaw`UPDATE contacts SET balance = GREATEST(0, balance - ${amount}) WHERE id = ${contactId}`
     }
     // Paid out to a supplier: it settles their received orders.
     if (contactId && transactionType === 'cash_out' && source === 'purchase') {
@@ -854,13 +855,18 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
   },
 
   // Staff come from the back office (pushChangesV2 refuses this table from a
-  // till). Even so a device can't hand out or touch the owner account, and
-  // never sets a password: those only change on the server.
+  // till). Even so a device can't hand out a role above its own rank, touch
+  // a user ranked above it, or set a password: that only changes on the
+  // server. See ROLE_RANK above for why this can't just special-case
+  // 'super_admin' — the real owner is almost always 'admin'.
   users: async (tx, device, { syncId, op, data, clientUpdatedAt }) => {
-    if (data.role === 'super_admin') throw new Error('The super_admin role cannot be assigned from a device')
+    const actorRank = roleRank(device.role)
+    if (typeof data.role === 'string' && roleRank(data.role) > actorRank) {
+      throw new Error(`Cannot grant a role above your own (${device.role})`)
+    }
     const existing = await tx.user.findUnique({ where: { syncId } })
     if (existing) {
-      if (existing.role === 'super_admin') throw new Error('The owner account cannot be changed from a device')
+      if (roleRank(existing.role) > actorRank) throw new Error('Cannot change a user with a higher role than your own')
       if (isStale(existing.updatedAt, clientUpdatedAt)) return { serverId: existing.id, status: 'skipped-stale' }
       await tx.user.update({
         where: { syncId },
@@ -1151,9 +1157,27 @@ async function allocateSupplierPayment(tx: Tx, storeId: number, vendorId: number
 // Staff and store-wide configuration are managed in the back office. A
 // cashier's token sits on a shared counter PC; through these tables it could
 // mint an admin or rewrite the owner PIN, so only managers may change them.
-const OFFICE_ONLY_TABLES = new Set(['users', 'settings', 'stores', 'charges'])
+// 'creditors' and 'product_barcodes' are confirmed never pushed by any POS/
+// cashier flow (only Office's CreditorsScreen and ProductsScreen push them —
+// a cashier's quick-add-product flow only ever reads product_barcodes, to
+// check for a duplicate). Tables like 'products', 'cash_logs' and
+// 'quantity_adjustments' are NOT in this set even though they're also
+// money/stock-sensitive, because legitimate cashier flows (quick-add a new
+// product, a cash sale, a cash debt repayment) genuinely push to them —
+// blocking the table outright would break those, so misuse there needs a
+// narrower, field-level check instead (see e.g. the sales-void gate below).
+const OFFICE_ONLY_TABLES = new Set(['users', 'settings', 'stores', 'charges', 'creditors', 'product_barcodes'])
 const OFFICE_ROLES = new Set(['admin', 'manager', 'super_admin'])
 const isOfficeUser = (device: DeviceCtx) => OFFICE_ROLES.has(device.role)
+
+// A device may only grant a role up to its own rank, and may only touch
+// (edit or delete) a user row whose CURRENT role is at or below its own rank
+// — otherwise a manager could push `role: 'admin'` onto itself, or edit the
+// real owner's (likely 'admin', not 'super_admin' — the seed never creates
+// one) account out from under them. Unranked/unknown roles rank below
+// everything, so they can never be used to bypass this.
+const ROLE_RANK: Record<string, number> = { cashier: 0, manager: 1, admin: 2, super_admin: 3 }
+const roleRank = (role: string) => ROLE_RANK[role] ?? -1
 
 // What else a pushed change alters on the server, so the sync:changed event
 // names every table devices should re-pull (they pull only those).
@@ -1225,7 +1249,12 @@ export async function pushSalesV2(
         // Re-pushing a sale the server already has is a no-op — except a void
         // done afterwards (Back office > Sales): that undoes everything the
         // sale did, exactly once (only on the transition into cancelled).
+        // Voiding is an office action (the client only ever offers it from
+        // Back office > Sales) — a cashier's own token re-pushing a sale as
+        // cancelled would otherwise refund its cash and reverse its stock
+        // and debt effects with nobody having approved it.
         if (sale.status === 'cancelled' && existing.status !== 'cancelled' && existing.storeId === device.storeId) {
+          if (!isOfficeUser(device)) throw new Error('Voiding a sale can only be done from the back office')
           await prisma.$transaction((tx) => voidSaleEffects(tx, device.storeId, existing.id))
         }
         synced.push({ syncId: sale.syncId, serverId: existing.id, invoiceNumber: existing.invoiceNumber })
