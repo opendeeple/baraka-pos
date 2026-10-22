@@ -557,12 +557,18 @@ const PUSH_HANDLERS: Record<string, PushHandler> = {
     if (existing) {
       if (isStale(existing.updatedAt, clientUpdatedAt)) return { serverId: existing.id, status: 'skipped-stale' }
       if (op === 'delete') {
-        // Cascade so other devices' next pull tombstones these batches too —
+        // Cascade so other devices' next pull tombstones these too —
         // otherwise they linger as "still active" server-side and a later
         // product that recycles the deleted product's local SQLite id
         // silently inherits them (fans out into duplicate rows wherever a
-        // product is joined to its active batch).
+        // product is joined to its active batch). A live barcode alias is
+        // worse than a live batch: product_barcodes.productId is NOT NULL,
+        // so any device that pulls this alias without already having the
+        // (now-deleted) product locally fails that insert outright — and
+        // since pulls apply a page at a time, that one row stalls the whole
+        // page, and every table after it in sync order, forever.
         await tx.productBatch.updateMany({ where: { productId: existing.id, deletedAt: null }, data: { deletedAt: new Date() } })
+        await tx.productBarcode.updateMany({ where: { productId: existing.id, deletedAt: null }, data: { deletedAt: new Date() } })
         await tx.product.update({ where: { syncId }, data: { deletedAt: new Date() } })
       } else {
         await tx.product.update({ where: { syncId }, data: fields as never })

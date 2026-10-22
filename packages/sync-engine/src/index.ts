@@ -628,6 +628,16 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         // contact_id is NOT NULL there; a clearance for a contact deleted on
         // this device has nothing left to apply to.
         if (table === 'debt_clearances' && !entries.some(([k, v]) => k === 'contact_id' && v != null)) continue
+        // product_id is NOT NULL there too; an alias of a product this
+        // device doesn't have locally (not yet pulled, or deleted on the
+        // server before this device ever saw it — e.g. a stale alias from
+        // before product deletes started cascading to their aliases) has
+        // nothing to attach to. Skipping it, instead of trying the insert
+        // and failing, matters a lot more here than for most tables: a
+        // failed insert fails the whole pulled page, so this exact row
+        // could otherwise permanently wedge every table after it in sync
+        // order on a fresh install (see server-side products delete cascade).
+        if (table === 'product_barcodes' && !entries.some(([k, v]) => k === 'product_id' && v != null)) continue
         if (table === 'product_stocks') {
           const pid = entries.find(([k]) => k === 'product_id')?.[1]
           const bid = entries.find(([k]) => k === 'batch_id')?.[1]
@@ -1326,11 +1336,19 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         }
         payloads.push({ row, sale })
       }
-      if (payloads.length) {
+      // The server refuses a whole request over 100 sales (syncV2.router.ts's
+      // salesSchema caps the array at 100) — a backlog past that (a till
+      // offline for a day, or a lapsed token piling sales up) used to send
+      // all of them in one request, get a single 400 for the lot, and
+      // dead-letter every one after enough retries even though each sale is
+      // individually fine. Chunking keeps every request under that cap.
+      const SALES_PUSH_CHUNK = 100
+      for (let i = 0; i < payloads.length; i += SALES_PUSH_CHUNK) {
+        const chunk = payloads.slice(i, i + SALES_PUSH_CHUNK)
         try {
           const { status, data } = await httpJson('POST', '/api/sync/v2/sales', {
             headers: authHeaders(),
-            body: { sales: payloads.map((p) => p.sale) },
+            body: { sales: chunk.map((p) => p.sale) },
           })
           if (isTransientStatus(status)) throw new NetworkError(`sales push HTTP ${status}`)
           if (status !== 200) {
@@ -1343,7 +1361,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
           const errBySyncId = new Map<string, string>(
             (data.errors as any[]).map((e) => [e.syncId, e.error])
           )
-          for (const { row } of payloads) {
+          for (const { row } of chunk) {
             const ok = okBySyncId.get(row.sync_id)
             if (ok) {
               markSynced(row.id)
@@ -1359,8 +1377,8 @@ export function createSyncEngine(deps: SyncEngineDeps) {
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'network error'
-          for (const { row } of payloads) scheduleRetry(row, msg, !(err instanceof NetworkError))
-          errors += payloads.length
+          for (const { row } of chunk) scheduleRetry(row, msg, !(err instanceof NetworkError))
+          errors += chunk.length
         }
       }
     }
