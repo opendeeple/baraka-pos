@@ -3,9 +3,11 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Home, Package, Receipt as ReceiptIcon, Users, Truck, Wallet, Settings, ArrowLeft, BarChart2,
-  UserCog, LogOut, HandCoins, Warehouse, ScrollText, Factory, Landmark, Banknote, type LucideIcon,
+  UserCog, LogOut, HandCoins, Warehouse, ScrollText, Factory, Landmark, Banknote,
+  ArrowDownToLine, ArrowUpFromLine, type LucideIcon,
 } from 'lucide-react'
 import { OpenDrawerButton } from '../pos/OpenDrawerButton'
+import { CashMovementModal, type MovementType } from '../pos/CashMovementModal'
 import { useAuthStore } from '../../store/auth.store'
 import { SyncStatusBadge } from './SyncStatusBadge'
 import { useAppMode } from '../../contexts/AppModeContext'
@@ -117,6 +119,7 @@ export function BackOfficeLayout({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation()
   const badges = useNavBadges()
   const location = useLocation()
+  const [cashMovement, setCashMovement] = useState<MovementType | null>(null)
 
   return (
     <div className="h-screen flex bg-dark overflow-hidden">
@@ -187,6 +190,20 @@ export function BackOfficeLayout({ children }: { children: React.ReactNode }) {
 
         {/* Who's signed in */}
         <div className="p-2 border-t border-dark-border space-y-2">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCashMovement('cash_in')}
+              className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg border border-dark-border text-xs text-gray-400 hover:text-green-400 hover:border-green-400/40 transition-colors"
+            >
+              <ArrowDownToLine size={13} /> {t('cashMovement.cashIn')}
+            </button>
+            <button
+              onClick={() => setCashMovement('cash_out')}
+              className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg border border-dark-border text-xs text-gray-400 hover:text-red-400 hover:border-red-400/40 transition-colors"
+            >
+              <ArrowUpFromLine size={13} /> {t('cashMovement.cashOut')}
+            </button>
+          </div>
           <OpenDrawerButton
             className="w-full flex items-center justify-center gap-2 h-10 rounded-lg border border-dark-border text-sm text-gray-300 hover:text-green-400 hover:border-green-400/40 disabled:opacity-40 transition-colors"
           >
@@ -225,6 +242,14 @@ export function BackOfficeLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 overflow-hidden flex flex-col">
         {children}
       </main>
+
+      {cashMovement && (
+        <CashMovementModal
+          type={cashMovement}
+          onClose={() => setCashMovement(null)}
+          onDone={() => setCashMovement(null)}
+        />
+      )}
     </div>
   )
 }

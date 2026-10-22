@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Trash2, Pause, ShoppingBag, Plus, Minus, LogOut, Tag, X, ChevronDown, Search, Zap, Package, Banknote } from 'lucide-react'
+import { Trash2, Pause, ShoppingBag, Plus, Minus, LogOut, Tag, X, ChevronDown, Search, Zap, Package, Banknote, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react'
 import { useCartStore, cartLineTotal } from '../../store/cart.store'
 import { fmtUZS } from '../../lib/currency'
 import { HeldOrdersPanel } from './HeldOrdersDrawer'
@@ -9,6 +9,7 @@ import { DebtHistoryPanel } from './DebtHistoryDrawer'
 import { NumPad } from './NumPad'
 import { DiscountModal } from './DiscountModal'
 import { OpenDrawerButton } from './OpenDrawerButton'
+import { CashMovementModal, type MovementType } from './CashMovementModal'
 import { Modal, Button } from '../ui'
 import { Debtor } from '../../types/pos.types'
 import { OPEN_DEBT_CONDITION } from '../../lib/debt'
@@ -48,6 +49,7 @@ export default function CartPanel({ onCheckout, onCloseRegister, onProductTap }:
   const [debtorsOpen, setDebtorsOpen] = useState(false)
   const [debtorSearch, setDebtorSearch] = useState('')
   const [featuredProducts, setFeaturedProducts] = useState<LocalProduct[]>([])
+  const [cashMovement, setCashMovement] = useState<MovementType | null>(null)
 
   const subtotal = getSubtotal()
   const chargeAmount = getTotalChargeAmount()
@@ -271,20 +273,38 @@ export default function CartPanel({ onCheckout, onCloseRegister, onProductTap }:
                 </div>
               </div>
             </div>
-            <div className="shrink-0 border-t border-dark-border p-4 flex gap-2">
-              <OpenDrawerButton
-                className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl border border-dark-border text-gray-300 active:text-green-400 active:border-green-400/40 disabled:opacity-40 text-sm font-medium transition-colors"
-              >
-                <Banknote size={15} />
-                {t('settings.openDrawer')}
-              </OpenDrawerButton>
-              <button
-                onClick={onCloseRegister}
-                className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl border border-dark-border text-gray-400 active:text-red-400 active:border-red-400/40 text-sm font-medium transition-colors"
-              >
-                <LogOut size={15} />
-                {t('pos.closeRegister')}
-              </button>
+            <div className="shrink-0 border-t border-dark-border p-4 space-y-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCashMovement('cash_in')}
+                  className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl border border-dark-border text-gray-400 active:text-green-400 active:border-green-400/40 text-xs font-medium transition-colors"
+                >
+                  <ArrowDownToLine size={14} />
+                  {t('cashMovement.cashIn')}
+                </button>
+                <button
+                  onClick={() => setCashMovement('cash_out')}
+                  className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl border border-dark-border text-gray-400 active:text-red-400 active:border-red-400/40 text-xs font-medium transition-colors"
+                >
+                  <ArrowUpFromLine size={14} />
+                  {t('cashMovement.cashOut')}
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <OpenDrawerButton
+                  className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl border border-dark-border text-gray-300 active:text-green-400 active:border-green-400/40 disabled:opacity-40 text-sm font-medium transition-colors"
+                >
+                  <Banknote size={15} />
+                  {t('settings.openDrawer')}
+                </OpenDrawerButton>
+                <button
+                  onClick={onCloseRegister}
+                  className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl border border-dark-border text-gray-400 active:text-red-400 active:border-red-400/40 text-sm font-medium transition-colors"
+                >
+                  <LogOut size={15} />
+                  {t('pos.closeRegister')}
+                </button>
+              </div>
             </div>
           </>
         ) : (
@@ -351,6 +371,13 @@ export default function CartPanel({ onCheckout, onCloseRegister, onProductTap }:
         )}
       </div>
 
+      {cashMovement && (
+        <CashMovementModal
+          type={cashMovement}
+          onClose={() => setCashMovement(null)}
+          onDone={() => setCashMovement(null)}
+        />
+      )}
     </>
   )
 }

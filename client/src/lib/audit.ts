@@ -13,6 +13,7 @@ export type AuditAction =
   | 'price_change' | 'product_create' | 'product_delete'
   | 'expense' | 'debt_payment' | 'debt_clear' | 'contact_delete'
   | 'shift_close' | 'settings_change' | 'drawer_open' | 'discount'
+  | 'cash_in' | 'cash_out'
 
 export async function logAudit(
   action: AuditAction,

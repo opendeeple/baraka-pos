@@ -4,13 +4,14 @@
 // All default on: popping the drawer whenever cash physically changes hands
 // is the safe default, and matches the behavior a cash sale already had
 // before this became configurable.
-export type DrawerTrigger = 'sale' | 'debtPayment' | 'expense' | 'supplierPayment'
+export type DrawerTrigger = 'sale' | 'debtPayment' | 'expense' | 'supplierPayment' | 'cashMovement'
 
 const SETTING_KEY: Record<DrawerTrigger, string> = {
   sale: 'auto_drawer_sale_config',
   debtPayment: 'auto_drawer_debt_payment_config',
   expense: 'auto_drawer_expense_config',
   supplierPayment: 'auto_drawer_supplier_payment_config',
+  cashMovement: 'auto_drawer_cash_movement_config',
 }
 
 export async function shouldAutoOpenDrawer(trigger: DrawerTrigger): Promise<boolean> {

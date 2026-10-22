@@ -161,6 +161,11 @@ export default function SettingsScreen() {
   const [autoDrawerDebtPayment, setAutoDrawerDebtPayment] = useState<AutoDrawerConfig>({ enabled: true })
   const [autoDrawerExpense, setAutoDrawerExpense] = useState<AutoDrawerConfig>({ enabled: true })
   const [autoDrawerSupplierPayment, setAutoDrawerSupplierPayment] = useState<AutoDrawerConfig>({ enabled: true })
+  const [autoDrawerCashMovement, setAutoDrawerCashMovement] = useState<AutoDrawerConfig>({ enabled: true })
+  // Separate from the owner PIN itself existing — lets the owner leave a PIN
+  // set for other gates (drawer, owner-expense, PIN reset) but skip it for
+  // cash in/out specifically, without clearing the PIN everywhere.
+  const [cashMovementPinGate, setCashMovementPinGate] = useState<AutoDrawerConfig>({ enabled: true })
   const [debtOverdueDays, setDebtOverdueDays] = useState('30')
   // Default on — matches creditorReminder.service.ts's DEFAULT_CONFIG.
   const [creditorReminder, setCreditorReminder] = useState<CreditorReminderConfig>({ enabled: true, ownerPhone: '' })
@@ -277,6 +282,12 @@ export default function SettingsScreen() {
     if (map.auto_drawer_supplier_payment_config) {
       try { setAutoDrawerSupplierPayment({ enabled: true, ...JSON.parse(map.auto_drawer_supplier_payment_config) }) } catch {}
     }
+    if (map.auto_drawer_cash_movement_config) {
+      try { setAutoDrawerCashMovement({ enabled: true, ...JSON.parse(map.auto_drawer_cash_movement_config) }) } catch {}
+    }
+    if (map.cash_movement_pin_config) {
+      try { setCashMovementPinGate({ enabled: true, ...JSON.parse(map.cash_movement_pin_config) }) } catch {}
+    }
     if (map.debt_overdue_days) setDebtOverdueDays(map.debt_overdue_days)
     if (map.creditor_reminder_config) {
       try { setCreditorReminder({ enabled: true, ownerPhone: '', ...JSON.parse(map.creditor_reminder_config) }) } catch {}
@@ -350,6 +361,8 @@ export default function SettingsScreen() {
       await saveSetting('auto_drawer_debt_payment_config', JSON.stringify(autoDrawerDebtPayment))
       await saveSetting('auto_drawer_expense_config', JSON.stringify(autoDrawerExpense))
       await saveSetting('auto_drawer_supplier_payment_config', JSON.stringify(autoDrawerSupplierPayment))
+      await saveSetting('auto_drawer_cash_movement_config', JSON.stringify(autoDrawerCashMovement))
+      await saveSetting('cash_movement_pin_config', JSON.stringify(cashMovementPinGate))
       await saveSetting('debt_overdue_days', String(Number(debtOverdueDays) > 0 ? Number(debtOverdueDays) : 30))
       await saveSetting('creditor_reminder_config', JSON.stringify(creditorReminder))
       await saveSetting('receiving_label_config', JSON.stringify(receivingLabel))
@@ -925,7 +938,26 @@ export default function SettingsScreen() {
                 onChange={(e) => setAutoDrawerSupplierPayment({ enabled: e.target.checked })} />
               {t('settings.autoDrawerSupplierPayment')}
             </label>
+            <label className="flex items-center gap-2 text-sm text-gray-300">
+              <input type="checkbox" className="w-4 h-4" checked={autoDrawerCashMovement.enabled}
+                onChange={(e) => setAutoDrawerCashMovement({ enabled: e.target.checked })} />
+              {t('settings.autoDrawerCashMovement')}
+            </label>
           </div>
+        </div>
+
+        {/* Cash in/out (float top-up, owner draw, bank drop, correction) —
+            POS cart panel and the Office sidebar both offer it. Separate
+            toggle from the PIN itself existing, so it can be left off here
+            while other PIN gates (owner-expense, drawer) stay on. */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm flex items-center gap-2"><Banknote size={15} /> {t('settings.cashMovementTitle')}</h2>
+          <p className="text-xs text-gray-500 -mt-2">{t('settings.cashMovementHint')}</p>
+          <label className="flex items-center gap-2 text-sm text-gray-300">
+            <input type="checkbox" className="w-4 h-4" checked={cashMovementPinGate.enabled}
+              onChange={(e) => setCashMovementPinGate({ enabled: e.target.checked })} />
+            {t('settings.cashMovementPinRequired')}
+          </label>
         </div>
 
         {/* Label printer — price labels and employee badges print here
