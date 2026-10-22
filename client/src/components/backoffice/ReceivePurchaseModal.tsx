@@ -41,6 +41,15 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
   const [newQty, setNewQty] = useState('')
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
+  const [pendingClose, setPendingClose] = useState(false)
+
+  // ✕ / backdrop / Escape used to silently throw away every line already
+  // checked off — a real cost here, since checking is done by scanning each
+  // box off a real delivery, not something you'd want to redo.
+  function requestClose() {
+    if (location !== null || Object.keys(checks).length > 0) setPendingClose(true)
+    else onClose()
+  }
   // Last step, from the supplier's invoice (nakladnoy): the real unit price
   // where it differs from the estimate, and the expiry date on the goods.
   const [prices, setPrices] = useState<Record<number, string>>({})
@@ -161,9 +170,10 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
   }
 
   return (
+    <>
     <Modal
       open
-      onClose={onClose}
+      onClose={requestClose}
       title={`${t('purchases.receiveOrder')} — ${reference}`}
       maxWidth="max-w-2xl"
       footer={
@@ -381,5 +391,23 @@ export function ReceivePurchaseModal({ purchaseId, reference, onClose, onReceive
         </div>
       )}
     </Modal>
+
+    {pendingClose && (
+      <Modal
+        open
+        onClose={() => setPendingClose(false)}
+        title={t('purchases.discardTitle')}
+        maxWidth="max-w-xs"
+        footer={
+          <>
+            <Button variant="secondary" className="flex-1" onClick={() => setPendingClose(false)}>{t('common.back')}</Button>
+            <Button className="flex-1" onClick={() => { setPendingClose(false); onClose() }}>{t('purchases.discardAndClose')}</Button>
+          </>
+        }
+      >
+        <p className="p-5 text-sm text-gray-400">{t('purchases.discardReceivingConfirm')}</p>
+      </Modal>
+    )}
+    </>
   )
 }

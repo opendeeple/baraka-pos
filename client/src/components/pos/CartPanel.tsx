@@ -500,7 +500,11 @@ function CartItemRow({
           <div className="flex items-center border border-dark-border rounded-xl overflow-hidden">
             <button
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); onQtyChange(Math.max(1, item.quantity - 1)) }}
+              // Floors at 1 for whole-unit quantities, same as before — but
+              // never floors ABOVE the current quantity, so a weighed line
+              // already under 1 (0.35 kg) doesn't jump up to 1 on a tap;
+              // it just stays put (use the × button to remove it instead).
+              onClick={(e) => { e.stopPropagation(); onQtyChange(Math.max(item.quantity - 1, Math.min(1, item.quantity))) }}
               className="w-11 h-10 flex items-center justify-center text-gray-300 active:bg-dark-card border-r border-dark-border transition-colors"
             >
               <Minus size={15} />

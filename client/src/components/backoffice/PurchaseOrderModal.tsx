@@ -54,6 +54,15 @@ export function PurchaseOrderModal({ onClose, onCreated, initialLines, onCancel 
   const [vendorId, setVendorId] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [aliasMap, setAliasMap] = useState<Map<string, number>>(new Map())
+  const [pendingClose, setPendingClose] = useState(false)
+
+  // The ✕ / backdrop / Escape all land here — a stray tap used to silently
+  // throw away everything typed in this window (added products, adjusted
+  // quantities, the chosen supplier, the note) with no warning at all.
+  function requestClose() {
+    if (lines.length > 0 || vendorId || note.trim()) setPendingClose(true)
+    else onClose()
+  }
 
   useEffect(() => {
     loadBarcodeAliasMap().then(setAliasMap)
@@ -140,7 +149,14 @@ export function PurchaseOrderModal({ onClose, onCreated, initialLines, onCancel 
   }
 
   function stepQty(key: string, delta: number) {
-    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, qty: String(Math.max(1, (Number(l.qty) || 0) + delta)) } : l)))
+    setLines((prev) => prev.map((l) => {
+      if (l.key !== key) return l
+      const current = Number(l.qty) || 0
+      // Never floors ABOVE the current quantity — a line already under 1
+      // (ordering 0.35 of something priced by kg) doesn't jump up to 1.
+      const next = delta > 0 ? current + delta : Math.max(current + delta, Math.min(1, current))
+      return { ...l, qty: String(next) }
+    }))
   }
 
   const qtyById = new Map(lines.map((l) => [l.product.id, Number(l.qty) || 0]))
@@ -168,9 +184,10 @@ export function PurchaseOrderModal({ onClose, onCreated, initialLines, onCancel 
   }
 
   return (
+    <>
     <Modal
       open
-      onClose={onClose}
+      onClose={requestClose}
       title={t('purchases.newOrder')}
       maxWidth="max-w-5xl"
       footer={
@@ -302,5 +319,23 @@ export function PurchaseOrderModal({ onClose, onCreated, initialLines, onCancel 
         </div>
       </div>
     </Modal>
+
+    {pendingClose && (
+      <Modal
+        open
+        onClose={() => setPendingClose(false)}
+        title={t('purchases.discardTitle')}
+        maxWidth="max-w-xs"
+        footer={
+          <>
+            <Button variant="secondary" className="flex-1" onClick={() => setPendingClose(false)}>{t('common.back')}</Button>
+            <Button className="flex-1" onClick={() => { setPendingClose(false); onClose() }}>{t('purchases.discardAndClose')}</Button>
+          </>
+        }
+      >
+        <p className="p-5 text-sm text-gray-400">{t('purchases.discardConfirm')}</p>
+      </Modal>
+    )}
+    </>
   )
 }

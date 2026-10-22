@@ -78,13 +78,16 @@ export default function POSScreen() {
   // Keyboard shortcuts
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'F5') { e.preventDefault(); setShowPayment(true) }
-if (e.key === 'F4') { e.preventDefault(); useCartStore.getState().holdCart() }
+      if (e.key === 'F5' && useCartStore.getState().items.length > 0) { e.preventDefault(); setShowPayment(true) }
+      // Holding only makes sense from the idle cart — while Payment is open,
+      // F4 emptying the cart out from under it could otherwise let an empty
+      // sale slip through (see PaymentScreen's isFullyPaid).
+      if (e.key === 'F4' && !showPayment) { e.preventDefault(); useCartStore.getState().holdCart() }
       if (e.key === 'Escape') setShowPayment(false)
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [navigate])
+  }, [navigate, showPayment])
 
   async function loadProducts() {
     let sql = `

@@ -70,8 +70,10 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
   const remaining = Math.max(0, total - paid)
   const change = Math.max(0, paid - total)
   // A fully-discounted cart (total 0) needs no payment entry at all to
-  // complete — nothing is being collected either way.
-  const isFullyPaid = total === 0 || (paid >= total && payments.length > 0)
+  // complete — nothing is being collected either way. `items.length` guards
+  // against completing with nothing in the cart at all (e.g. F4 held the
+  // cart while this screen was still open, emptying it out from under it).
+  const isFullyPaid = (total === 0 && items.length > 0) || (paid >= total && payments.length > 0)
   const hasDebtPayment = payments.some((p) => p.paymentMethod === 'Debt')
   const canComplete = isFullyPaid && (!hasDebtPayment || debtContact !== null)
 
@@ -169,7 +171,7 @@ export default function PaymentScreen({ onClose, onComplete }: Props) {
   async function processPayment(overridePayments?: PaymentEntry[]) {
     const effectivePayments = overridePayments ?? payments
     const effectivePaid = effectivePayments.reduce((s, p) => s + p.amount, 0)
-    const effectiveFullyPaid = total === 0 || (effectivePaid >= total && effectivePayments.length > 0)
+    const effectiveFullyPaid = (total === 0 && items.length > 0) || (effectivePaid >= total && effectivePayments.length > 0)
     const effectiveHasDebt = effectivePayments.some((p) => p.paymentMethod === 'Debt')
 
     if (!effectiveFullyPaid) { setError(t('payment.insufficientAmount')); return }

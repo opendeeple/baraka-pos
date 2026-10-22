@@ -195,6 +195,12 @@ export default function SettingsScreen() {
   const [scale, setScale] = useState<ScaleConfig>(DEFAULT_SCALE_CONFIG)
   const [scalePrefixes, setScalePrefixes] = useState(DEFAULT_SCALE_CONFIG.prefixes.join(', '))
   const [scaleTest, setScaleTest] = useState('')
+  // Every field above starts at a hardcoded default until loadSettings()
+  // fills it in. Save must never run before that finishes — otherwise it
+  // pushes those defaults over the real, already-saved settings (an empty
+  // PIN, blank Telegram/SMS config, scale reading switched off) to every
+  // device, since Save has no idea anything is still missing.
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
   const { t, i18n } = useTranslation()
 
   useEffect(() => { loadSettings() }, [])
@@ -304,6 +310,7 @@ export default function SettingsScreen() {
     setCharges(await window.electronAPI.db.query(
       `SELECT id, name, rate_type, rate_value, is_active FROM charges ORDER BY name`, []
     ) as ChargeRow[])
+    setSettingsLoaded(true)
   }
 
   // Store-wide keys (SHARED_SETTING_KEYS) sync to every device; the rest
@@ -327,6 +334,7 @@ export default function SettingsScreen() {
   }
 
   async function saveAll() {
+    if (!settingsLoaded) { toast.error(t('settings.stillLoading')); return }
     setSaving(true)
     try {
       await saveSetting('printer_config', JSON.stringify(printer))
@@ -498,9 +506,9 @@ export default function SettingsScreen() {
             className="flex items-center gap-2 border border-dark-border text-gray-300 hover:text-white px-4 py-2 rounded-xl text-sm transition-colors">
             <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {t('settings.syncNow')}
           </button>
-          <button onClick={saveAll} disabled={saving}
+          <button onClick={saveAll} disabled={saving || !settingsLoaded}
             className="flex items-center gap-2 bg-primary hover:bg-orange-600 disabled:opacity-40 text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors">
-            <Save size={14} /> {saving ? t('common.saving') : t('settings.saveChanges')}
+            <Save size={14} /> {saving ? t('common.saving') : !settingsLoaded ? t('common.loading') : t('settings.saveChanges')}
           </button>
         </div>
       </div>
@@ -567,18 +575,10 @@ export default function SettingsScreen() {
           <p className="text-xs text-gray-500">{t('settings.ownerExpensePinHint')}</p>
           <div className="max-w-xs space-y-2">
             {!ownerPin ? (
-              <>
-                <label className={LABEL_CLS}>{t('settings.pinCode')}</label>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={ownerPin}
-                  onChange={(e) => setOwnerPin(e.target.value.replace(/\D/g, ''))}
-                  placeholder="••••"
-                  className={INPUT_CLS}
-                />
-              </>
+              <button type="button" onClick={() => setSettingNewPin(true)}
+                className="flex items-center gap-2 border border-dark-border text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs transition-colors">
+                <Lock size={13} /> {t('settings.setNewPin')}
+              </button>
             ) : (
               <>
                 <div className="flex items-center justify-between bg-dark-card border border-dark-border rounded-lg px-3 py-2.5">
