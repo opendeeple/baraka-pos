@@ -20,6 +20,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
+        "android.permission.CAMERA",
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE"
       ]
@@ -30,6 +31,12 @@
     "plugins": [
       "expo-sqlite",
       "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Baraka Office uses the camera to scan product barcodes."
+        }
+      ],
       [
         "expo-build-properties",
         {

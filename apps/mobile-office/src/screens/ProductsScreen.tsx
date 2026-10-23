@@ -4,10 +4,12 @@ import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { ProductListItem } from '@baraka/data'
 import {
+  BarcodeScannerModal,
   Badge,
   Button,
   EmptyState,
   Icon,
+  IconButton,
   Input,
   ListRow,
   Screen,
@@ -40,6 +42,10 @@ export function ProductsScreen() {
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
+  // 'lookup' (toolbar scan — find/open an existing product by its barcode,
+  // or start a new one pre-filled with it) vs 'fill' (the form's own Barcode
+  // field — scan a physical label straight into it instead of typing it).
+  const [scanMode, setScanMode] = useState<'lookup' | 'fill' | null>(null)
 
   const load = useCallback(() => {
     setProducts(repos.products.list({ search: search || undefined, limit: 300 }))
@@ -90,6 +96,24 @@ export function ProductsScreen() {
 
   const set = (k: keyof FormState, v: string | boolean) => setForm((prev) => ({ ...prev, [k]: v }))
 
+  function handleScan(barcode: string) {
+    const mode = scanMode
+    setScanMode(null)
+    if (mode === 'fill') {
+      set('barcode', barcode)
+      return
+    }
+    const existing = repos.products.findByBarcode(barcode)
+    if (existing) {
+      openEdit(existing)
+    } else {
+      setEditId(null)
+      setForm({ ...EMPTY_FORM, barcode })
+      setShowForm(true)
+      toast.info('No product with this barcode yet — fill in the rest and save')
+    }
+  }
+
   return (
     <Screen padded={false}>
       <View style={styles.toolbar}>
@@ -102,6 +126,7 @@ export function ProductsScreen() {
           left={<Icon name="search" size={16} color={theme.textFaint} />}
           containerStyle={styles.searchWrap}
         />
+        <IconButton icon="scan" accessibilityLabel="Scan barcode" onPress={() => setScanMode('lookup')} />
         <Button title="New" icon="plus" size="md" onPress={openCreate} />
       </View>
 
@@ -159,6 +184,14 @@ export function ProductsScreen() {
               label="Barcode"
               value={form.barcode}
               onChangeText={(v) => set('barcode', v)}
+              right={
+                <IconButton
+                  icon="scan"
+                  size={20}
+                  accessibilityLabel="Scan barcode"
+                  onPress={() => setScanMode('fill')}
+                />
+              }
               containerStyle={styles.flex1}
             />
             <Input label="SKU" value={form.sku} onChangeText={(v) => set('sku', v)} containerStyle={styles.flex1} />
@@ -187,6 +220,12 @@ export function ProductsScreen() {
           </View>
         </View>
       </Sheet>
+
+      <BarcodeScannerModal
+        visible={scanMode !== null}
+        onClose={() => setScanMode(null)}
+        onScan={handleScan}
+      />
     </Screen>
   )
 }

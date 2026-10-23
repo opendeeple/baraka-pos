@@ -17,6 +17,7 @@
     "buffer": "^6.0.3",
     "expo": "~57.0.9",
     "expo-build-properties": "~57.0.8",
+    "expo-camera": "~57.0.3",
     "expo-crypto": "~57.0.1",
     "expo-haptics": "~57.0.1",
     "expo-secure-store": "~57.0.1",

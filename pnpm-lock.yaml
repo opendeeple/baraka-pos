@@ -56,6 +56,9 @@ importers:
       expo-build-properties:
         specifier: ~57.0.8
         version: 57.0.8(expo@57.0.9)
+      expo-camera:
+        specifier: ~57.0.3
+        version: 57.0.3(@types/emscripten@1.41.5)(expo@57.0.9)(react-native@0.86.2(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       expo-crypto:
         specifier: ~57.0.1
         version: 57.0.1(expo@57.0.9)
@@ -652,6 +655,9 @@ importers:
       '@baraka/ui-tokens':
         specifier: workspace:*
         version: link:../ui-tokens
+      expo-camera:
+        specifier: '*'
+        version: 57.0.3(@types/emscripten@1.41.5)(expo@57.0.9)(react-native@0.86.2(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       expo-haptics:
         specifier: '*'
         version: 57.0.1(expo@57.0.9)

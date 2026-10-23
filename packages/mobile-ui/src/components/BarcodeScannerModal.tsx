@@ -2,16 +2,17 @@ import { useEffect, useRef } from 'react'
 import { Modal, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
-import { Button, useTheme } from '@baraka/mobile-ui'
+import { useTheme } from '../theme/ThemeProvider'
+import { Button } from './Button'
 import { radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 
-interface Props {
+export interface BarcodeScannerModalProps {
   visible: boolean
   onClose: () => void
   onScan: (barcode: string) => void
 }
 
-export function BarcodeScannerModal({ visible, onClose, onScan }: Props) {
+export function BarcodeScannerModal({ visible, onClose, onScan }: BarcodeScannerModalProps) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   const [permission, requestPermission] = useCameraPermissions()

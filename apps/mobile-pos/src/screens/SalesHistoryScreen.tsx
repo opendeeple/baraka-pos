@@ -3,7 +3,7 @@ import { FlatList, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { SaleHistoryItem } from '@baraka/data'
-import { Badge, Button, Dialog, EmptyState, ListRow, Screen, toast, useTheme } from '@baraka/mobile-ui'
+import { Badge, Button, Dialog, EmptyState, ListRow, PinConfirmModal, Screen, toast, useTheme } from '@baraka/mobile-ui'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
@@ -14,6 +14,11 @@ export function SalesHistoryScreen() {
   const { user, session } = useAuthStore()
   const [sales, setSales] = useState<SaleHistoryItem[]>([])
   const [refundTarget, setRefundTarget] = useState<SaleHistoryItem | null>(null)
+  const [pinTarget, setPinTarget] = useState<SaleHistoryItem | null>(null)
+  // Same settings key as desktop's owner_expense_pin gate — set once in
+  // desktop Settings, synced down, and checked here too (M0's H4 left this
+  // refund flow explicitly ungated pending this).
+  const [ownerPin] = useState(() => repos.settings.get('owner_expense_pin'))
 
   const load = useCallback(() => {
     setSales(repos.sales.history({ limit: 100 }))
@@ -22,7 +27,6 @@ export function SalesHistoryScreen() {
   useFocusEffect(load)
 
   function performRefund(sale: SaleHistoryItem) {
-    setRefundTarget(null)
     // Refund money is always a current-shift drawer movement, so there must
     // be an open session here to file it under — it must not land on the
     // original (possibly already-closed) shift.
@@ -108,8 +112,32 @@ export function SalesHistoryScreen() {
         }
         actions={[
           { label: 'Cancel', onPress: () => setRefundTarget(null) },
-          { label: 'Refund', tone: 'danger', onPress: () => refundTarget && performRefund(refundTarget) },
+          {
+            label: 'Refund',
+            tone: 'danger',
+            onPress: () => {
+              if (!refundTarget) return
+              const target = refundTarget
+              setRefundTarget(null)
+              // Gate only applies once the owner has actually set a PIN —
+              // same opt-in convention as every desktop PinConfirmModal site.
+              if (ownerPin) setPinTarget(target)
+              else performRefund(target)
+            },
+          },
         ]}
+      />
+
+      <PinConfirmModal
+        visible={pinTarget !== null}
+        expectedPin={ownerPin}
+        title="Owner PIN required to refund"
+        onClose={() => setPinTarget(null)}
+        onConfirmed={() => {
+          const target = pinTarget
+          setPinTarget(null)
+          if (target) performRefund(target)
+        }}
       />
     </Screen>
   )

@@ -10,6 +10,7 @@
     "@baraka/ui-tokens": "workspace:*"
   },
   "peerDependencies": {
+    "expo-camera": "*",
     "expo-haptics": "*",
     "lucide-react-native": "*",
     "react": "^19.0.0",
