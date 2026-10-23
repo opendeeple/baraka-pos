@@ -8,6 +8,7 @@ export { createHeldCartRepository, type HeldCartRepository, type HeldCart } from
 export { createReportsRepository, type ReportsRepository } from './repositories/reports.repo'
 export { createExpenseRepository, type ExpenseRepository, type ExpenseItem, type CreateExpenseInput } from './repositories/expense.repo'
 export { createWarehouseRepository, type WarehouseRepository, type WarehouseStockRow, type StockLocation, type StockMoveKind } from './repositories/warehouse.repo'
+export { createPurchaseRepository, type PurchaseRepository, type PurchaseListItem, type PurchaseItemRow, type OrderLineInput, type ReceiveCheck } from './repositories/purchase.repo'
 
 import type { DbAdapter } from './adapter'
 import type { EnqueueFn } from './repositories/contact.repo'
@@ -20,6 +21,7 @@ import { createHeldCartRepository } from './repositories/heldCart.repo'
 import { createReportsRepository } from './repositories/reports.repo'
 import { createExpenseRepository } from './repositories/expense.repo'
 import { createWarehouseRepository } from './repositories/warehouse.repo'
+import { createPurchaseRepository } from './repositories/purchase.repo'
 
 /** Convenience: build all repositories over one adapter. */
 export function createRepositories(db: DbAdapter, uuid: () => string, enqueue: EnqueueFn) {
@@ -33,6 +35,7 @@ export function createRepositories(db: DbAdapter, uuid: () => string, enqueue: E
     reports: createReportsRepository(db),
     expenses: createExpenseRepository(db, uuid, enqueue),
     warehouse: createWarehouseRepository(db, uuid, enqueue),
+    purchases: createPurchaseRepository(db, uuid, enqueue),
   }
 }
 
