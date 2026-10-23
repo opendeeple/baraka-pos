@@ -51,6 +51,15 @@ gh repo create <your-org-or-username>/baraka-pos --private --source=. --push
 2. Add a repository variable `RENDER_HEALTH_URL` = `https://<your-render-service>.onrender.com/api/health`.
 3. The workflow (`.github/workflows/keep-alive.yml`) runs automatically every 10 minutes, 06:00–22:00 UTC — adjust the cron expression to your store's actual open hours/timezone (UTC-based) to avoid unnecessary pings overnight.
 
+## 5. GitHub Actions — database backup
+
+The desktop apps already back up their own *local* copy automatically (Settings > Do'kon), but that only protects one till's machine. This is the backup for the shared database itself — every store's real, synced data in one place.
+
+1. In your GitHub repo: **Settings > Secrets and variables > Actions > Secrets** tab (the *Secrets* sub-tab, not *Variables* — this one holds the database password, so it must not be viewable after saving).
+2. Add a repository secret `DATABASE_URL` = the exact same Session pooler connection string you set in Render's Environment tab (step 3 above) — not the `postgresql://postgres:password@localhost:5432/baraka_pos` placeholder from `.env.example`.
+3. The workflow (`.github/workflows/backup-database.yml`) runs automatically once a day and uploads a `pg_dump` as a workflow artifact (Actions tab > a run of "Backup database" > Artifacts), kept for 14 days. Trigger one by hand any time from the Actions tab ("Run workflow") to confirm it's working right after you add the secret.
+4. **To restore** from a downloaded `.dump` file onto a (new or emptied) database: `pg_restore --clean --if-exists --no-owner --no-acl -d "<DATABASE_URL>" baraka-pos-backup.dump`. This is a last-resort step for after real data loss, not something to script casually — read what you're restoring onto first.
+
 ## Known limitation to accept or budget for
 
 Render's free tier sleeps after 15 minutes with no incoming requests, and **a sleep drops any open Socket.io connections** — so real-time stock/sale updates between terminals can silently stop working for whoever's connected when it sleeps, until they reconnect on their next action. The keep-alive ping keeps it awake during the hours you configure, but if you need guaranteed always-on sockets outside those hours (e.g. a 24-hour store), the fix is Render's cheapest paid plan (a few dollars/month) — there's no way to get a truly persistent, never-sleeping process for $0 anywhere.
