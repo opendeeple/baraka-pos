@@ -6,6 +6,7 @@ export { createSessionRepository, type SessionRepository, type LocalSession } fr
 export { createSettingsRepository, type SettingsRepository } from './repositories/settings.repo'
 export { createHeldCartRepository, type HeldCartRepository, type HeldCart } from './repositories/heldCart.repo'
 export { createReportsRepository, type ReportsRepository } from './repositories/reports.repo'
+export { createExpenseRepository, type ExpenseRepository, type ExpenseItem, type CreateExpenseInput } from './repositories/expense.repo'
 
 import type { DbAdapter } from './adapter'
 import type { EnqueueFn } from './repositories/contact.repo'
@@ -16,6 +17,7 @@ import { createSessionRepository } from './repositories/session.repo'
 import { createSettingsRepository } from './repositories/settings.repo'
 import { createHeldCartRepository } from './repositories/heldCart.repo'
 import { createReportsRepository } from './repositories/reports.repo'
+import { createExpenseRepository } from './repositories/expense.repo'
 
 /** Convenience: build all repositories over one adapter. */
 export function createRepositories(db: DbAdapter, uuid: () => string, enqueue: EnqueueFn) {
@@ -27,6 +29,7 @@ export function createRepositories(db: DbAdapter, uuid: () => string, enqueue: E
     settings: createSettingsRepository(db),
     heldCarts: createHeldCartRepository(db, uuid),
     reports: createReportsRepository(db),
+    expenses: createExpenseRepository(db, uuid, enqueue),
   }
 }
 

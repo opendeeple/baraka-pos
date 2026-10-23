@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { NavigationContainer, DarkTheme } from '@react-navigation/native'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
+import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { StatusBar } from 'expo-status-bar'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
 import { Icon, SyncStatusBadge, ThemeProvider, ToastProvider, type IconName } from '@baraka/mobile-ui'
@@ -16,9 +17,31 @@ import { ProductsScreen } from './screens/ProductsScreen'
 import { CustomersScreen } from './screens/CustomersScreen'
 import { SalesScreen } from './screens/SalesScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
+import { MoreScreen } from './screens/MoreScreen'
+import { ExpensesScreen } from './screens/ExpensesScreen'
+import type { MoreStackParamList } from './navigation'
 import { colors } from './theme'
 
 const Tab = createBottomTabNavigator()
+const MoreStack = createNativeStackNavigator<MoreStackParamList>()
+
+// The "More" tab's own stack — see navigation.ts. Shares the tab navigator's
+// header styling/sync badge via the same screenOptions as every other tab.
+function MoreTab() {
+  return (
+    <MoreStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.surface },
+        headerTintColor: colors.text,
+        headerTitleStyle: { fontWeight: '700' },
+        headerRight: () => <HeaderSyncBadge />,
+      }}
+    >
+      <MoreStack.Screen name="MoreMenu" component={MoreScreen} options={{ title: 'More' }} />
+      <MoreStack.Screen name="Expenses" component={ExpensesScreen} options={{ title: 'Expenses' }} />
+    </MoreStack.Navigator>
+  )
+}
 
 const navTheme = {
   ...DarkTheme,
@@ -46,6 +69,7 @@ const TAB_ICONS: Record<string, IconName> = {
   Products: 'package',
   Customers: 'users',
   Sales: 'sales',
+  More: 'more',
   Settings: 'settings',
 }
 
@@ -118,6 +142,7 @@ export default function AppRoot() {
             <Tab.Screen name="Products" component={ProductsScreen} />
             <Tab.Screen name="Customers" component={CustomersScreen} />
             <Tab.Screen name="Sales" component={SalesScreen} />
+            <Tab.Screen name="More" component={MoreTab} options={{ headerShown: false }} />
             <Tab.Screen name="Settings" component={SettingsScreen} />
           </Tab.Navigator>
         )}
