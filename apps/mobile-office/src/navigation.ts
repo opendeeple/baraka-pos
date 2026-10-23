@@ -4,4 +4,5 @@
 export type MoreStackParamList = {
   MoreMenu: undefined
   Expenses: undefined
+  Warehouse: undefined
 }
