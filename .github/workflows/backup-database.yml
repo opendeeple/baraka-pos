@@ -18,8 +18,12 @@ jobs:
             echo "Set the DATABASE_URL repository secret (Settings > Secrets and variables > Actions > Secrets) — the same Session pooler string used in Render (DEPLOYMENT.md step 1), not the free local-dev placeholder."
             exit 1
           fi
-          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
-          pg_dump "$DATABASE_URL" --no-owner --no-acl -F c -f baraka-pos-backup.dump
+          # pg_dump refuses to dump from a server newer than itself, and the
+          # Ubuntu runner's own apt package (16.x) is older than Supabase's
+          # Postgres (17.x) — run pg_dump from an official postgres:17 image
+          # instead of installing a client package, so it always matches.
+          docker run --rm -v "$PWD:/out" postgres:17 \
+            pg_dump "$DATABASE_URL" --no-owner --no-acl -F c -f /out/baraka-pos-backup.dump
 
       # Free private-repo storage is 500MB total for Actions artifacts — 14
       # days keeps a recovery window without filling that up. A single day's
