@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Save, Printer, TestTube2, RefreshCw, Globe, Maximize, Minimize, Send, BellRing, Banknote, Scale, Store, Receipt, Monitor, Lock,
-  type LucideIcon,
+  DatabaseBackup, type LucideIcon,
 } from 'lucide-react'
 import { DEFAULT_SCALE_CONFIG, SCALE_SETTING_KEY, parseScaleBarcode, readScaleConfig, type ScaleConfig } from '../../lib/scaleBarcode'
 import { LABEL_PRESETS, DEFAULT_LABEL_SIZE, labelGeometry, parseStickerSize, type LabelSize } from '../../lib/labels'
@@ -185,6 +185,7 @@ export default function SettingsScreen() {
   const [togglingFullscreen, setTogglingFullscreen] = useState(false)
   const [ownerPin, setOwnerPin] = useState('')
   const [openingDrawer, setOpeningDrawer] = useState(false)
+  const [exportingBackup, setExportingBackup] = useState(false)
   const [pendingDrawerConfirm, setPendingDrawerConfirm] = useState(false)
   const [savingStoreInfo, setSavingStoreInfo] = useState(false)
   const [pendingStoreInfoConfirm, setPendingStoreInfoConfirm] = useState(false)
@@ -469,6 +470,20 @@ export default function SettingsScreen() {
     }
   }
 
+  async function exportBackup() {
+    setExportingBackup(true)
+    try {
+      const r = await window.electronAPI.db.exportBackup()
+      if (r.canceled) return
+      if (r.success) toast.success(t('settings.backupSaved', { path: r.path ?? '' }))
+      else toast.error(r.error || t('settings.backupFailed'))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setExportingBackup(false)
+    }
+  }
+
   async function syncNow() {
     setSyncing(true)
     try {
@@ -578,6 +593,21 @@ export default function SettingsScreen() {
         </>)}
 
         {tab === 'store' && (<>
+        {/* A dated snapshot (VACUUM INTO, not a raw file copy — the live
+            file is open in WAL mode) is already taken automatically once a
+            day on this PC (db.service.ts, kept 14 days, never leaves the
+            machine). This button is the manual half: a copy the owner picks
+            the destination for themselves — a USB drive, a folder synced to
+            the cloud — so there's a copy that survives this PC dying too. */}
+        <div className={SECTION_CLS}>
+          <h2 className="text-white font-semibold text-sm flex items-center gap-2"><DatabaseBackup size={15} /> {t('settings.backupTitle')}</h2>
+          <p className="text-xs text-gray-500">{t('settings.backupHint')}</p>
+          <button onClick={exportBackup} disabled={exportingBackup}
+            className="flex items-center gap-2 border border-dark-border text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs transition-colors disabled:opacity-50">
+            <DatabaseBackup size={13} /> {exportingBackup ? t('common.saving') : t('settings.backupExport')}
+          </button>
+        </div>
+
         {/* Owner personal-expense PIN. Once one is set, it can only be
             changed by someone who already knows it, or — if forgotten — by
             proving ownership through the account login instead (see

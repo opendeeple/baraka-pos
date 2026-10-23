@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('db:exec', sql, params),
     transaction: (ops: Array<{ sql: string; params: unknown[] }>) =>
       ipcRenderer.invoke('db:transaction', ops),
+    exportBackup: () => ipcRenderer.invoke('db:exportBackup'),
   },
   printer: {
     print: (receiptData: unknown) => ipcRenderer.invoke('printer:print', receiptData),

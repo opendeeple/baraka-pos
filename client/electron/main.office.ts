@@ -102,7 +102,7 @@ app.whenReady().then(async () => {
     return
   }
 
-  registerDatabaseIpc()
+  registerDatabaseIpc(() => mainWindow)
   registerPrinterIpc()
   registerSessionIpc()
   registerSyncIpc('office')

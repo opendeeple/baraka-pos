@@ -143,7 +143,7 @@ app.whenReady().then(async () => {
   }
 
   // Register all IPC handlers
-  registerDatabaseIpc()
+  registerDatabaseIpc(() => mainWindow)
   registerPrinterIpc()
   registerSessionIpc(isTraining)
   registerSyncIpc('pos')

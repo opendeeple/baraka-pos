@@ -46,6 +46,8 @@ export interface ElectronAPI {
     query: <T = unknown>(sql: string, params?: unknown[]) => Promise<T[]>
     exec: (sql: string, params?: unknown[]) => Promise<void>
     transaction: (ops: Array<{ sql: string; params: unknown[] }>) => Promise<void>
+    /** Saves a consistent snapshot of the local database (VACUUM INTO, not a raw file copy) to a path the owner picks. */
+    exportBackup: () => Promise<{ success: boolean; path?: string; error?: string; canceled?: boolean }>
   }
   printer: {
     print: (receiptData: unknown) => Promise<{ success: boolean; error?: string }>
