@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import { fmtUZS } from '@baraka/app-core'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
+import { useSyncSocket } from '@baraka/mobile-shell'
 import type { CategoryItem, ProductListItem } from '@baraka/data'
 import { Button, Dialog, Icon, Input, Screen, Sheet, toast, useTheme } from '@baraka/mobile-ui'
 import { breakpoints, opacity, radius, spacing, type as typeScale } from '@baraka/ui-tokens'
@@ -69,6 +70,15 @@ export function RegisterScreen({ navigation }: Props) {
     const flushInterval = setInterval(() => { engine.flushOutbox().catch(() => {}) }, 60_000)
     return () => clearInterval(flushInterval)
   }, [])
+
+  // Register stays mounted all day — without this, a price or stock change
+  // from Office or another phone only reached it on the next remount (never,
+  // in practice). Mirrors desktop POSScreen's useWebSocket(onSyncChanged).
+  useSyncSocket((tables) => {
+    if (tables.includes('products') || tables.includes('product_batches') || tables.includes('product_stocks')) {
+      load()
+    }
+  })
 
   useEffect(load, [load])
 

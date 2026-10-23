@@ -278,6 +278,11 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     return Boolean(getSetting(tokenKey))
   }
 
+  /** For callers that need the raw value (e.g. authenticating a websocket) — everyone else should use hasTerminalToken(). */
+  function getTerminalToken(): string {
+    return getSetting(tokenKey)
+  }
+
   // --- terminal token + invoice range --------------------------------------
 
   /**
@@ -611,6 +616,21 @@ export function createSyncEngine(deps: SyncEngineDeps) {
           continue
         }
 
+        // This row has an edit sitting in the outbox, not yet pushed —
+        // applying the pull now would silently overwrite it with the
+        // server's older copy, and the eventual push would then upload
+        // exactly what the pull just wrote, not what the user changed.
+        // Skip it; the very next pull picks it up once the push has landed.
+        // Mobile's flakier connectivity (a push retry losing a race to a
+        // pull that happens to succeed first) makes this far more likely in
+        // practice than on desktop's wired/office connection, but the check
+        // is cheap and correct for both.
+        if (db.get(
+          `SELECT 1 AS x FROM sync_queue_local WHERE status='pending'
+           AND COALESCE(table_name, CASE entity_type WHEN 'sale' THEN 'sales' ELSE entity_type END)=? AND sync_id=?`,
+          [table, syncId]
+        )) continue
+
         const entries: Array<[string, unknown]> = []
         for (const [k, v] of Object.entries(record)) {
           if (k === 'id' || k === 'syncId' || Array.isArray(v)) continue
@@ -742,7 +762,14 @@ export function createSyncEngine(deps: SyncEngineDeps) {
         // not a real failure — every other table still syncs normally. Keeps
         // a client update safe to ship ahead of the server deploy that adds
         // the table (every platform shares this loop, not just desktop).
-        if (typeof message === 'string' && message.startsWith('Unknown table')) return { table, count: 0 }
+        // Only on this table's very first pull attempt, though (no cursor
+        // saved yet) — a table that has synced before and now suddenly
+        // isn't recognized is a real regression (a bad deploy, a renamed
+        // table), not a pending migration, and swallowing that silently
+        // forever is exactly how it would go unnoticed.
+        if (isInitialFullPull && typeof message === 'string' && message.startsWith('Unknown table')) {
+          return { table, count: 0 }
+        }
         throw new Error(message)
       }
 
@@ -1428,6 +1455,7 @@ export function createSyncEngine(deps: SyncEngineDeps) {
     ensureInvoiceRange,
     nextInvoiceNumber,
     hasTerminalToken,
+    getTerminalToken,
     pullTableV2,
     enqueueOutbox,
     flushOutbox,

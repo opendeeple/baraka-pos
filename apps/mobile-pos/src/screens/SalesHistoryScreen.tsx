@@ -11,7 +11,7 @@ import { useAuthStore } from '../platform/authStore'
 export function SalesHistoryScreen() {
   const theme = useTheme()
   const { repos, engine } = getServices()
-  const user = useAuthStore((s) => s.user)
+  const { user, session } = useAuthStore()
   const [sales, setSales] = useState<SaleHistoryItem[]>([])
   const [refundTarget, setRefundTarget] = useState<SaleHistoryItem | null>(null)
 
@@ -23,16 +23,32 @@ export function SalesHistoryScreen() {
 
   function performRefund(sale: SaleHistoryItem) {
     setRefundTarget(null)
-    const invoiceNumber =
-      engine.nextInvoiceNumber() ?? `RET-${Math.random().toString(16).slice(2, 10).toUpperCase()}`
-    const result = repos.sales.createReturn(sale.id, { invoiceNumber, userId: user?.id ?? 1 })
-    if (!result) {
-      toast.error('This sale was already refunded or is not refundable')
+    // Refund money is always a current-shift drawer movement, so there must
+    // be an open session here to file it under — it must not land on the
+    // original (possibly already-closed) shift.
+    if (!session) {
+      toast.error('Open a shift before refunding a sale')
       return
     }
-    engine.flushOutbox().catch(() => {})
-    load()
-    toast.success(`Refunded ${result.invoiceNumber} — ${fmtUZS(result.total)}`)
+    const invoiceNumber =
+      engine.nextInvoiceNumber() ?? `RET-${Math.random().toString(16).slice(2, 10).toUpperCase()}`
+    try {
+      const result = repos.sales.createReturn(sale.id, {
+        invoiceNumber,
+        userId: user?.id ?? 1,
+        userName: user?.name ?? null,
+        sessionId: session.id,
+      })
+      if (!result) {
+        toast.error('This sale was already refunded or is not refundable')
+        return
+      }
+      engine.flushOutbox().catch(() => {})
+      load()
+      toast.success(`Refunded ${result.invoiceNumber} — ${fmtUZS(result.total)}`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Refund failed — please retry')
+    }
   }
 
   return (

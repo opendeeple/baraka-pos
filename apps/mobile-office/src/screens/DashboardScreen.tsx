@@ -3,6 +3,7 @@ import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
+import { useSyncSocket } from '@baraka/mobile-shell'
 import { Badge, Card, EmptyState, KpiTile, Row, SectionHeader, useTheme } from '@baraka/mobile-ui'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
@@ -36,6 +37,12 @@ export function DashboardScreen() {
   }, [])
 
   useFocusEffect(load)
+
+  // Dashboard is the office's main screen and can stay open for a while —
+  // without this, a sale rung up elsewhere or a warehouse adjustment only
+  // reached it on the next tab focus or pull-to-refresh. Mirrors mobile-pos
+  // RegisterScreen's same fix for the register.
+  useSyncSocket(() => load())
 
   async function refresh() {
     setRefreshing(true)

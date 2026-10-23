@@ -94,8 +94,12 @@ export function createSaleRepository(db: DbAdapter, uuid: () => string, enqueue:
               item.discount, 0, item.isFree ? 1 : 0, now,
             ]
           )
+          // A sale only ever takes stock off the shop floor (matches
+          // desktop's client/src/lib/salesOps.ts) — without the location
+          // filter this also decrements the product's warehouse row.
           db.run(
-            `UPDATE product_stocks SET quantity = quantity - ?, updated_at = ? WHERE product_id = ? AND batch_id = ?`,
+            `UPDATE product_stocks SET quantity = quantity - ?, updated_at = ?
+             WHERE id = (SELECT id FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' ORDER BY id DESC LIMIT 1)`,
             [item.quantity, now, item.productId, item.batchId]
           )
         }
@@ -141,7 +145,10 @@ export function createSaleRepository(db: DbAdapter, uuid: () => string, enqueue:
      * quantities, restores stock, reverses cash/debt effects, and enqueues the
      * return for sync. Returns null if the sale is missing or already returned.
      */
-    createReturn(originalSaleId: number, opts: { invoiceNumber: string; userId: number }): CreateSaleResult | null {
+    createReturn(
+      originalSaleId: number,
+      opts: { invoiceNumber: string; userId: number; userName?: string | null; sessionId: number }
+    ): CreateSaleResult | null {
       const original = db.get<Record<string, any>>(`SELECT * FROM sales WHERE id=?`, [originalSaleId])
       if (!original || original.sale_type === 'return' || original.status !== 'completed') return null
       const alreadyReturned = db.get<{ id: number }>(
@@ -155,6 +162,28 @@ export function createSaleRepository(db: DbAdapter, uuid: () => string, enqueue:
       const now = new Date().toISOString()
       const total = Number(original.total_amount) || 0
 
+      // Reverse what the drawer actually kept, not what was handed over: a
+      // cash payment above the total is partly change (already given back at
+      // sale time — see expectedCash() in session.repo.ts), so refunding the
+      // raw tendered amount again overstates the cash-out by the change.
+      // Only cash can carry an overpayment — PaymentScreen caps every other
+      // method at exactly what's due — so cash alone absorbs it here.
+      let changeToAbsorb = Number(original.change_amount) || 0
+      const byMethod = new Map<string, number>()
+      for (const p of payments) {
+        byMethod.set(p.payment_method, (byMethod.get(p.payment_method) ?? 0) + (Number(p.amount) || 0))
+      }
+      const reversals: Array<{ method: string; amount: number }> = []
+      for (const [method, amount] of byMethod) {
+        let net = amount
+        if (method === 'Cash' && changeToAbsorb > 0) {
+          const absorbed = Math.min(changeToAbsorb, net)
+          net -= absorbed
+          changeToAbsorb -= absorbed
+        }
+        if (net > 0.004) reversals.push({ method, amount: net })
+      }
+
       let saleId = 0
       db.transaction(() => {
         db.run(
@@ -164,7 +193,9 @@ export function createSaleRepository(db: DbAdapter, uuid: () => string, enqueue:
              sale_date, sale_time, created_at, updated_at, sync_status)
            VALUES (?,?,?,?,?, ?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,'pending')`,
           [
-            syncId, original.store_id, original.session_id, original.contact_id, opts.userId,
+            // Filed under the CURRENT shift, not the original sale's — a
+            // refund days later must not reopen an already-closed drawer.
+            syncId, original.store_id, opts.sessionId, original.contact_id, opts.userId,
             opts.invoiceNumber, 'return', originalSaleId,
             -Number(original.subtotal || 0), -Number(original.discount || 0), -Number(original.total_charge_amount || 0),
             -total, -total, 0, 'completed', original.payment_status,
@@ -185,35 +216,53 @@ export function createSaleRepository(db: DbAdapter, uuid: () => string, enqueue:
             ]
           )
           if (item.product_id && item.batch_id) {
+            // Restores shop stock only — the sale that's being refunded only
+            // ever took stock off the shop floor (see createSale above).
             db.run(
-              `UPDATE product_stocks SET quantity = quantity + ?, updated_at = ? WHERE product_id = ? AND batch_id = ?`,
+              `UPDATE product_stocks SET quantity = quantity + ?, updated_at = ?
+               WHERE id = (SELECT id FROM product_stocks WHERE product_id=? AND batch_id=? AND location='shop' ORDER BY id DESC LIMIT 1)`,
               [item.quantity, now, item.product_id, item.batch_id]
             )
           }
         }
 
-        for (const payment of payments) {
+        for (const { method, amount } of reversals) {
           db.run(
             `INSERT INTO payment_transactions (sync_id, sale_id, store_id, session_id, transaction_date,
                amount, payment_method, transaction_type, charge_state, created_at, sync_status)
              VALUES (?,?,?,?,?,?,?,'return','FULLY_CHARGED',?,'pending')`,
-            [uuid(), saleId, original.store_id, original.session_id, now, -Number(payment.amount || 0), payment.payment_method, now]
+            [uuid(), saleId, original.store_id, opts.sessionId, now, -amount, method, now]
           )
-          if (payment.payment_method === 'Cash') {
+          if (method === 'Cash') {
             db.run(
               `INSERT INTO cash_logs (store_id, session_id, transaction_type, amount, source, description, created_by, created_at)
                VALUES (?,?,'cash_out',?,'sale',?,?,?)`,
-              [original.store_id, original.session_id, Number(payment.amount || 0), `Refund ${original.invoice_number}`, opts.userId, now]
+              [original.store_id, opts.sessionId, amount, `Refund ${original.invoice_number}`, opts.userId, now]
             )
           }
-          if (payment.payment_method === 'Debt' && original.contact_id) {
+          if (method === 'Debt' && original.contact_id) {
             db.run(`UPDATE contacts SET balance = balance - ?, updated_at = ? WHERE id = ?`, [
-              Number(payment.amount || 0), now, original.contact_id,
+              amount, now, original.contact_id,
             ])
           }
         }
 
         db.run(`UPDATE sales SET status='refunded', updated_at=? WHERE id=?`, [now, originalSaleId])
+
+        // No PIN re-auth gate exists on mobile yet (tracked separately as
+        // mobile-parity phase M1) — this audit row at least records who
+        // tapped Refund and for how much, matching desktop's logAudit call.
+        const auditSyncId = uuid()
+        db.run(
+          `INSERT INTO audit_logs (sync_id, action, entity, entity_id, details, user_id, user_name, occurred_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?)`,
+          [
+            auditSyncId, 'sale_return', 'sale', original.invoice_number,
+            JSON.stringify({ returnInvoice: opts.invoiceNumber, refund: total, reversals }),
+            opts.userId, opts.userName ?? null, now, now,
+          ]
+        )
+        enqueue('audit_logs', auditSyncId, 'upsert')
         enqueue('sales', syncId, 'upsert')
       })
 

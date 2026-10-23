@@ -27,14 +27,23 @@ export interface CategoryItem {
   sortOrder: number
 }
 
+// A product can carry separate 'shop' and 'warehouse' product_stocks rows
+// (schema v8) — the register only ever sells shop-floor stock, so both the
+// batch and stock joins must pick one deterministic row each (mirrors
+// desktop's client/src/screens/pos/POSScreen.tsx query) or a product with
+// warehouse stock shows up twice, or with the wrong location's quantity.
 const PRODUCT_SELECT = `
   SELECT p.id, p.name, p.sku, p.barcode, p.category_id, p.product_type,
          p.is_stock_managed, p.is_active, p.is_featured, p.alert_quantity, p.image_url,
          b.id AS batch_id, COALESCE(b.price, 0) AS price, COALESCE(b.cost, 0) AS cost,
          COALESCE(s.quantity, 0) AS stock
   FROM products p
-  LEFT JOIN product_batches b ON b.product_id = p.id AND b.is_active = 1
-  LEFT JOIN product_stocks s ON s.product_id = p.id AND s.batch_id = b.id
+  LEFT JOIN product_batches b ON b.id = (
+    SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
+  )
+  LEFT JOIN product_stocks s ON s.id = (
+    SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = b.id AND location = 'shop' ORDER BY id DESC LIMIT 1
+  )
   WHERE p.is_active = 1 AND (p.deleted_at IS NULL)`
 
 function mapProduct(row: Record<string, any>): ProductListItem {

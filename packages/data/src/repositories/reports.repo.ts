@@ -66,13 +66,22 @@ export function createReportsRepository(db: DbAdapter) {
         }))
     },
 
+    // Shop-floor stock only (matches desktop's DashboardScreen low-stock
+    // card) — warehouse stock existing doesn't mean the shop floor isn't
+    // about to run dry, which is what this alert is for.
     lowStock(limit = 50): Array<{ productId: number; name: string; stock: number; alertQuantity: number }> {
       return db
         .all<Record<string, any>>(
-          `SELECT p.id AS product_id, p.name, COALESCE(SUM(s.quantity),0) AS stock, p.alert_quantity
-           FROM products p LEFT JOIN product_stocks s ON s.product_id = p.id
+          `SELECT p.id AS product_id, p.name, COALESCE(s.quantity, 0) AS stock, p.alert_quantity
+           FROM products p
+           LEFT JOIN product_batches b ON b.id = (
+             SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1
+           )
+           LEFT JOIN product_stocks s ON s.id = (
+             SELECT id FROM product_stocks WHERE product_id = p.id AND batch_id = b.id AND location = 'shop' ORDER BY id DESC LIMIT 1
+           )
            WHERE p.is_stock_managed = 1 AND p.is_active = 1 AND p.deleted_at IS NULL
-           GROUP BY p.id HAVING stock <= COALESCE(p.alert_quantity, 0) AND p.alert_quantity > 0
+             AND COALESCE(s.quantity, 0) <= COALESCE(p.alert_quantity, 0) AND p.alert_quantity > 0
            ORDER BY stock ASC LIMIT ?`,
           [limit]
         )
