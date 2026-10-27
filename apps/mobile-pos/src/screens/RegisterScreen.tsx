@@ -13,6 +13,7 @@ import { ProductGrid } from './register/ProductGrid'
 import { CartPanel } from './register/CartPanel'
 import { DiscountDialog } from './register/DiscountDialog'
 import { UnitCalculatorModal, type CalculatorLine } from '../components/UnitCalculatorModal'
+import { QuickAddProductModal } from '../components/QuickAddProductModal'
 import type { RootStackParamList } from '../navigation'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>
@@ -33,6 +34,7 @@ export function RegisterScreen({ navigation }: Props) {
   const [discountOpen, setDiscountOpen] = useState(false)
   const [stockWarning, setStockWarning] = useState<{ product: ProductListItem; message: string } | null>(null)
   const [calculatorProduct, setCalculatorProduct] = useState<ProductListItem | null>(null)
+  const [quickAddBarcode, setQuickAddBarcode] = useState<string | null>(null)
 
   // Selector subscriptions: the coordinator needs only the cart-bar numbers,
   // not the whole store (kills the old full-screen re-render per keystroke).
@@ -189,6 +191,7 @@ export function RegisterScreen({ navigation }: Props) {
           containerStyle={styles.searchWrap}
           onSubmitEditing={() => {
             if (submitBarcode(search)) setSearch('')
+            else if (search.trim()) setQuickAddBarcode(search.trim())
           }}
         />
         <Button title="Scan" icon="scan" onPress={() => setScannerOpen(true)} />
@@ -210,7 +213,10 @@ export function RegisterScreen({ navigation }: Props) {
         visible={scannerOpen}
         onClose={() => setScannerOpen(false)}
         onScan={(code) => {
-          if (!submitBarcode(code)) toast.error(`No product for barcode ${code}`)
+          if (!submitBarcode(code)) {
+            setScannerOpen(false)
+            setQuickAddBarcode(code.trim())
+          }
         }}
       />
       <DiscountDialog
@@ -234,6 +240,17 @@ export function RegisterScreen({ navigation }: Props) {
           onAdd={(lines) => {
             addCalculatorLines(calculatorProduct, lines)
             setCalculatorProduct(null)
+          }}
+        />
+      )}
+      {quickAddBarcode !== null && (
+        <QuickAddProductModal
+          barcode={quickAddBarcode}
+          onClose={() => setQuickAddBarcode(null)}
+          onCreated={(product) => {
+            setQuickAddBarcode(null)
+            addProduct(product)
+            load()
           }}
         />
       )}

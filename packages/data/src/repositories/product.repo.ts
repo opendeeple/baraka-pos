@@ -91,12 +91,13 @@ export interface ProductInput {
 export function createProductRepository(db: DbAdapter, uuid?: () => string, enqueue?: EnqueueFn) {
   return {
     /** Creates product + default batch + zero stock row, all enqueued for push. */
-    create(input: ProductInput): number {
+    create(input: ProductInput): { productId: number; batchId: number } {
       if (!uuid || !enqueue) throw new Error('Product repository is read-only without uuid/enqueue deps')
       const now = new Date().toISOString()
       const productSyncId = uuid()
       const batchSyncId = uuid()
       let productId = 0
+      let batchId = 0
       db.transaction(() => {
         db.run(
           `INSERT INTO products (sync_id,name,sku,barcode,category_id,is_stock_managed,alert_quantity,is_active,product_type,created_at,updated_at)
@@ -112,7 +113,7 @@ export function createProductRepository(db: DbAdapter, uuid?: () => string, enqu
           `INSERT INTO product_batches (sync_id,product_id,price,cost,is_active,created_at,updated_at) VALUES (?,?,?,?,1,?,?)`,
           [batchSyncId, productId, input.price, input.cost ?? 0, now, now]
         )
-        const batchId = db.get<{ id: number }>(`SELECT id FROM product_batches WHERE sync_id=?`, [batchSyncId])!.id
+        batchId = db.get<{ id: number }>(`SELECT id FROM product_batches WHERE sync_id=?`, [batchSyncId])!.id
         db.run(
           `INSERT INTO product_stocks (sync_id,product_id,batch_id,quantity,updated_at) VALUES (?,?,?,0,?)`,
           [uuid(), productId, batchId, now]
@@ -120,7 +121,7 @@ export function createProductRepository(db: DbAdapter, uuid?: () => string, enqu
         enqueue('products', productSyncId, 'upsert')
         enqueue('product_batches', batchSyncId, 'upsert')
       })
-      return productId
+      return { productId, batchId }
     },
 
     update(productId: number, patch: Partial<ProductInput>): void {
