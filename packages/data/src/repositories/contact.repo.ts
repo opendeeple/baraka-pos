@@ -10,6 +10,10 @@ export interface ContactListItem {
   type: string
   balance: number
   loyaltyPointsBalance: number
+  /** Set once the customer taps the bot's deep link — learnt by whichever
+   *  device polls Telegram and synced to every other device (including this
+   *  one) from there; mobile never does the polling/linking itself. */
+  telegramChatId: string | null
 }
 
 function mapContact(row: Record<string, any>): ContactListItem {
@@ -23,6 +27,7 @@ function mapContact(row: Record<string, any>): ContactListItem {
     type: row.type,
     balance: Number(row.balance) || 0,
     loyaltyPointsBalance: Number(row.loyalty_points_balance) || 0,
+    telegramChatId: row.telegram_chat_id ?? null,
   }
 }
 
@@ -84,6 +89,33 @@ export function createContactRepository(db: DbAdapter, uuid: () => string, enque
     bySyncId(syncId: string): ContactListItem | null {
       const row = db.get<Record<string, any>>(`SELECT * FROM contacts WHERE sync_id=?`, [syncId])
       return row ? mapContact(row) : null
+    },
+
+    /** Device-local audit trail for a sent/failed notification — message_log
+     *  isn't synced (desktop's own copy stays desktop-only too), so this is
+     *  just this device's own record of what it sent. */
+    logMessage(contactId: number, channel: string, body: string, status: 'sent' | 'failed', error?: string | null): void {
+      db.run(
+        `INSERT INTO message_log (contact_id, channel, body, status, error, trigger, created_at) VALUES (?,?,?,?,?, 'manual', ?)`,
+        [contactId, channel, body, status, error ?? null, new Date().toISOString()]
+      )
+    },
+
+    /** Debt repayments against this contact, newest first — mirrors desktop's
+     *  REPAYMENT_FOR_CONTACT (client/src/lib/debt.ts): desktop records them
+     *  as 'debt_payment', ones pulled from other devices arrive as 'deposit'
+     *  (the server's name for a cash-in against a customer); the reference_id
+     *  branch catches old desktop rows written before contact_id existed. */
+    repayments(contactId: number, limit = 10): Array<{ amount: number; createdAt: string }> {
+      return db
+        .all<{ amount: number; created_at: string }>(
+          `SELECT amount, created_at FROM cash_logs
+           WHERE transaction_type = 'cash_in' AND source IN ('debt_payment', 'deposit')
+             AND (contact_id = ? OR (contact_id IS NULL AND source = 'debt_payment' AND reference_id = ?))
+           ORDER BY created_at DESC LIMIT ?`,
+          [contactId, contactId, limit]
+        )
+        .map((r) => ({ amount: Number(r.amount) || 0, createdAt: r.created_at }))
     },
   }
 }

@@ -37,6 +37,12 @@ export interface SaleHistoryItem {
   contactName: string | null
 }
 
+export interface SaleItemRow {
+  description: string
+  quantity: number
+  unitPrice: number
+}
+
 export function saleTotals(items: CartItem[], charges: CartCharge[], discount: number) {
   const subtotal = items.reduce((sum, item) => {
     const lineTotal = item.unitPrice * item.quantity
@@ -269,12 +275,16 @@ export function createSaleRepository(db: DbAdapter, uuid: () => string, enqueue:
       return { saleId, syncId, invoiceNumber: opts.invoiceNumber, total: -total, changeAmount: 0 }
     },
 
-    history(opts: { sessionId?: number; limit?: number } = {}): SaleHistoryItem[] {
+    history(opts: { sessionId?: number; contactId?: number; limit?: number } = {}): SaleHistoryItem[] {
       const clauses: string[] = []
       const params: unknown[] = []
       if (opts.sessionId) {
         clauses.push('s.session_id = ?')
         params.push(opts.sessionId)
+      }
+      if (opts.contactId) {
+        clauses.push('s.contact_id = ? AND s.status = \'completed\'')
+        params.push(opts.contactId)
       }
       const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
       return db
@@ -296,6 +306,19 @@ export function createSaleRepository(db: DbAdapter, uuid: () => string, enqueue:
           saleType: r.sale_type ?? 'sale',
           syncStatus: r.sync_status,
           contactName: r.contact_name,
+        }))
+    },
+
+    items(saleId: number): SaleItemRow[] {
+      return db
+        .all<Record<string, any>>(
+          `SELECT description, quantity, unit_price FROM sale_items WHERE sale_id=? ORDER BY id`,
+          [saleId]
+        )
+        .map((r) => ({
+          description: r.description,
+          quantity: Number(r.quantity) || 0,
+          unitPrice: Number(r.unit_price) || 0,
         }))
     },
   }

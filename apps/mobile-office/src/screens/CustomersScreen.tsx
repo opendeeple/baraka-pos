@@ -6,8 +6,10 @@ import type { ContactListItem } from '@baraka/data'
 import {
   Badge,
   Button,
+  Chip,
   EmptyState,
   Icon,
+  IconButton,
   Input,
   ListRow,
   Screen,
@@ -17,6 +19,8 @@ import {
 } from '@baraka/mobile-ui'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
+import { useAuthStore } from '../platform/authStore'
+import { buildDebtMessage, buildHistoryMessage, sendTelegramMessage, telegramConfigured } from '../lib/telegram'
 
 const EMPTY_FORM = { name: '', phone: '', email: '', address: '' }
 
@@ -28,6 +32,7 @@ export function CustomersScreen() {
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [messageTarget, setMessageTarget] = useState<ContactListItem | null>(null)
 
   const load = useCallback(() => {
     setCustomers(repos.contacts.search(search, 100))
@@ -95,11 +100,22 @@ export function CustomersScreen() {
               setShowForm(true)
             }}
             right={
-              item.balance > 0 ? (
-                <Badge label={`Debt ${fmtUZS(item.balance)}`} tone="danger" />
-              ) : (
-                <Text style={[typeScale.sm, { color: theme.textMuted }]}>{fmtUZS(item.balance)}</Text>
-              )
+              <View style={styles.rowRight}>
+                {item.balance > 0 ? (
+                  <Badge label={`Debt ${fmtUZS(item.balance)}`} tone="danger" />
+                ) : (
+                  <Text style={[typeScale.sm, { color: theme.textMuted }]}>{fmtUZS(item.balance)}</Text>
+                )}
+                {item.telegramChatId && (
+                  <IconButton
+                    icon="send"
+                    size={20}
+                    color={theme.primary}
+                    accessibilityLabel={`Message ${item.name} on Telegram`}
+                    onPress={() => setMessageTarget(item)}
+                  />
+                )}
+              </View>
             }
           />
         )}
@@ -137,7 +153,80 @@ export function CustomersScreen() {
           </View>
         </View>
       </Sheet>
+
+      {messageTarget && (
+        <MessageSheet contact={messageTarget} onClose={() => setMessageTarget(null)} />
+      )}
     </Screen>
+  )
+}
+
+function MessageSheet({ contact, onClose }: { contact: ContactListItem; onClose: () => void }) {
+  const theme = useTheme()
+  const { repos } = getServices()
+  const { store } = useAuthStore()
+  const [template, setTemplate] = useState<'debt' | 'history'>(contact.balance > 0 ? 'debt' : 'history')
+  const [sending, setSending] = useState(false)
+
+  const configured = telegramConfigured()
+  const preview = !configured || !contact.telegramChatId
+    ? ''
+    : template === 'debt'
+      ? buildDebtMessage(contact.id, store?.name ?? '')
+      : buildHistoryMessage(contact.id)
+
+  async function send() {
+    if (!contact.telegramChatId || sending) return
+    setSending(true)
+    try {
+      const result = await sendTelegramMessage(contact.telegramChatId, preview)
+      repos.contacts.logMessage(contact.id, 'telegram', preview, result.success ? 'sent' : 'failed', result.error)
+      if (result.success) {
+        toast.success('Message sent')
+        onClose()
+      } else {
+        toast.error(result.error || 'Send failed')
+      }
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <Sheet visible onClose={onClose} title={`Message — ${contact.name}`}>
+      <View style={styles.form}>
+        {!configured ? (
+          <Text style={[typeScale.sm, { color: theme.warning }]}>
+            Telegram bot isn't configured yet — set it up in desktop Settings first.
+          </Text>
+        ) : !contact.telegramChatId ? (
+          <Text style={[typeScale.sm, { color: theme.warning }]}>
+            This customer hasn't connected Telegram yet — send them the bot link from desktop.
+          </Text>
+        ) : (
+          <>
+            <View style={styles.chipRow}>
+              <Chip label="Debt reminder" selected={template === 'debt'} onPress={() => setTemplate('debt')} />
+              <Chip label="Purchase history" selected={template === 'history'} onPress={() => setTemplate('history')} />
+            </View>
+            <View style={[styles.preview, { borderColor: theme.border }]}>
+              <Text style={[typeScale.xs, { color: theme.textMuted }]}>{preview}</Text>
+            </View>
+          </>
+        )}
+        <View style={styles.actions}>
+          <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button
+            title="Send"
+            icon="send"
+            onPress={send}
+            loading={sending}
+            disabled={!configured || !contact.telegramChatId}
+            style={styles.flex2}
+          />
+        </View>
+      </View>
+    </Sheet>
   )
 }
 
@@ -145,7 +234,10 @@ const styles = StyleSheet.create({
   toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'flex-start' },
   searchWrap: { flex: 1 },
   list: { padding: spacing.md, gap: spacing.sm, flexGrow: 1 },
+  rowRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   form: { gap: spacing.sm, paddingBottom: spacing.sm },
+  chipRow: { flexDirection: 'row', gap: spacing.xs },
+  preview: { borderWidth: 1, borderRadius: 8, padding: spacing.sm, maxHeight: 220 },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   flex1: { flex: 1 },
   flex2: { flex: 2 },

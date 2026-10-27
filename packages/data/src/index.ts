@@ -1,7 +1,7 @@
 export type { DbAdapter } from './adapter'
 export { createProductRepository, type ProductRepository, type ProductListItem, type CategoryItem, type ProductInput } from './repositories/product.repo'
 export { createContactRepository, type ContactRepository, type ContactListItem, type EnqueueFn } from './repositories/contact.repo'
-export { createSaleRepository, saleTotals, type SaleRepository, type CreateSaleInput, type CreateSaleResult, type SaleHistoryItem } from './repositories/sale.repo'
+export { createSaleRepository, saleTotals, type SaleRepository, type CreateSaleInput, type CreateSaleResult, type SaleHistoryItem, type SaleItemRow } from './repositories/sale.repo'
 export { createSessionRepository, type SessionRepository, type LocalSession } from './repositories/session.repo'
 export { createSettingsRepository, type SettingsRepository } from './repositories/settings.repo'
 export { createHeldCartRepository, type HeldCartRepository, type HeldCart } from './repositories/heldCart.repo'
