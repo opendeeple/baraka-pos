@@ -18,6 +18,12 @@ export interface ProductListItem {
   price: number
   cost: number
   stock: number
+  /** 'piece' (default), 'kg', or 'box' — drives the unit calculator on tap. */
+  unit: string | null
+  /** Box only: how many pieces one box contains. */
+  unitsPerPackage: number | null
+  /** Box only: the loose-piece price, when it differs from price ÷ unitsPerPackage. */
+  piecePrice: number | null
 }
 
 export interface CategoryItem {
@@ -35,6 +41,7 @@ export interface CategoryItem {
 const PRODUCT_SELECT = `
   SELECT p.id, p.name, p.sku, p.barcode, p.category_id, p.product_type,
          p.is_stock_managed, p.is_active, p.is_featured, p.alert_quantity, p.image_url,
+         p.unit, p.units_per_package, p.piece_price,
          b.id AS batch_id, COALESCE(b.price, 0) AS price, COALESCE(b.cost, 0) AS cost,
          COALESCE(s.quantity, 0) AS stock
   FROM products p
@@ -63,6 +70,9 @@ function mapProduct(row: Record<string, any>): ProductListItem {
     price: Number(row.price) || 0,
     cost: Number(row.cost) || 0,
     stock: Number(row.stock) || 0,
+    unit: row.unit,
+    unitsPerPackage: row.units_per_package != null ? Number(row.units_per_package) : null,
+    piecePrice: row.piece_price != null ? Number(row.piece_price) : null,
   }
 }
 

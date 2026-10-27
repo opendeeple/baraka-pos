@@ -12,6 +12,7 @@ import { getServices } from '../platform/services'
 import { ProductGrid } from './register/ProductGrid'
 import { CartPanel } from './register/CartPanel'
 import { DiscountDialog } from './register/DiscountDialog'
+import { UnitCalculatorModal, type CalculatorLine } from '../components/UnitCalculatorModal'
 import type { RootStackParamList } from '../navigation'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>
@@ -31,6 +32,7 @@ export function RegisterScreen({ navigation }: Props) {
   const [scannerOpen, setScannerOpen] = useState(false)
   const [discountOpen, setDiscountOpen] = useState(false)
   const [stockWarning, setStockWarning] = useState<{ product: ProductListItem; message: string } | null>(null)
+  const [calculatorProduct, setCalculatorProduct] = useState<ProductListItem | null>(null)
 
   // Selector subscriptions: the coordinator needs only the cart-bar numbers,
   // not the whole store (kills the old full-screen re-render per keystroke).
@@ -97,9 +99,15 @@ export function RegisterScreen({ navigation }: Props) {
     [addItem]
   )
 
+  // Routes kg/box-priced products to the unit calculator instead of adding a
+  // flat quantity of 1 — mirrors desktop's POSScreen handleProductTap.
   const addProduct = useCallback(
     (p: ProductListItem) => {
       if (!p.batchId) return
+      if (p.unit === 'kg' || p.unit === 'box') {
+        setCalculatorProduct(p)
+        return
+      }
       // The shop's rule: goods are entered into the system (received) before
       // they're sold — only what the shelf holds can go in the cart, same as
       // the desktop till.
@@ -120,6 +128,44 @@ export function RegisterScreen({ navigation }: Props) {
       doAdd(p)
     },
     [cartItems, doAdd]
+  )
+
+  // Always adds directly with the given (possibly fractional, possibly
+  // multi-line) quantity from the calculator — same stock-warning UX as a
+  // flat add, just checked against the TOTAL across every line first.
+  const addCalculatorLines = useCallback(
+    (p: ProductListItem, lines: CalculatorLine[]) => {
+      if (!p.batchId) return
+      const totalQty = lines.reduce((s, l) => s + l.quantity, 0)
+      if (p.isStockManaged) {
+        const inCart = cartItems
+          .filter((i) => i.productId === p.id && i.batchId === p.batchId)
+          .reduce((s, i) => s + i.quantity, 0)
+        if (inCart + totalQty > p.stock) {
+          setStockWarning({
+            product: p,
+            message: p.stock <= 0
+              ? `${p.name} is out of stock — receive the goods before selling.`
+              : `${p.name}: only ${p.stock} in stock${inCart ? ` (${inCart} already in cart)` : ''}.`,
+          })
+          return
+        }
+      }
+      for (const line of lines) {
+        addItem({
+          productId: p.id,
+          batchId: p.batchId,
+          name: p.name,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          unitCost: p.cost,
+          discount: 0,
+          maxStock: p.isStockManaged ? p.stock : undefined,
+          unitsPerPackage: p.unit === 'box' && p.unitsPerPackage ? p.unitsPerPackage : undefined,
+        } as never)
+      }
+    },
+    [cartItems, addItem]
   )
 
   function submitBarcode(code: string): boolean {
@@ -181,6 +227,16 @@ export function RegisterScreen({ navigation }: Props) {
         message={stockWarning?.message ?? ''}
         actions={[{ label: 'OK', tone: 'primary', onPress: () => setStockWarning(null) }]}
       />
+      {calculatorProduct && (
+        <UnitCalculatorModal
+          product={calculatorProduct}
+          onClose={() => setCalculatorProduct(null)}
+          onAdd={(lines) => {
+            addCalculatorLines(calculatorProduct, lines)
+            setCalculatorProduct(null)
+          }}
+        />
+      )}
     </>
   )
 

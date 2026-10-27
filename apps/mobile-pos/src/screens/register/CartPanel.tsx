@@ -1,6 +1,6 @@
 import { FlatList, StyleSheet, Text, View } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
-import { Button, EmptyState, IconButton, useTheme } from '@baraka/mobile-ui'
+import { Button, EmptyState, IconButton, toast, useTheme } from '@baraka/mobile-ui'
 import { radius, spacing, touch, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../../platform/services'
 
@@ -47,7 +47,16 @@ export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
                 icon="minus"
                 size={20}
                 accessibilityLabel={`Decrease ${item.name} quantity`}
-                onPress={() => setQuantity(index, item.quantity - 1)}
+                onPress={() => {
+                  // Floors at 1 for whole-unit quantities, but never floors
+                  // ABOVE the current quantity — a weighed kg/box line
+                  // already under 1 (0.35 kg) doesn't jump up to 1 on a tap;
+                  // it just stays put (remove the line instead to clear it).
+                  const next = Math.max(item.quantity - 1, Math.min(1, item.quantity))
+                  if (setQuantity(index, next)) {
+                    toast.info(`Only ${item.maxStock} ${item.name} in stock`)
+                  }
+                }}
                 variant="filled"
               />
               <Text style={[typeScale.money, styles.qtyText, { color: theme.text }]}>{item.quantity}</Text>
@@ -55,7 +64,11 @@ export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
                 icon="plus"
                 size={20}
                 accessibilityLabel={`Increase ${item.name} quantity`}
-                onPress={() => setQuantity(index, item.quantity + 1)}
+                onPress={() => {
+                  if (setQuantity(index, item.quantity + 1)) {
+                    toast.info(`Only ${item.maxStock} ${item.name} in stock`)
+                  }
+                }}
                 variant="filled"
               />
             </View>

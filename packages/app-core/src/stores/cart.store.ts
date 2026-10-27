@@ -12,10 +12,12 @@ interface CartStore {
   getTotalChargeAmount: () => number
   getFinalTotal: () => number
 
-  addItem: (item: CartItem) => void
+  /** 'capped' = the cart already holds all the stock there is. */
+  addItem: (item: CartItem) => 'added' | 'capped'
   removeItem: (index: number) => void
   updateItem: (index: number, patch: Partial<CartItem>) => void
-  setQuantity: (index: number, qty: number) => void
+  /** true when the quantity was cut down to the stock on hand. */
+  setQuantity: (index: number, qty: number) => boolean
   setDiscount: (amount: number) => void
   addCharge: (charge: CartCharge) => void
   removeCharge: (chargeId: number) => void
@@ -24,6 +26,12 @@ interface CartStore {
   discardHeld: (id: string) => void
   clearCart: () => void
   loadHeldCarts: () => void
+}
+
+/** Quantity of the same product+batch on every line except `skipIdx`. */
+function otherLinesQty(items: CartItem[], skipIdx: number, item: Pick<CartItem, 'productId' | 'batchId'>): number {
+  return items.reduce((sum, i, idx) =>
+    idx !== skipIdx && i.productId === item.productId && i.batchId === item.batchId ? sum + i.quantity : sum, 0)
 }
 
 /**
@@ -57,14 +65,21 @@ export function createCartStore(heldCarts: HeldCartRepository) {
 
     // maxStock (the shelf quantity; unset when the product isn't
     // stock-managed) caps every line: nothing is sold that isn't in the system.
+    // One product can sit on several lines at different prices (a box
+    // product's whole boxes and its loose pieces), so the cap counts all of
+    // them, and a new line only merges with an existing one at the SAME
+    // price — mirrors desktop's client/src/store/cart.store.ts exactly.
     addItem: (newItem) => {
+      let capped = false
       set((state) => {
         const existingIdx = state.items.findIndex(
-          (i) => i.productId === newItem.productId && i.batchId === newItem.batchId
+          (i) => i.productId === newItem.productId && i.batchId === newItem.batchId && i.unitPrice === newItem.unitPrice
         )
         const max = newItem.maxStock
+        const room = max != null ? max - otherLinesQty(state.items, existingIdx, newItem) : undefined
         const wanted = (existingIdx >= 0 ? state.items[existingIdx].quantity : 0) + newItem.quantity
-        const quantity = max != null && wanted > max ? max : wanted
+        const quantity = room != null && wanted > room ? Math.max(0, room) : wanted
+        capped = quantity < wanted
         if (existingIdx >= 0) {
           const items = [...state.items]
           items[existingIdx] = { ...items[existingIdx], quantity, maxStock: max }
@@ -73,6 +88,7 @@ export function createCartStore(heldCarts: HeldCartRepository) {
         if (quantity <= 0) return {}
         return { items: [...state.items, { ...newItem, quantity }] }
       })
+      return capped ? 'capped' : 'added'
     },
 
     removeItem: (index) => set((state) => ({ items: state.items.filter((_, i) => i !== index) })),
@@ -87,10 +103,15 @@ export function createCartStore(heldCarts: HeldCartRepository) {
     setQuantity: (index, qty) => {
       if (qty <= 0) {
         get().removeItem(index)
-        return
+        return false
       }
-      const max = get().items[index]?.maxStock
-      get().updateItem(index, { quantity: max != null && qty > max ? max : qty })
+      const { items } = get()
+      const item = items[index]
+      const max = item?.maxStock
+      const room = max != null ? max - otherLinesQty(items, index, item) : undefined
+      const capped = room != null && qty > room
+      get().updateItem(index, { quantity: capped ? Math.max(0, room!) : qty })
+      return capped
     },
 
     setDiscount: (amount) => set({ discount: Math.max(0, amount) }),
