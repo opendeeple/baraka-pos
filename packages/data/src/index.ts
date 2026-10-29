@@ -14,6 +14,7 @@ export { createCategoryRepository, type CategoryRepository, type CategoryRow } f
 export { createSupplierRepository, type SupplierRepository, type SupplierRow, type SupplierForm, type SupplierOrderRow, type SupplierPaymentRow, type PayMethod } from './repositories/supplier.repo'
 export { createCreditorRepository, type CreditorRepository, type CreditorRow, type CreditorForm, type CreditorCurrency, type CreditorStatus, type CreditorReturnType, daysUntil, fmtCreditorAmount, todayYmd } from './repositories/creditor.repo'
 export { createEmployeeRepository, type EmployeeRepository, type EmployeeRow, type EmployeeForm, type EmployeeRole, type SalaryRecordRow } from './repositories/employee.repo'
+export { createJournalRepository, type JournalRepository, type JournalEntry, type JournalGroup, JOURNAL_GROUPS, JOURNAL_ATTENTION } from './repositories/journal.repo'
 
 import type { DbAdapter } from './adapter'
 import type { EnqueueFn } from './repositories/contact.repo'
@@ -31,6 +32,7 @@ import { createCategoryRepository } from './repositories/category.repo'
 import { createSupplierRepository } from './repositories/supplier.repo'
 import { createCreditorRepository } from './repositories/creditor.repo'
 import { createEmployeeRepository } from './repositories/employee.repo'
+import { createJournalRepository } from './repositories/journal.repo'
 
 /** Convenience: build all repositories over one adapter. */
 export function createRepositories(db: DbAdapter, uuid: () => string, enqueue: EnqueueFn) {
@@ -49,6 +51,7 @@ export function createRepositories(db: DbAdapter, uuid: () => string, enqueue: E
     suppliers: createSupplierRepository(db, uuid, enqueue),
     creditors: createCreditorRepository(db, uuid, enqueue),
     employees: createEmployeeRepository(db, uuid, enqueue),
+    journal: createJournalRepository(db),
   }
 }
 
