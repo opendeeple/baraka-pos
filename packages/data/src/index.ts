@@ -7,7 +7,7 @@ export { createSettingsRepository, type SettingsRepository } from './repositorie
 export { createHeldCartRepository, type HeldCartRepository, type HeldCart } from './repositories/heldCart.repo'
 export { createReportsRepository, type ReportsRepository } from './repositories/reports.repo'
 export { createExpenseRepository, type ExpenseRepository, type ExpenseItem, type CreateExpenseInput } from './repositories/expense.repo'
-export { createWarehouseRepository, type WarehouseRepository, type WarehouseStockRow, type StockLocation, type StockMoveKind } from './repositories/warehouse.repo'
+export { createWarehouseRepository, type WarehouseRepository, type WarehouseStockRow, type StockLocation, type StockMoveKind, type StocktakeRow, type WriteOffReason } from './repositories/warehouse.repo'
 export { createPurchaseRepository, type PurchaseRepository, type PurchaseListItem, type PurchaseItemRow, type OrderLineInput, type ReceiveCheck } from './repositories/purchase.repo'
 export { logAudit, type AuditAction } from './repositories/audit'
 export { createCategoryRepository, type CategoryRepository, type CategoryRow } from './repositories/category.repo'

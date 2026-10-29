@@ -1,8 +1,19 @@
 import type { DbAdapter } from '../adapter'
 import type { EnqueueFn } from './contact.repo'
+import { logAudit } from './audit'
 
 export type StockLocation = 'shop' | 'warehouse'
 export type StockMoveKind = 'receipt' | 'transfer' | 'stocktake' | 'writeoff'
+
+export interface StocktakeRow {
+  productId: number
+  name: string
+  batchId: number
+  cost: number
+  system: number
+}
+
+export type WriteOffReason = 'damaged' | 'expired' | 'lost' | 'internal' | 'other'
 
 export interface WarehouseStockRow {
   id: number
@@ -163,6 +174,93 @@ export function createWarehouseRepository(db: DbAdapter, uuid: () => string, enq
       repo.moveStock({
         productId: opts.productId, batchId: opts.batchId, location: 'shop',
         delta: opts.qty, kind: 'transfer', reason: 'Transfer in', userId: opts.userId,
+      })
+    },
+
+    /** Every stock-managed product's batch + system quantity at one location — the count sheet to fill in. */
+    stocktakeItems(location: StockLocation): StocktakeRow[] {
+      return db
+        .all<Record<string, any>>(
+          `SELECT p.id AS product_id, p.name, pb.id AS batch_id, COALESCE(pb.cost, 0) AS cost,
+                  COALESCE((SELECT quantity FROM product_stocks WHERE product_id = p.id AND batch_id = pb.id AND location = ? ORDER BY id DESC LIMIT 1), 0) AS system
+           FROM products p
+           JOIN product_batches pb ON pb.id = (SELECT id FROM product_batches WHERE product_id = p.id AND is_active = 1 ORDER BY id DESC LIMIT 1)
+           WHERE p.deleted_at IS NULL AND p.is_stock_managed = 1
+           ORDER BY p.name`,
+          [location]
+        )
+        .map((r) => ({ productId: r.product_id, name: r.name, batchId: r.batch_id, cost: Number(r.cost) || 0, system: Number(r.system) || 0 }))
+    },
+
+    /**
+     * Counted what's physically there; the system records the differences —
+     * each one its own stock document (kind='stocktake'), never a silent
+     * overwrite. Only lines whose count differs from the system figure
+     * change anything. One audit row summarizes the whole session, like
+     * desktop's StocktakeModal.
+     */
+    applyStocktake(
+      location: StockLocation,
+      lines: Array<{ productId: number; batchId: number; name: string; system: number; counted: number; cost: number }>,
+      note: string,
+      userId: number
+    ): { changed: number } {
+      const changes = lines.filter((l) => l.counted !== l.system)
+      if (changes.length === 0) return { changed: 0 }
+      const reason = `Stocktake${note.trim() ? `: ${note.trim()}` : ''}`
+      let shortageValue = 0
+      let surplusValue = 0
+      // Each line is its own moveStock transaction (which already wraps
+      // itself) — not nested inside one big transaction, since the DbAdapter
+      // doesn't guarantee nested transactions are safe. Matches
+      // transferToShop's same already-accepted non-atomic-pair tradeoff.
+      for (const l of changes) {
+        const delta = l.counted - l.system
+        repo.moveStock({ productId: l.productId, batchId: l.batchId, location, delta, kind: 'stocktake', reason, userId })
+        if (delta < 0) shortageValue += Math.abs(delta) * l.cost
+        else surplusValue += delta * l.cost
+      }
+      logAudit(db, uuid, enqueue, 'stocktake', {
+        entity: 'stock', entityId: location, userId,
+        details: {
+          location, counted: lines.length, changed: changes.length, note: note.trim() || null,
+          shortageValue, surplusValue,
+          lines: changes.map((l) => ({ product: l.name, system: l.system, counted: l.counted })),
+        },
+      })
+      return { changed: changes.length }
+    },
+
+    /**
+     * Writing off goods that can no longer be sold — broken, expired, lost
+     * or stolen. Never more than is in stock at that location.
+     */
+    writeOff(opts: {
+      productId: number
+      batchId: number
+      productName: string
+      location: StockLocation
+      qty: number
+      cost: number
+      reason: WriteOffReason
+      note?: string
+      userId: number
+    }): void {
+      if (repo.stockAt(opts.productId, opts.batchId, opts.location) < opts.qty) {
+        throw new Error('Not enough stock at that location')
+      }
+      const text = opts.note?.trim() ? `${opts.reason}: ${opts.note.trim()}` : opts.reason
+      // moveStock already wraps its own transaction — not nested further, see applyStocktake's note above.
+      repo.moveStock({
+        productId: opts.productId, batchId: opts.batchId, location: opts.location,
+        delta: -opts.qty, kind: 'writeoff', reason: text, userId: opts.userId,
+      })
+      logAudit(db, uuid, enqueue, 'writeoff', {
+        entity: 'product', entityId: opts.productId, userId: opts.userId,
+        details: {
+          product: opts.productName, qty: opts.qty, location: opts.location,
+          reason: opts.reason, note: opts.note?.trim() || null, value: opts.qty * opts.cost,
+        },
       })
     },
   }
