@@ -1,6 +1,7 @@
 import type { CartItem, CartCharge, PaymentEntry } from '@baraka/shared'
 import type { DbAdapter } from '../adapter'
 import type { EnqueueFn } from './contact.repo'
+import { logAudit } from './audit'
 
 export interface CreateSaleInput {
   storeId: number
@@ -255,20 +256,11 @@ export function createSaleRepository(db: DbAdapter, uuid: () => string, enqueue:
 
         db.run(`UPDATE sales SET status='refunded', updated_at=? WHERE id=?`, [now, originalSaleId])
 
-        // No PIN re-auth gate exists on mobile yet (tracked separately as
-        // mobile-parity phase M1) — this audit row at least records who
-        // tapped Refund and for how much, matching desktop's logAudit call.
-        const auditSyncId = uuid()
-        db.run(
-          `INSERT INTO audit_logs (sync_id, action, entity, entity_id, details, user_id, user_name, occurred_at, updated_at)
-           VALUES (?,?,?,?,?,?,?,?,?)`,
-          [
-            auditSyncId, 'sale_return', 'sale', original.invoice_number,
-            JSON.stringify({ returnInvoice: opts.invoiceNumber, refund: total, reversals }),
-            opts.userId, opts.userName ?? null, now, now,
-          ]
-        )
-        enqueue('audit_logs', auditSyncId, 'upsert')
+        logAudit(db, uuid, enqueue, 'sale_return', {
+          entity: 'sale', entityId: original.invoice_number,
+          userId: opts.userId, userName: opts.userName,
+          details: { returnInvoice: opts.invoiceNumber, refund: total, reversals },
+        })
         enqueue('sales', syncId, 'upsert')
       })
 

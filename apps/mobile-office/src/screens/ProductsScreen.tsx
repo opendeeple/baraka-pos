@@ -2,11 +2,12 @@ import { useCallback, useState } from 'react'
 import { FlatList, StyleSheet, Switch, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
-import type { ProductListItem } from '@baraka/data'
+import type { CategoryItem, ProductListItem } from '@baraka/data'
 import {
   BarcodeScannerModal,
   Badge,
   Button,
+  Chip,
   EmptyState,
   Icon,
   IconButton,
@@ -28,10 +29,11 @@ interface FormState {
   cost: string
   alertQuantity: string
   isStockManaged: boolean
+  categoryId: number | null
 }
 
 const EMPTY_FORM: FormState = {
-  name: '', sku: '', barcode: '', price: '', cost: '', alertQuantity: '', isStockManaged: true,
+  name: '', sku: '', barcode: '', price: '', cost: '', alertQuantity: '', isStockManaged: true, categoryId: null,
 }
 
 export function ProductsScreen() {
@@ -42,6 +44,7 @@ export function ProductsScreen() {
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
+  const [categories, setCategories] = useState<CategoryItem[]>([])
   // 'lookup' (toolbar scan — find/open an existing product by its barcode,
   // or start a new one pre-filled with it) vs 'fill' (the form's own Barcode
   // field — scan a physical label straight into it instead of typing it).
@@ -49,6 +52,7 @@ export function ProductsScreen() {
 
   const load = useCallback(() => {
     setProducts(repos.products.list({ search: search || undefined, limit: 300 }))
+    setCategories(repos.products.categories())
   }, [search])
 
   useFocusEffect(load)
@@ -68,6 +72,7 @@ export function ProductsScreen() {
       // low-stock threshold back to 0.
       alertQuantity: p.alertQuantity ? String(p.alertQuantity) : '',
       isStockManaged: p.isStockManaged,
+      categoryId: p.categoryId,
     })
     setShowForm(true)
   }
@@ -85,6 +90,7 @@ export function ProductsScreen() {
       cost: Number(form.cost) || 0,
       alertQuantity: Number(form.alertQuantity) || 0,
       isStockManaged: form.isStockManaged,
+      categoryId: form.categoryId,
     }
     if (editId) repos.products.update(editId, input)
     else repos.products.create(input)
@@ -196,6 +202,18 @@ export function ProductsScreen() {
             />
             <Input label="SKU" value={form.sku} onChangeText={(v) => set('sku', v)} containerStyle={styles.flex1} />
           </View>
+          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Category</Text>
+          <View style={styles.chipRow}>
+            <Chip label="None" selected={form.categoryId === null} onPress={() => setForm((p) => ({ ...p, categoryId: null }))} />
+            {categories.map((c) => (
+              <Chip
+                key={c.id}
+                label={c.name}
+                selected={form.categoryId === c.id}
+                onPress={() => setForm((p) => ({ ...p, categoryId: c.id }))}
+              />
+            ))}
+          </View>
           <View style={styles.row2}>
             <Input
               label="Low-stock alert at"
@@ -237,6 +255,7 @@ const styles = StyleSheet.create({
   rowRight: { alignItems: 'flex-end', gap: spacing.xs },
   form: { gap: spacing.sm, paddingBottom: spacing.sm },
   row2: { flexDirection: 'row', gap: spacing.sm },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   flex1: { flex: 1 },
   flex2: { flex: 2 },
   switchCol: { alignItems: 'flex-start', justifyContent: 'space-between', paddingVertical: spacing.xs },
