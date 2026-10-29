@@ -6,7 +6,7 @@ import { fmtUZS } from '@baraka/app-core'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
 import { useSyncSocket } from '@baraka/mobile-shell'
 import type { CategoryItem, ProductListItem } from '@baraka/data'
-import { BarcodeScannerModal, Button, Dialog, Icon, Input, Screen, Sheet, toast, useTheme } from '@baraka/mobile-ui'
+import { BarcodeScannerModal, Button, Dialog, Icon, IconButton, Input, Screen, Sheet, toast, useTheme } from '@baraka/mobile-ui'
 import { breakpoints, opacity, radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { ProductGrid } from './register/ProductGrid'
@@ -14,6 +14,7 @@ import { CartPanel } from './register/CartPanel'
 import { DiscountDialog } from './register/DiscountDialog'
 import { UnitCalculatorModal, type CalculatorLine } from '../components/UnitCalculatorModal'
 import { QuickAddProductModal } from '../components/QuickAddProductModal'
+import { DebtorsModal } from '../components/DebtorsModal'
 import type { RootStackParamList } from '../navigation'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>
@@ -35,6 +36,7 @@ export function RegisterScreen({ navigation }: Props) {
   const [stockWarning, setStockWarning] = useState<{ product: ProductListItem; message: string } | null>(null)
   const [calculatorProduct, setCalculatorProduct] = useState<ProductListItem | null>(null)
   const [quickAddBarcode, setQuickAddBarcode] = useState<string | null>(null)
+  const [debtorsOpen, setDebtorsOpen] = useState(false)
 
   // Selector subscriptions: the coordinator needs only the cart-bar numbers,
   // not the whole store (kills the old full-screen re-render per keystroke).
@@ -195,6 +197,14 @@ export function RegisterScreen({ navigation }: Props) {
           }}
         />
         <Button title="Scan" icon="scan" onPress={() => setScannerOpen(true)} />
+        <IconButton
+          icon="banknote"
+          size={24}
+          color={theme.warning}
+          variant="outline"
+          accessibilityLabel="Debtors"
+          onPress={() => setDebtorsOpen(true)}
+        />
       </View>
       <ProductGrid
         products={products}
@@ -254,6 +264,7 @@ export function RegisterScreen({ navigation }: Props) {
           }}
         />
       )}
+      {debtorsOpen && <DebtorsModal onClose={() => setDebtorsOpen(false)} />}
     </>
   )
 

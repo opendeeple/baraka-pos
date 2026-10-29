@@ -45,6 +45,20 @@ export interface EnqueueFn {
   (table: string, syncId: string, op: 'upsert' | 'delete'): void
 }
 
+// A contact counts as a debtor if they owe money right now, OR their
+// balance is already 0 but a debt sale since their last clearance hasn't
+// been cleared yet (still shows in the till's debtor list until someone
+// clears it). Mirrors desktop's OPEN_DEBT_CONDITION (client/src/lib/debt.ts)
+// exactly.
+function openDebtCondition(): string {
+  const since = lastClearedSql('contacts.id')
+  return `(contacts.balance > 0 OR EXISTS (
+    SELECT 1 FROM sales s
+    JOIN payment_transactions pt ON pt.sale_id = s.id AND pt.payment_method = 'Debt'
+    WHERE s.contact_id = contacts.id AND s.status != 'cancelled' AND s.created_at > ${since}
+  ))`
+}
+
 export function createContactRepository(db: DbAdapter, uuid: () => string, enqueue: EnqueueFn) {
   return {
     search(term: string, limit = 30): ContactListItem[] {
@@ -54,6 +68,20 @@ export function createContactRepository(db: DbAdapter, uuid: () => string, enque
           `SELECT * FROM contacts WHERE deleted_at IS NULL AND (name LIKE ? OR phone LIKE ?)
            ORDER BY name LIMIT ?`,
           [like, like, limit]
+        )
+        .map(mapContact)
+    },
+
+    /** Open debtors for the till's debtor picker — balance owed, or a
+     *  not-yet-cleared debt sale even at a zero balance. Mirrors desktop's
+     *  CartPanel.tsx loadDebtors query. */
+    debtors(limit = 50): ContactListItem[] {
+      return db
+        .all<Record<string, any>>(
+          `SELECT * FROM contacts
+           WHERE type IN ('customer', 'both') AND deleted_at IS NULL AND ${openDebtCondition()}
+           ORDER BY balance DESC LIMIT ?`,
+          [limit]
         )
         .map(mapContact)
     },
