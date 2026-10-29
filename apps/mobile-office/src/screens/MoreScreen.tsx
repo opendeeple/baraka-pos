@@ -56,6 +56,13 @@ export function MoreScreen({ navigation }: Props) {
           right={<Icon name="chevronRight" size={20} color={theme.textFaint} />}
           onPress={() => navigation.navigate('Creditors')}
         />
+        <ListRow
+          title="Employees"
+          subtitle="Staff, roles, PIN codes, salary payments"
+          left={<Icon name="users" color={theme.primary} />}
+          right={<Icon name="chevronRight" size={20} color={theme.textFaint} />}
+          onPress={() => navigation.navigate('Employees')}
+        />
       </View>
     </Screen>
   )
