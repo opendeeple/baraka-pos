@@ -70,6 +70,13 @@ export function MoreScreen({ navigation }: Props) {
           right={<Icon name="chevronRight" size={20} color={theme.textFaint} />}
           onPress={() => navigation.navigate('Journal')}
         />
+        <ListRow
+          title="Reports"
+          subtitle="ABC analysis, dead stock, losses"
+          left={<Icon name="barChart" color={theme.primary} />}
+          right={<Icon name="chevronRight" size={20} color={theme.textFaint} />}
+          onPress={() => navigation.navigate('Reports')}
+        />
       </View>
     </Screen>
   )

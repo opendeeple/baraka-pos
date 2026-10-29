@@ -11,4 +11,5 @@ export type MoreStackParamList = {
   Creditors: undefined
   Employees: undefined
   Journal: undefined
+  Reports: undefined
 }
