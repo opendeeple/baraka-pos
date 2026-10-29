@@ -8,4 +8,5 @@ export type MoreStackParamList = {
   Purchases: undefined
   Categories: undefined
   Suppliers: undefined
+  Creditors: undefined
 }

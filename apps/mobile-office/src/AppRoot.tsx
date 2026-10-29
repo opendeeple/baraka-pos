@@ -23,6 +23,7 @@ import { WarehouseScreen } from './screens/WarehouseScreen'
 import { PurchasesScreen } from './screens/PurchasesScreen'
 import { CategoriesScreen } from './screens/CategoriesScreen'
 import { SuppliersScreen } from './screens/SuppliersScreen'
+import { CreditorsScreen } from './screens/CreditorsScreen'
 import type { MoreStackParamList } from './navigation'
 import { colors } from './theme'
 
@@ -47,6 +48,7 @@ function MoreTab() {
       <MoreStack.Screen name="Purchases" component={PurchasesScreen} options={{ title: 'Purchases' }} />
       <MoreStack.Screen name="Categories" component={CategoriesScreen} options={{ title: 'Categories' }} />
       <MoreStack.Screen name="Suppliers" component={SuppliersScreen} options={{ title: 'Suppliers' }} />
+      <MoreStack.Screen name="Creditors" component={CreditorsScreen} options={{ title: 'Creditors' }} />
     </MoreStack.Navigator>
   )
 }
