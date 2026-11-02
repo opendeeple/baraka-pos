@@ -108,19 +108,19 @@ export default function AppRoot() {
                     <HeaderSyncBadge />
                     <IconButton
                       icon="history"
-                      accessibilityLabel="Sales history"
+                      accessibilityLabel={t('nav.sales')}
                       color={colors.primary}
                       onPress={() => navigation.navigate('SalesHistory')}
                     />
                     <IconButton
                       icon="lock"
-                      accessibilityLabel="Close register"
+                      accessibilityLabel={t('nav.closeRegister')}
                       color={colors.primary}
                       onPress={() => navigation.navigate('CloseSession')}
                     />
                     <IconButton
                       icon="settings"
-                      accessibilityLabel="Settings"
+                      accessibilityLabel={t('nav.settings')}
                       color={colors.primary}
                       onPress={() => navigation.navigate('Settings')}
                     />

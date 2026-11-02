@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import type { ProductListItem } from '@baraka/data'
 import { Button, Icon, Input, Sheet, toast, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
@@ -33,6 +34,7 @@ function isExactDuplicate(p: ProductListItem, name: string, barcode: string): bo
  */
 export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos, engine } = getServices()
   const { user } = useAuthStore()
   const [step, setStep] = useState<'form' | 'confirm'>('form')
@@ -78,7 +80,7 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
         ? repos.products.findByBarcode(barcodeValue.trim())
         : repos.products.list({ search: name.trim(), limit: 1 })[0]
       if (created) onCreated(created)
-      else toast.error('Product created but could not be found — check the list')
+      else toast.error(t('pos.createdButNotFound'))
     } finally {
       setSaving(false)
     }
@@ -87,20 +89,20 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
   if (step === 'confirm') {
     const exactDup = similar.find((p) => isExactDuplicate(p, name, barcodeValue))
     return (
-      <Sheet visible onClose={onClose} title="Confirm new product">
+      <Sheet visible onClose={onClose} title={t('pos.confirmNewProduct')}>
         <View style={styles.body}>
           <View style={[styles.banner, { backgroundColor: exactDup ? theme.danger + '1a' : theme.warning + '1a', borderColor: exactDup ? theme.danger : theme.warning }]}>
             <Icon name="alert" size={16} color={exactDup ? theme.danger : theme.warning} />
             <Text style={[typeScale.sm, { color: exactDup ? theme.danger : theme.warning, flex: 1 }]}>
               {exactDup
-                ? `A product named "${exactDup.name}" already exists — pick it from the grid instead.`
-                : 'Make sure this product really is new, not a misread barcode for one you already have.'}
+                ? t('pos.duplicateWarning', { name: exactDup.name })
+                : t('pos.newProductWarning')}
             </Text>
           </View>
 
           {similar.length > 0 && (
             <View style={styles.similarList}>
-              <Text style={[typeScale.xs, { color: theme.textFaint }]}>Similar products found</Text>
+              <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('pos.similarProducts')}</Text>
               {similar.map((p) => (
                 <View key={p.id} style={[styles.similarRow, { borderColor: theme.border }]}>
                   <Text style={[typeScale.sm, { color: theme.text }]}>{p.name}</Text>
@@ -111,7 +113,7 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
           )}
 
           <View style={[styles.summary, { borderColor: theme.border }]}>
-            <Text style={[typeScale.xs, { color: theme.textFaint }]}>New product</Text>
+            <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('pos.newProduct')}</Text>
             <Text style={[typeScale.md, { color: theme.text, fontWeight: '700' }]}>{name}</Text>
             <Text style={[typeScale.sm, { color: theme.textMuted }]}>
               {barcodeValue || '—'} · {price} UZS · qty {qtyNum}
@@ -119,8 +121,8 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
           </View>
 
           <View style={styles.actions}>
-            <Button title="Back" variant="secondary" onPress={() => setStep('form')} style={styles.flex1} />
-            <Button title="Create" onPress={confirmCreate} loading={saving} disabled={!!exactDup} style={styles.flex2} />
+            <Button title={t('common.back')} variant="secondary" onPress={() => setStep('form')} style={styles.flex1} />
+            <Button title={t('common.create')} onPress={confirmCreate} loading={saving} disabled={!!exactDup} style={styles.flex2} />
           </View>
         </View>
       </Sheet>
@@ -128,20 +130,20 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
   }
 
   return (
-    <Sheet visible onClose={onClose} title="New product">
+    <Sheet visible onClose={onClose} title={t('pos.newProduct')}>
       <View style={styles.body}>
-        <Text style={[typeScale.sm, { color: theme.textMuted }]}>No product matches barcode {barcode}</Text>
-        <Input label="Name" value={name} onChangeText={setName} autoFocus />
-        <Input label="Barcode" value={barcodeValue} onChangeText={setBarcodeValue} />
+        <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('pos.noMatchBarcode', { barcode })}</Text>
+        <Input label={t('pos.productName')} value={name} onChangeText={setName} autoFocus />
+        <Input label={t('pos.barcode')} value={barcodeValue} onChangeText={setBarcodeValue} />
         <View style={styles.row2}>
-          <Input label="Price" value={price} onChangeText={setPrice} keyboardType="numeric" containerStyle={styles.flex1} />
-          <Input label="Cost" value={cost} onChangeText={setCost} keyboardType="numeric" containerStyle={styles.flex1} />
+          <Input label={t('pos.priceLabel')} value={price} onChangeText={setPrice} keyboardType="numeric" containerStyle={styles.flex1} />
+          <Input label={t('pos.costLabel')} value={cost} onChangeText={setCost} keyboardType="numeric" containerStyle={styles.flex1} />
         </View>
-        <Input label="Quantity on hand" value={qty} onChangeText={setQty} keyboardType="decimal-pad" placeholder="0" />
+        <Input label={t('pos.quantityOnHand')} value={qty} onChangeText={setQty} keyboardType="decimal-pad" placeholder="0" />
         <View style={styles.actions}>
-          <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
           <Button
-            title="Continue"
+            title={t('common.continue')}
             onPress={goToConfirm}
             disabled={!name.trim() || !price || !(qtyNum > 0)}
             style={styles.flex2}

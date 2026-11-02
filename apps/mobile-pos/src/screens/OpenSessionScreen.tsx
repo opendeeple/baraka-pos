@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
 import { Button, NumPad, Screen, applyNumKey, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
 
 export function OpenSessionScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const { user, store, setSession } = useAuthStore()
   const [amount, setAmount] = useState('')
@@ -24,20 +26,20 @@ export function OpenSessionScreen() {
       })
       setSession(session)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to open session')
+      setError(err instanceof Error ? err.message : t('session.failedToOpen'))
     }
   }
 
   return (
     <Screen edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.center}>
-        <Text style={[typeScale.title, { color: theme.text }]}>Open Register</Text>
+        <Text style={[typeScale.title, { color: theme.text }]}>{t('session.openRegister')}</Text>
         <Text style={[typeScale.sm, styles.subtitle, { color: theme.textMuted }]}>
-          Enter the opening cash balance
+          {t('session.enterOpeningBalance')}
         </Text>
         <Text
           style={[typeScale.moneyDisplay, styles.amount, { color: theme.primary }]}
-          accessibilityLabel={`Opening balance ${amount || '0'}`}
+          accessibilityLabel={`${t('session.openingBalance')} ${amount || '0'}`}
         >
           {amount ? fmtUZS(Number(amount)) : fmtUZS(0)}
         </Text>
@@ -45,7 +47,7 @@ export function OpenSessionScreen() {
           <NumPad onKey={(k) => setAmount((v) => applyNumKey(v, k))} />
         </View>
         {error ? <Text style={[typeScale.sm, styles.error, { color: theme.danger }]}>{error}</Text> : null}
-        <Button title="Open Session" size="lg" onPress={openSession} style={styles.submit} testID="open-session" />
+        <Button title={t('session.openSession')} size="lg" onPress={openSession} style={styles.submit} testID="open-session" />
       </View>
     </Screen>
   )

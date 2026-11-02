@@ -3,6 +3,7 @@ import { FlatList, StyleSheet, View } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
 import type { ContactListItem } from '@baraka/data'
 import { Badge, Button, EmptyState, Icon, Input, ListRow, Sheet, toast, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 
@@ -14,6 +15,7 @@ interface Props {
 
 export function CustomerPickerModal({ visible, onClose, onSelect }: Props) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos, engine } = getServices()
   const [search, setSearch] = useState('')
   const [results, setResults] = useState<ContactListItem[]>([])
@@ -27,7 +29,7 @@ export function CustomerPickerModal({ visible, onClose, onSelect }: Props) {
 
   function createAndSelect() {
     if (!newName.trim()) {
-      toast.error('Customer name is required')
+      toast.error(t('pos.customerNameRequired'))
       return
     }
     const contact = repos.contacts.create({
@@ -42,11 +44,11 @@ export function CustomerPickerModal({ visible, onClose, onSelect }: Props) {
   }
 
   return (
-    <Sheet visible={visible} onClose={onClose} title="Select customer">
+    <Sheet visible={visible} onClose={onClose} title={t('pos.selectCustomer')}>
       <Input
         value={search}
         onChangeText={setSearch}
-        placeholder="Search by name or phone…"
+        placeholder={t('pos.searchNameOrPhone')}
         left={<Icon name="search" size={16} color={theme.textFaint} />}
         returnKeyType="search"
       />
@@ -61,24 +63,24 @@ export function CustomerPickerModal({ visible, onClose, onSelect }: Props) {
             title={item.name}
             subtitle={item.phone ?? '—'}
             onPress={() => onSelect(item)}
-            right={item.balance > 0 ? <Badge label={`Debt ${fmtUZS(item.balance)}`} tone="danger" /> : undefined}
+            right={item.balance > 0 ? <Badge label={t('pos.debtBadge', { amount: fmtUZS(item.balance) })} tone="danger" /> : undefined}
           />
         )}
-        ListEmptyComponent={<EmptyState icon="users" title="No customers found" />}
+        ListEmptyComponent={<EmptyState icon="users" title={t('pos.noCustomersFound')} />}
       />
 
       {creating ? (
         <View style={styles.createBox}>
-          <Input value={newName} onChangeText={setNewName} placeholder="Customer name" autoFocus />
-          <Input value={newPhone} onChangeText={setNewPhone} placeholder="Phone (optional)" keyboardType="phone-pad" />
+          <Input value={newName} onChangeText={setNewName} placeholder={t('pos.customerName')} autoFocus />
+          <Input value={newPhone} onChangeText={setNewPhone} placeholder={t('pos.phoneOptional')} keyboardType="phone-pad" />
           <View style={styles.createActions}>
-            <Button title="Back" variant="secondary" onPress={() => setCreating(false)} style={styles.flex1} />
-            <Button title="Create & select" onPress={createAndSelect} style={styles.flex2} />
+            <Button title={t('common.back')} variant="secondary" onPress={() => setCreating(false)} style={styles.flex1} />
+            <Button title={t('pos.createAndSelect')} onPress={createAndSelect} style={styles.flex2} />
           </View>
         </View>
       ) : (
         <Button
-          title="New customer"
+          title={t('pos.newCustomer')}
           icon="plus"
           variant="secondary"
           onPress={() => setCreating(true)}

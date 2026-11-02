@@ -16,9 +16,16 @@ import {
   toast,
   useTheme,
 } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
+
+const METHOD_I18N: Record<'Cash' | 'Card' | 'Click', string> = {
+  Cash: 'payment.methodCash',
+  Card: 'payment.methodCard',
+  Click: 'payment.methodClick',
+}
 
 interface Props {
   onClose: () => void
@@ -34,6 +41,7 @@ interface Props {
  */
 export function DebtorsModal({ onClose }: Props) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const [search, setSearch] = useState('')
   const [debtors, setDebtors] = useState<ContactListItem[]>([])
@@ -63,12 +71,12 @@ export function DebtorsModal({ onClose }: Props) {
   }
 
   return (
-    <Sheet visible onClose={onClose} title="Debtors">
+    <Sheet visible onClose={onClose} title={t('pos.debtors')}>
       <View style={styles.form}>
         <Input
           value={search}
           onChangeText={setSearch}
-          placeholder="Search by name or phone…"
+          placeholder={t('pos.searchNameOrPhone')}
           autoFocus
           left={<Icon name="search" size={16} color={theme.textFaint} />}
         />
@@ -88,7 +96,7 @@ export function DebtorsModal({ onClose }: Props) {
             />
           )}
           ListEmptyComponent={
-            <EmptyState icon="banknote" title="No outstanding debts" message="Customers who owe money appear here" />
+            <EmptyState icon="banknote" title={t('pos.debtorsNone')} message={t('pos.debtorsNoneHint')} />
           }
         />
       </View>
@@ -105,6 +113,7 @@ function DebtorPayPanel({
   onPaid: () => void
 }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const { user, store } = useAuthStore()
   const [statement, setStatement] = useState(() => repos.contacts.debtStatement(contact.id))
@@ -121,7 +130,7 @@ function DebtorPayPanel({
 
   function confirmPay() {
     if (!entered || entered <= 0) {
-      toast.error('Enter a valid amount')
+      toast.error(t('debt.enterValidAmount'))
       return
     }
     setPaying(true)
@@ -132,9 +141,9 @@ function DebtorPayPanel({
       setView('statement')
       setEntry('')
       onPaid()
-      toast.success(result.change > 0 ? `Paid — change ${fmtUZS(result.change)}` : 'Payment recorded')
+      toast.success(result.change > 0 ? t('debt.paid', { change: fmtUZS(result.change) }) : t('debt.recorded'))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Payment failed')
+      toast.error(err instanceof Error ? err.message : t('debt.paymentFailed'))
     } finally {
       setPaying(false)
     }
@@ -142,11 +151,11 @@ function DebtorPayPanel({
 
   if (view === 'pay') {
     return (
-      <Sheet visible onClose={() => setView('statement')} title={`Pay debt — ${contact.name}`}>
+      <Sheet visible onClose={() => setView('statement')} title={t('debt.payDebtTitle', { name: contact.name })}>
         <View style={styles.form}>
           <View style={styles.chipRow}>
             {(['Cash', 'Card', 'Click'] as const).map((m) => (
-              <Chip key={m} label={m} selected={method === m} onPress={() => setMethod(m)} />
+              <Chip key={m} label={t(METHOD_I18N[m])} selected={method === m} onPress={() => setMethod(m)} />
             ))}
           </View>
           <Text style={[typeScale.moneyLg, { color: theme.text, textAlign: 'center' }]}>
@@ -156,18 +165,18 @@ function DebtorPayPanel({
           {change > 0 && (
             <View style={[styles.summaryBox, { borderColor: theme.success }]}>
               <View style={styles.rowBetween}>
-                <Text style={[typeScale.sm, { color: theme.textMuted }]}>Payment</Text>
+                <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('debt.payment')}</Text>
                 <Text style={[typeScale.sm, { color: theme.text, fontWeight: '700' }]}>{fmtUZS(Math.max(0, balance))}</Text>
               </View>
               <View style={styles.rowBetween}>
-                <Text style={[typeScale.md, { color: theme.success, fontWeight: '700' }]}>Change</Text>
+                <Text style={[typeScale.md, { color: theme.success, fontWeight: '700' }]}>{t('payment.change')}</Text>
                 <Text style={[typeScale.md, { color: theme.success, fontWeight: '700' }]}>{fmtUZS(change)}</Text>
               </View>
             </View>
           )}
           <View style={styles.actions}>
-            <Button title="Back" variant="secondary" onPress={() => setView('statement')} style={styles.flex1} />
-            <Button title="Confirm payment" onPress={confirmPay} loading={paying} disabled={!entered} style={styles.flex2} />
+            <Button title={t('common.back')} variant="secondary" onPress={() => setView('statement')} style={styles.flex1} />
+            <Button title={t('debt.confirmPayment')} onPress={confirmPay} loading={paying} disabled={!entered} style={styles.flex2} />
           </View>
         </View>
       </Sheet>
@@ -177,14 +186,14 @@ function DebtorPayPanel({
   return (
     <Sheet visible onClose={onClose} title={contact.name}>
       <View style={styles.form}>
-        <Button title="Back to list" variant="ghost" onPress={onBack} />
+        <Button title={t('pos.backToList')} variant="ghost" onPress={onBack} />
         {!hasHistory ? (
-          <Text style={[typeScale.sm, { color: theme.textFaint }]}>No debt records</Text>
+          <Text style={[typeScale.sm, { color: theme.textFaint }]}>{t('debt.noRecords')}</Text>
         ) : (
           <ScrollView style={styles.historyList} contentContainerStyle={styles.historyListInner}>
             {statement.debts.length > 0 && (
               <>
-                <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Debts taken</Text>
+                <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('debt.debtsTaken')}</Text>
                 {statement.debts.map((d, i) => (
                   <View key={i} style={[styles.rowItem, { borderColor: theme.border }]}>
                     <View style={styles.flex1}>
@@ -198,7 +207,7 @@ function DebtorPayPanel({
             )}
             {statement.payments.length > 0 && (
               <>
-                <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Payments</Text>
+                <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('debt.payments')}</Text>
                 {statement.payments.map((p, i) => (
                   <View key={i} style={[styles.rowItem, { borderColor: theme.border }]}>
                     <Text style={[typeScale.xs, { color: theme.textFaint }]}>{String(p.date).slice(0, 16).replace('T', ' ')}</Text>
@@ -212,12 +221,12 @@ function DebtorPayPanel({
 
         <View style={[styles.summaryBox, { borderColor: fullyPaid ? theme.success : theme.danger }]}>
           <Text style={[typeScale.md, { color: fullyPaid ? theme.success : theme.danger, fontWeight: '700' }]}>
-            {fullyPaid ? 'Fully paid' : `Remaining: ${fmtUZS(Math.max(0, balance))}`}
+            {fullyPaid ? t('debt.fullyPaid') : t('debt.remaining', { amount: fmtUZS(Math.max(0, balance)) })}
           </Text>
         </View>
 
         {!fullyPaid && (
-          <Button title="Pay debt" icon="banknote" onPress={() => setView('pay')} fullWidth />
+          <Button title={t('debt.payDebt')} icon="banknote" onPress={() => setView('pay')} fullWidth />
         )}
       </View>
     </Sheet>

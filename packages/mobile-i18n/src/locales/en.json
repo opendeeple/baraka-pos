@@ -13,6 +13,8 @@
     "create": "Create",
     "scan": "Scan",
     "retry": "Retry",
+    "record": "Record",
+    "ok": "OK",
     "wrongPin": "Wrong PIN",
     "ownerPinTitle": "Owner PIN"
   },
@@ -73,6 +75,8 @@
     "openingBalance": "Opening balance",
     "cashIn": "Cash In",
     "cashOut": "Cash Out",
+    "in": "In",
+    "out": "Out",
     "countedCash": "Counted cash",
     "expectedCash": "Expected cash",
     "balanced": "Balanced",
@@ -129,10 +133,12 @@
     "outOfStockMessage": "{{name}} is out of stock — receive the goods before selling.",
     "lowStockMessage": "{{name}}: only {{stock}} in stock{{inCart}}.",
     "alreadyInCart": " ({{count}} already in cart)",
+    "debtBadge": "Debt {{amount}}",
     "debtors": "Debtors",
     "debtorsNone": "No outstanding debts",
     "debtorsNoneHint": "Customers who owe money appear here",
     "searchNameOrPhone": "Search by name or phone…",
+    "selectCustomer": "Select customer",
     "backToList": "Back to list",
     "unitGrams": "Grams",
     "unitPieces": "Pieces",
@@ -142,6 +148,9 @@
     "perKg": "Per kg {{price}}",
     "perPiece": "Per piece {{price}}",
     "priceLabel": "Price",
+    "costLabel": "Cost",
+    "productName": "Name",
+    "barcode": "Barcode",
     "addToCart": "Add to cart",
     "selectCustomer": "Select customer",
     "newCustomer": "New customer",
@@ -199,8 +208,10 @@
     "fullyPaid": "Fully paid",
     "remaining": "Remaining: {{amount}}",
     "payDebt": "Pay debt",
+    "payDebtTitle": "Pay debt — {{name}}",
     "noRecords": "No debt records",
-    "confirmPayment": "Confirm payment"
+    "confirmPayment": "Confirm payment",
+    "payment": "Payment"
   },
   "cashMovement": {
     "cashInTitle": "Cash In",
@@ -227,7 +238,9 @@
     "tooMuch": "Discount cannot exceed the sale total"
   },
   "receipt": {
-    "printFailed": "Receipt print failed — check the printer"
+    "printFailed": "Receipt print failed — check the printer",
+    "storeFallback": "Store",
+    "cashierFallback": "Cashier"
   },
   "printer": {
     "none": "No printer",

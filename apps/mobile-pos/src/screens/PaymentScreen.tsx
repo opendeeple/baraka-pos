@@ -18,6 +18,7 @@ import {
   toast,
   useTheme,
 } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
@@ -28,6 +29,12 @@ import type { RootStackParamList } from '../navigation'
 type Props = NativeStackScreenProps<RootStackParamList, 'Payment'>
 
 const METHODS = ['Cash', 'Card', 'Click', 'Debt'] as const
+const METHOD_I18N: Record<(typeof METHODS)[number], string> = {
+  Cash: 'payment.methodCash',
+  Card: 'payment.methodCard',
+  Click: 'payment.methodClick',
+  Debt: 'payment.methodDebt',
+}
 
 // Likely banknote hand-overs for the amount due: the total rounded UP to the
 // next multiple of each denomination, deduped (adapted from Lakasir).
@@ -42,6 +49,7 @@ function suggestedCash(due: number): number[] {
 
 export function PaymentScreen({ navigation }: Props) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos, engine, useCartStore } = getServices()
   const cart = useCartStore()
   const { user, store, session } = useAuthStore()
@@ -73,7 +81,7 @@ export function PaymentScreen({ navigation }: Props) {
     // Card, Click and debt settle exactly what they cover: a debt keyed above
     // the bill would charge the customer for goods they never took.
     if (method !== 'Cash' && value > remaining + 0.005) {
-      toast.error(`${method} can't be more than what's left: ${fmtUZS(remaining)}`)
+      toast.error(t('payment.nonCashOverRemaining', { method: t(METHOD_I18N[method]), amount: fmtUZS(remaining) }))
       return
     }
     // Fat-finger guard (Odoo's large-amount check): a manually keyed amount
@@ -90,7 +98,7 @@ export function PaymentScreen({ navigation }: Props) {
     if (!fullyPaid || processing) return
     // Debt sales must be attached to a customer whose balance carries the debt.
     if (payments.some((p) => p.paymentMethod === 'Debt') && !customer) {
-      toast.error('Select a customer for debt payments')
+      toast.error(t('payment.selectCustomerForDebt'))
       setPickerOpen(true)
       return
     }
@@ -111,10 +119,10 @@ export function PaymentScreen({ navigation }: Props) {
       })
       const doc: ReceiptDoc = {
         invoiceNumber: result.invoiceNumber,
-        storeName: store?.name ?? 'Store',
+        storeName: store?.name ?? t('receipt.storeFallback'),
         storeAddress: store?.address,
         storePhone: store?.phone,
-        cashierName: user?.name ?? 'Cashier',
+        cashierName: user?.name ?? t('receipt.cashierFallback'),
         timestamp: new Date().toISOString(),
         items: cart.items.map((i) => ({
           name: i.name,
@@ -132,13 +140,13 @@ export function PaymentScreen({ navigation }: Props) {
       const printerConfig = repos.settings.getJson<PrinterConfig>('printer_config')
       printReceipt(doc, printerConfig).catch(() => {
         // A failed print must never be invisible at the counter.
-        toast.error('Receipt print failed — check the printer')
+        toast.error(t('receipt.printFailed'))
       })
       cart.clearCart()
       engine.flushOutbox().catch(() => {})
       setReceipt({ doc, change: result.changeAmount })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Payment failed — please retry')
+      toast.error(err instanceof Error ? err.message : t('payment.paymentFailed'))
     } finally {
       setProcessing(false)
     }
@@ -156,7 +164,7 @@ export function PaymentScreen({ navigation }: Props) {
     try {
       await printViaSystemDialog(receipt.doc)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Print failed')
+      toast.error(err instanceof Error ? err.message : t('payment.printFailed'))
     } finally {
       setReceiptBusy(null)
     }
@@ -168,7 +176,7 @@ export function PaymentScreen({ navigation }: Props) {
     try {
       await shareReceiptPdf(receipt.doc)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not create the PDF')
+      toast.error(err instanceof Error ? err.message : t('payment.pdfFailed'))
     } finally {
       setReceiptBusy(null)
     }
@@ -177,10 +185,10 @@ export function PaymentScreen({ navigation }: Props) {
   return (
     <Screen scroll maxWidth={560}>
       <Card>
-        <Row label="Total" value={fmtUZS(total)} big />
-        <Row label="Paid" value={fmtUZS(paid)} />
+        <Row label={t('payment.total')} value={fmtUZS(total)} big />
+        <Row label={t('payment.paid')} value={fmtUZS(paid)} />
         <Row
-          label={change > 0 ? 'Change' : 'Remaining'}
+          label={change > 0 ? t('payment.change') : t('payment.remaining')}
           value={fmtUZS(change > 0 ? change : remaining)}
           accent
           valueColor={change > 0 ? theme.success : undefined}
@@ -191,7 +199,7 @@ export function PaymentScreen({ navigation }: Props) {
         {METHODS.map((m) => (
           <Chip
             key={m}
-            label={m}
+            label={t(METHOD_I18N[m])}
             selected={method === m}
             onPress={() => {
               setMethod(m)
@@ -207,8 +215,8 @@ export function PaymentScreen({ navigation }: Props) {
             customer
               ? customer.name
               : hasDebt
-                ? 'Select customer (required for debt)'
-                : 'Add customer (optional)'
+                ? t('payment.selectCustomerDebt')
+                : t('payment.selectCustomer')
           }
           variant="secondary"
           icon="user"
@@ -217,7 +225,7 @@ export function PaymentScreen({ navigation }: Props) {
           style={[styles.flex1, hasDebt && !customer ? { borderColor: theme.danger, borderWidth: 1 } : null]}
         />
         {customer && (
-          <IconButton icon="x" accessibilityLabel="Clear customer" color={theme.danger} onPress={() => setCustomer(null)} />
+          <IconButton icon="x" accessibilityLabel={t('payment.clearCustomer')} color={theme.danger} onPress={() => setCustomer(null)} />
         )}
       </View>
 
@@ -237,7 +245,7 @@ export function PaymentScreen({ navigation }: Props) {
 
       <Text
         style={[typeScale.moneyDisplay, styles.entry, { color: entry ? theme.text : theme.textFaint }]}
-        accessibilityLabel={`Amount ${entry || String(remaining)}`}
+        accessibilityLabel={`${fmtUZS(Number(entry) || remaining)}`}
       >
         {entry ? fmtUZS(Number(entry)) : fmtUZS(remaining)}
       </Text>
@@ -246,19 +254,19 @@ export function PaymentScreen({ navigation }: Props) {
       </View>
 
       <View style={styles.quickRow}>
-        <Button title="Exact" variant="secondary" onPress={() => addPayment(remaining)} style={styles.flex1} />
-        <Button title={`Add ${method}`} onPress={() => addPayment()} style={styles.flex2} />
+        <Button title={t('payment.exact')} variant="secondary" onPress={() => addPayment(remaining)} style={styles.flex1} />
+        <Button title={t('payment.addPayment', { method: t(METHOD_I18N[method]) })} onPress={() => addPayment()} style={styles.flex2} />
       </View>
 
       {payments.map((p, i) => (
         <View key={i} style={[styles.paymentRow, { backgroundColor: theme.surfaceRaised }]}>
-          <Text style={[typeScale.md, { color: theme.text, fontWeight: '600' }]}>{p.paymentMethod}</Text>
+          <Text style={[typeScale.md, { color: theme.text, fontWeight: '600' }]}>{t(METHOD_I18N[p.paymentMethod as keyof typeof METHOD_I18N] ?? p.paymentMethod)}</Text>
           <View style={styles.paymentRight}>
             <Text style={[typeScale.money, { color: theme.text }]}>{fmtUZS(p.amount)}</Text>
             <IconButton
               icon="x"
               size={20}
-              accessibilityLabel={`Remove ${p.paymentMethod} payment`}
+              accessibilityLabel={t('payment.removePayment', { method: p.paymentMethod })}
               color={theme.danger}
               onPress={() => setPayments((prev) => prev.filter((_, j) => j !== i))}
             />
@@ -267,7 +275,7 @@ export function PaymentScreen({ navigation }: Props) {
       ))}
 
       <Button
-        title={processing ? 'Processing…' : 'Complete Sale'}
+        title={processing ? t('payment.processing') : t('payment.completeSale')}
         variant="success"
         size="lg"
         fullWidth
@@ -281,12 +289,12 @@ export function PaymentScreen({ navigation }: Props) {
       <Dialog
         visible={largeAmount !== null}
         onClose={() => setLargeAmount(null)}
-        title="Confirm large amount"
-        message={largeAmount !== null ? `${fmtUZS(largeAmount)} entered for a ${fmtUZS(total)} sale. Add it anyway?` : ''}
+        title={t('payment.largeAmountTitle')}
+        message={largeAmount !== null ? t('payment.largeAmountMessage', { amount: fmtUZS(largeAmount), total: fmtUZS(total) }) : ''}
         actions={[
-          { label: 'Cancel', onPress: () => setLargeAmount(null) },
+          { label: t('common.cancel'), onPress: () => setLargeAmount(null) },
           {
-            label: 'Add',
+            label: t('payment.add'),
             tone: 'primary',
             onPress: () => {
               if (largeAmount !== null) {
@@ -303,13 +311,13 @@ export function PaymentScreen({ navigation }: Props) {
       <Sheet
         visible={receipt !== null}
         onClose={() => { setReceipt(null); navigation.goBack() }}
-        title="Sale complete"
+        title={t('payment.saleComplete')}
       >
         {receipt && (
           <>
             {receipt.change > 0 && (
               <Card style={styles.changeCard}>
-                <Row label="Change due" value={fmtUZS(receipt.change)} big valueColor={theme.success} />
+                <Row label={t('payment.changeDue')} value={fmtUZS(receipt.change)} big valueColor={theme.success} />
               </Card>
             )}
             <View style={[styles.receiptBox, { backgroundColor: theme.bg, borderColor: theme.border }]}>
@@ -319,7 +327,7 @@ export function PaymentScreen({ navigation }: Props) {
             </View>
             <View style={styles.receiptActions}>
               <Button
-                title="Print"
+                title={t('payment.print')}
                 variant="secondary"
                 icon="printer"
                 loading={receiptBusy === 'print'}
@@ -328,7 +336,7 @@ export function PaymentScreen({ navigation }: Props) {
                 style={styles.flex1}
               />
               <Button
-                title="Save PDF"
+                title={t('payment.savePdf')}
                 variant="secondary"
                 icon="send"
                 loading={receiptBusy === 'pdf'}
@@ -338,7 +346,7 @@ export function PaymentScreen({ navigation }: Props) {
               />
             </View>
             <Button
-              title="Done"
+              title={t('common.done')}
               size="lg"
               fullWidth
               onPress={() => { setReceipt(null); navigation.goBack() }}

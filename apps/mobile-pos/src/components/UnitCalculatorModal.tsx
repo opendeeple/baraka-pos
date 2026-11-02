@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
 import type { ProductListItem } from '@baraka/data'
 import { Chip, Dialog, Input, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 
 /** quantity is in cart-store units (kg fraction for 'kg', box fraction for
@@ -43,6 +44,7 @@ const linesTotal = (lines: CalculatorLine[]) => lines.reduce((sum, l) => sum + l
  */
 export function UnitCalculatorModal({ product, onClose, onAdd }: Props) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const isBox = product.unit === 'box'
   const basePrice = product.price ?? 0
   const piecesPerBox = isBox ? (product.unitsPerPackage || 1) : 1
@@ -72,7 +74,7 @@ export function UnitCalculatorModal({ product, onClose, onAdd }: Props) {
     return { lines: [{ quantity: qty, unitPrice: basePrice }], computedPrice: money, computedAmount: amount }
   }, [mode, amountInput, moneyInput, basePrice, isBox, piecesPerBox, piecePrice])
 
-  const amountLabel = isBox ? 'Pieces' : 'Grams'
+  const amountLabel = isBox ? t('pos.unitPieces') : t('pos.unitGrams')
   const addable = lines.filter((l) => l.quantity > 0)
   const canAdd = addable.length > 0
 
@@ -82,21 +84,21 @@ export function UnitCalculatorModal({ product, onClose, onAdd }: Props) {
       onClose={onClose}
       title={product.name}
       actions={[
-        { label: 'Cancel', onPress: onClose },
-        { label: 'Add to cart', tone: 'primary', onPress: () => canAdd && onAdd(addable) },
+        { label: t('common.cancel'), onPress: onClose },
+        { label: t('pos.addToCart'), tone: 'primary', onPress: () => canAdd && onAdd(addable) },
       ]}
     >
       <View style={styles.body}>
         <Text style={[typeScale.sm, { color: theme.textMuted }]}>
           {isBox
-            ? `Box price ${fmtUZS(basePrice)} (${piecesPerBox} pcs)`
-            : `Per kg ${fmtUZS(basePrice)}`}
-          {piecePrice ? `\nPer piece ${fmtUZS(piecePrice)}` : ''}
+            ? t('pos.boxPrice', { price: fmtUZS(basePrice), pieces: piecesPerBox })
+            : t('pos.perKg', { price: fmtUZS(basePrice) })}
+          {piecePrice ? `\n${t('pos.perPiece', { price: fmtUZS(piecePrice) })}` : ''}
         </Text>
 
         <View style={styles.modeRow}>
           <Chip label={amountLabel} selected={mode === 'amount'} onPress={() => setMode('amount')} />
-          <Chip label="Money" selected={mode === 'money'} onPress={() => setMode('money')} />
+          <Chip label={t('pos.unitMoney')} selected={mode === 'money'} onPress={() => setMode('money')} />
         </View>
 
         {mode === 'amount' ? (
@@ -109,13 +111,13 @@ export function UnitCalculatorModal({ product, onClose, onAdd }: Props) {
               autoFocus
             />
             <Text style={[typeScale.sm, { color: theme.textMuted }, styles.gapTop]}>
-              Price: <Text style={{ color: theme.text, fontWeight: '700' }}>{fmtUZS(computedPrice)}</Text>
+              {t('pos.priceLabel')}: <Text style={{ color: theme.text, fontWeight: '700' }}>{fmtUZS(computedPrice)}</Text>
             </Text>
           </View>
         ) : (
           <View>
             <Input
-              label="Money (UZS)"
+              label={t('pos.unitMoneyLabel')}
               value={moneyInput}
               onChangeText={setMoneyInput}
               keyboardType="decimal-pad"

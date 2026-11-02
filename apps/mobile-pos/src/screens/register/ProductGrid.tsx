@@ -4,6 +4,7 @@ import { Pressable } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
 import type { CategoryItem, ProductListItem } from '@baraka/data'
 import { Badge, Chip, EmptyState, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { opacity, radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 
 interface ProductGridProps {
@@ -24,6 +25,7 @@ const ProductTile = memo(function ProductTile({
   onAdd: (p: ProductListItem) => void
 }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const low = item.isStockManaged && item.stock > 0 && item.alertQuantity > 0 && item.stock <= item.alertQuantity
   const out = item.isStockManaged && item.stock <= 0
   return (
@@ -45,14 +47,14 @@ const ProductTile = memo(function ProductTile({
         <Text style={[typeScale.money, { color: theme.primary }]}>{fmtUZS(item.price)}</Text>
         {item.isStockManaged ? (
           out ? (
-            <Badge label="Out of stock" tone="danger" />
+            <Badge label={t('pos.outOfStock')} tone="danger" />
           ) : low ? (
-            <Badge label={`Low: ${item.stock}`} tone="warning" />
+            <Badge label={t('pos.lowStock', { stock: item.stock })} tone="warning" />
           ) : (
-            <Text style={[typeScale.xs, { color: theme.textFaint }]}>Stock: {item.stock}</Text>
+            <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('pos.stock', { stock: item.stock })}</Text>
           )
         ) : (
-          <Text style={[typeScale.xs, { color: theme.textFaint }]}>Unlimited</Text>
+          <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('pos.unlimited')}</Text>
         )}
       </View>
     </Pressable>
@@ -60,6 +62,7 @@ const ProductTile = memo(function ProductTile({
 })
 
 export function ProductGrid({ products, categories, categoryId, onCategory, onAdd, twoPane }: ProductGridProps) {
+  const { t } = useTranslation()
   const renderItem = useCallback(
     ({ item }: { item: ProductListItem }) => <ProductTile item={item} onAdd={onAdd} />,
     [onAdd]
@@ -73,7 +76,7 @@ export function ProductGrid({ products, categories, categoryId, onCategory, onAd
         style={styles.chips}
         contentContainerStyle={styles.chipsInner}
       >
-        <Chip label="All" selected={categoryId === null} onPress={() => onCategory(null)} />
+        <Chip label={t('pos.all')} selected={categoryId === null} onPress={() => onCategory(null)} />
         {categories.map((c) => (
           <Chip key={c.id} label={c.name} selected={categoryId === c.id} onPress={() => onCategory(c.id)} />
         ))}
@@ -87,7 +90,7 @@ export function ProductGrid({ products, categories, categoryId, onCategory, onAd
         contentContainerStyle={styles.listInner}
         keyboardShouldPersistTaps="handled"
         renderItem={renderItem}
-        ListEmptyComponent={<EmptyState icon="package" title="No products" message="Try another search or category" />}
+        ListEmptyComponent={<EmptyState icon="package" title={t('pos.noProducts')} message={t('pos.noProductsHint')} />}
       />
     </>
   )

@@ -1,6 +1,7 @@
 import { FlatList, StyleSheet, Text, View } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
 import { Button, EmptyState, IconButton, toast, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { radius, spacing, touch, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../../platform/services'
 
@@ -16,6 +17,7 @@ interface CartPanelProps {
  */
 export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { useCartStore } = getServices()
   const items = useCartStore((s) => s.items)
   const discount = useCartStore((s) => s.discount)
@@ -29,7 +31,7 @@ export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
 
   return (
     <View style={styles.body}>
-      <Text style={[typeScale.lg, styles.title, { color: theme.text }]}>Cart ({itemCount})</Text>
+      <Text style={[typeScale.lg, styles.title, { color: theme.text }]}>{t('pos.cart', { count: itemCount })}</Text>
       <FlatList
         data={items}
         keyExtractor={(_, i) => String(i)}
@@ -54,7 +56,7 @@ export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
                   // it just stays put (remove the line instead to clear it).
                   const next = Math.max(item.quantity - 1, Math.min(1, item.quantity))
                   if (setQuantity(index, next)) {
-                    toast.info(`Only ${item.maxStock} ${item.name} in stock`)
+                    toast.info(t('pos.onlyInStock', { stock: item.maxStock, name: item.name }))
                   }
                 }}
                 variant="filled"
@@ -66,7 +68,7 @@ export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
                 accessibilityLabel={`Increase ${item.name} quantity`}
                 onPress={() => {
                   if (setQuantity(index, item.quantity + 1)) {
-                    toast.info(`Only ${item.maxStock} ${item.name} in stock`)
+                    toast.info(t('pos.onlyInStock', { stock: item.maxStock, name: item.name }))
                   }
                 }}
                 variant="filled"
@@ -74,22 +76,22 @@ export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
             </View>
           </View>
         )}
-        ListEmptyComponent={<EmptyState icon="cart" title="Cart is empty" message="Tap products to add them" />}
+        ListEmptyComponent={<EmptyState icon="cart" title={t('pos.cartEmpty')} message={t('pos.cartEmptyHint')} />}
       />
       <View style={[styles.footer, { borderTopColor: theme.border }]}>
         <Button
-          title={discount > 0 ? `Discount −${fmtUZS(discount)}` : 'Add discount'}
+          title={discount > 0 ? t('pos.discountApplied', { amount: fmtUZS(discount) }) : t('pos.addDiscount')}
           variant="ghost"
           size="sm"
           onPress={onDiscountPress}
         />
         <View style={styles.totalRow}>
-          <Text style={[typeScale.md, { color: theme.textMuted }]}>Total</Text>
+          <Text style={[typeScale.md, { color: theme.textMuted }]}>{t('pos.total')}</Text>
           <Text style={[typeScale.moneyLg, { color: theme.text }]}>{fmtUZS(total)}</Text>
         </View>
         {heldCarts.length > 0 && (
           <Button
-            title={`${heldCarts.length} held — restore latest`}
+            title={t('pos.heldRestore', { count: heldCarts.length })}
             variant="secondary"
             size="sm"
             icon="pause"
@@ -98,9 +100,9 @@ export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
           />
         )}
         <View style={styles.actions}>
-          <Button title="Hold" variant="secondary" disabled={items.length === 0} onPress={onHold} style={styles.flex1} />
+          <Button title={t('pos.hold')} variant="secondary" disabled={items.length === 0} onPress={onHold} style={styles.flex1} />
           <Button
-            title={`Pay ${fmtUZS(total)}`}
+            title={t('pos.pay', { amount: fmtUZS(total) })}
             disabled={items.length === 0}
             onPress={onPay}
             style={styles.flex2}

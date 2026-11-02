@@ -13,6 +13,8 @@
     "create": "Yaratish",
     "scan": "Skanerlash",
     "retry": "Qayta urinish",
+    "record": "Qayd etish",
+    "ok": "OK",
     "wrongPin": "PIN xato",
     "ownerPinTitle": "Egasi PIN-kodi"
   },
@@ -73,6 +75,8 @@
     "openingBalance": "Boshlang'ich summa",
     "cashIn": "Naqd kiritish",
     "cashOut": "Naqd chiqarish",
+    "in": "Kirim",
+    "out": "Chiqim",
     "countedCash": "Sanalgan naqd pul",
     "expectedCash": "Kassada bo'lishi kerak",
     "balanced": "Mos keldi",
@@ -129,10 +133,12 @@
     "outOfStockMessage": "{{name}} qolmagan — sotishdan oldin tovarni qabul qiling.",
     "lowStockMessage": "{{name}}: faqat {{stock}} ta qoldi{{inCart}}.",
     "alreadyInCart": " (savatda {{count}} ta bor)",
+    "debtBadge": "Qarz {{amount}}",
     "debtors": "Qarzdorlar",
     "debtorsNone": "Qarzdorlar yo'q",
     "debtorsNoneHint": "Qarzi bor mijozlar shu yerda ko'rinadi",
     "searchNameOrPhone": "Ism yoki telefon bo'yicha qidiring…",
+    "selectCustomer": "Mijozni tanlash",
     "backToList": "Ro'yxatga qaytish",
     "unitGrams": "Gramm",
     "unitPieces": "Dona",
@@ -142,6 +148,9 @@
     "perKg": "1 kg narxi {{price}}",
     "perPiece": "1 dona narxi {{price}}",
     "priceLabel": "Narx",
+    "costLabel": "Tannarx",
+    "productName": "Nomi",
+    "barcode": "Shtrix-kod",
     "addToCart": "Savatga qo'shish",
     "selectCustomer": "Mijozni tanlash",
     "newCustomer": "Yangi mijoz",
@@ -199,8 +208,10 @@
     "fullyPaid": "To'liq to'landi",
     "remaining": "Qolgan: {{amount}}",
     "payDebt": "Qarzni to'lash",
+    "payDebtTitle": "Qarzni to'lash — {{name}}",
     "noRecords": "Qarz yozuvlari yo'q",
-    "confirmPayment": "To'lovni tasdiqlash"
+    "confirmPayment": "To'lovni tasdiqlash",
+    "payment": "To'lov"
   },
   "cashMovement": {
     "cashInTitle": "Naqd kiritish",
@@ -227,7 +238,9 @@
     "tooMuch": "Chegirma sotuv summasidan katta bo'lishi mumkin emas"
   },
   "receipt": {
-    "printFailed": "Chek chop etilmadi — printerni tekshiring"
+    "printFailed": "Chek chop etilmadi — printerni tekshiring",
+    "storeFallback": "Do'kon",
+    "cashierFallback": "Kassir"
   },
   "printer": {
     "none": "Printer yo'q",

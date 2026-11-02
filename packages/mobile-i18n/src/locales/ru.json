@@ -13,6 +13,8 @@
     "create": "Создать",
     "scan": "Сканировать",
     "retry": "Повторить",
+    "record": "Записать",
+    "ok": "OK",
     "wrongPin": "Неверный PIN",
     "ownerPinTitle": "PIN владельца"
   },
@@ -73,6 +75,8 @@
     "openingBalance": "Начальная сумма",
     "cashIn": "Внести наличные",
     "cashOut": "Изъять наличные",
+    "in": "Приход",
+    "out": "Расход",
     "countedCash": "Посчитанные наличные",
     "expectedCash": "Должно быть в кассе",
     "balanced": "Совпадает",
@@ -129,10 +133,12 @@
     "outOfStockMessage": "{{name}} закончился — примите товар перед продажей.",
     "lowStockMessage": "{{name}}: осталось только {{stock}}{{inCart}}.",
     "alreadyInCart": " (уже {{count}} в корзине)",
+    "debtBadge": "Долг {{amount}}",
     "debtors": "Должники",
     "debtorsNone": "Нет должников",
     "debtorsNoneHint": "Клиенты, которые должны деньги, появятся здесь",
     "searchNameOrPhone": "Поиск по имени или телефону…",
+    "selectCustomer": "Выбрать клиента",
     "backToList": "Назад к списку",
     "unitGrams": "Граммы",
     "unitPieces": "Штуки",
@@ -142,6 +148,9 @@
     "perKg": "За кг {{price}}",
     "perPiece": "За штуку {{price}}",
     "priceLabel": "Цена",
+    "costLabel": "Себестоимость",
+    "productName": "Название",
+    "barcode": "Штрих-код",
     "addToCart": "Добавить в корзину",
     "selectCustomer": "Выбрать клиента",
     "newCustomer": "Новый клиент",
@@ -199,8 +208,10 @@
     "fullyPaid": "Долг погашен полностью",
     "remaining": "Осталось: {{amount}}",
     "payDebt": "Погасить долг",
+    "payDebtTitle": "Погасить долг — {{name}}",
     "noRecords": "Записей о долге нет",
-    "confirmPayment": "Подтвердить оплату"
+    "confirmPayment": "Подтвердить оплату",
+    "payment": "Платёж"
   },
   "cashMovement": {
     "cashInTitle": "Внести наличные",
@@ -227,7 +238,9 @@
     "tooMuch": "Скидка не может превышать сумму продажи"
   },
   "receipt": {
-    "printFailed": "Не удалось напечатать чек — проверьте принтер"
+    "printFailed": "Не удалось напечатать чек — проверьте принтер",
+    "storeFallback": "Магазин",
+    "cashierFallback": "Кассир"
   },
   "printer": {
     "none": "Нет принтера",

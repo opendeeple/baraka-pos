@@ -12,6 +12,7 @@ import {
   applyNumKey,
   useTheme,
 } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
@@ -22,6 +23,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'CloseSession'>
 
 export function CloseSessionScreen({ navigation }: Props) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos, engine } = getServices()
   const { session, setSession } = useAuthStore()
   const [actual, setActual] = useState('')
@@ -51,41 +53,41 @@ export function CloseSessionScreen({ navigation }: Props) {
     const closed = repos.sessions.close(session.id, Number(actual) || 0)
     engine.flushOutbox().catch(() => {})
     setClosedInfo(
-      `Theoretical: ${fmtUZS(Number(closed.closing_balance_theoretical ?? 0))}\n` +
-        `Counted: ${fmtUZS(Number(closed.closing_balance_actual ?? 0))}\n` +
-        `Variance: ${fmtUZS(Number(closed.variance ?? 0))}`
+      t('session.theoretical', { amount: fmtUZS(Number(closed.closing_balance_theoretical ?? 0)) }) + '\n' +
+        t('session.counted', { amount: fmtUZS(Number(closed.closing_balance_actual ?? 0)) }) + '\n' +
+        t('session.variance', { amount: fmtUZS(Number(closed.variance ?? 0)) })
     )
   }
 
   return (
     <Screen scroll maxWidth={560}>
       <Card>
-        <Row label="Opening balance" value={fmtUZS(Number(session?.opening_balance ?? 0))} />
+        <Row label={t('session.openingBalance')} value={fmtUZS(Number(session?.opening_balance ?? 0))} />
         {summary.map((s) => (
           <Row key={s.paymentMethod} label={`${s.paymentMethod} (${s.count})`} value={fmtUZS(s.total)} />
         ))}
         {movements.map((m) => (
           <Row
             key={m.id}
-            label={`${m.type === 'cash_in' ? '↓ In' : '↑ Out'} · ${m.description ?? ''}${m.contactName ? ` (${m.contactName})` : ''}`}
+            label={`${m.type === 'cash_in' ? `↓ ${t('session.in')}` : `↑ ${t('session.out')}`} · ${m.description ?? ''}${m.contactName ? ` (${m.contactName})` : ''}`}
             value={`${m.type === 'cash_in' ? '+' : '−'}${fmtUZS(m.amount)}`}
             valueColor={m.type === 'cash_in' ? theme.success : theme.danger}
           />
         ))}
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
-        <Row label="Expected cash" value={fmtUZS(theoretical)} accent big />
+        <Row label={t('session.expectedCash')} value={fmtUZS(theoretical)} accent big />
       </Card>
 
       <View style={styles.drawerBtns}>
         <Button
-          title="Cash In"
+          title={t('session.cashIn')}
           icon="cashIn"
           variant="secondary"
           onPress={() => setMovementType('cash_in')}
           style={styles.flex1}
         />
         <Button
-          title="Cash Out"
+          title={t('session.cashOut')}
           icon="cashOut"
           variant="secondary"
           onPress={() => setMovementType('cash_out')}
@@ -103,7 +105,7 @@ export function CloseSessionScreen({ navigation }: Props) {
         }}
       />
 
-      <Text style={[typeScale.sm, styles.label, { color: theme.textMuted }]}>Counted cash</Text>
+      <Text style={[typeScale.sm, styles.label, { color: theme.textMuted }]}>{t('session.countedCash')}</Text>
       <Text style={[typeScale.moneyDisplay, { color: theme.text }]}>
         {actual ? fmtUZS(Number(actual)) : fmtUZS(0)}
       </Text>
@@ -119,35 +121,35 @@ export function CloseSessionScreen({ navigation }: Props) {
         ]}
         accessibilityLiveRegion="polite"
       >
-        {variance === 0 ? 'Balanced' : variance < 0 ? `Short: ${fmtUZS(-variance)}` : `Overage: ${fmtUZS(variance)}`}
+        {variance === 0 ? t('session.balanced') : variance < 0 ? t('session.short', { amount: fmtUZS(-variance) }) : t('session.overage', { amount: fmtUZS(variance) })}
       </Text>
 
-      <Button title="Close Session" size="lg" fullWidth onPress={() => setConfirmClose(true)} style={styles.closeBtn} />
-      <Button title="Cancel" variant="ghost" fullWidth onPress={() => navigation.goBack()} />
+      <Button title={t('session.closeSession')} size="lg" fullWidth onPress={() => setConfirmClose(true)} style={styles.closeBtn} />
+      <Button title={t('common.cancel')} variant="ghost" fullWidth onPress={() => navigation.goBack()} />
 
       <Dialog
         visible={confirmClose}
         onClose={() => setConfirmClose(false)}
-        title="Close session?"
+        title={t('session.closeSessionTitle')}
         message={
           variance === 0
-            ? 'Drawer is balanced.'
+            ? t('session.drawerBalanced')
             : variance < 0
-              ? `Drawer is SHORT by ${fmtUZS(-variance)}.`
-              : `Drawer is OVER by ${fmtUZS(variance)}.`
+              ? t('session.drawerShort', { amount: fmtUZS(-variance) })
+              : t('session.drawerOver', { amount: fmtUZS(variance) })
         }
         actions={[
-          { label: 'Keep open', onPress: () => setConfirmClose(false) },
-          { label: 'Close session', tone: 'primary', onPress: close },
+          { label: t('session.keepOpen'), onPress: () => setConfirmClose(false) },
+          { label: t('session.closeSession'), tone: 'primary', onPress: close },
         ]}
       />
 
       <Dialog
         visible={closedInfo !== null}
         onClose={() => { setClosedInfo(null); setSession(null) }}
-        title="Session closed"
+        title={t('session.sessionClosed')}
         message={closedInfo ?? ''}
-        actions={[{ label: 'Done', tone: 'primary', onPress: () => { setClosedInfo(null); setSession(null) } }]}
+        actions={[{ label: t('common.done'), tone: 'primary', onPress: () => { setClosedInfo(null); setSession(null) } }]}
       />
     </Screen>
   )

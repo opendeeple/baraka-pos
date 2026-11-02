@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { StyleSheet, Text } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
 import { Dialog, NumPad, applyNumKey, toast, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 
 interface DiscountDialogProps {
@@ -15,12 +16,13 @@ interface DiscountDialogProps {
 
 export function DiscountDialog({ visible, initial, maxAmount, onApply, onClose }: DiscountDialogProps) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const [entry, setEntry] = useState(() => (initial ? String(initial) : ''))
 
   function apply() {
     const value = Number(entry) || 0
     if (value > maxAmount) {
-      toast.error('Discount cannot exceed the sale total')
+      toast.error(t('discount.tooMuch'))
       return
     }
     onApply(value)
@@ -31,10 +33,10 @@ export function DiscountDialog({ visible, initial, maxAmount, onApply, onClose }
     <Dialog
       visible
       onClose={onClose}
-      title="Sale discount"
+      title={t('discount.title')}
       actions={[
-        { label: 'Clear', onPress: () => onApply(0) },
-        { label: 'Apply', tone: 'primary', onPress: apply },
+        { label: t('discount.clear'), onPress: () => onApply(0) },
+        { label: t('discount.apply'), tone: 'primary', onPress: apply },
       ]}
     >
       <Text style={[typeScale.moneyDisplay, styles.entry, { color: theme.text }]}>

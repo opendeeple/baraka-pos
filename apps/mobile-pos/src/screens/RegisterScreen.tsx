@@ -7,6 +7,7 @@ import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
 import { useSyncSocket } from '@baraka/mobile-shell'
 import type { CategoryItem, ProductListItem } from '@baraka/data'
 import { BarcodeScannerModal, Button, Dialog, Icon, IconButton, Input, Screen, Sheet, toast, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { breakpoints, opacity, radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { ProductGrid } from './register/ProductGrid'
@@ -21,6 +22,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Register'>
 
 export function RegisterScreen({ navigation }: Props) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const insets = useSafeAreaInsets()
   const { repos, useCartStore, engine } = getServices()
   const { width } = useWindowDimensions()
@@ -123,8 +125,8 @@ export function RegisterScreen({ navigation }: Props) {
           setStockWarning({
             product: p,
             message: p.stock <= 0
-              ? `${p.name} is out of stock — receive the goods before selling.`
-              : `${p.name}: only ${p.stock} in stock${inCart ? ` (${inCart} already in cart)` : ''}.`,
+              ? t('pos.outOfStockMessage', { name: p.name })
+              : t('pos.lowStockMessage', { name: p.name, stock: p.stock, inCart: inCart ? t('pos.alreadyInCart', { count: inCart }) : '' }),
           })
           return
         }
@@ -149,8 +151,8 @@ export function RegisterScreen({ navigation }: Props) {
           setStockWarning({
             product: p,
             message: p.stock <= 0
-              ? `${p.name} is out of stock — receive the goods before selling.`
-              : `${p.name}: only ${p.stock} in stock${inCart ? ` (${inCart} already in cart)` : ''}.`,
+              ? t('pos.outOfStockMessage', { name: p.name })
+              : t('pos.lowStockMessage', { name: p.name, stock: p.stock, inCart: inCart ? t('pos.alreadyInCart', { count: inCart }) : '' }),
           })
           return
         }
@@ -187,7 +189,7 @@ export function RegisterScreen({ navigation }: Props) {
         <Input
           value={search}
           onChangeText={setSearch}
-          placeholder="Search or scan barcode…"
+          placeholder={t('pos.searchPlaceholder')}
           returnKeyType="search"
           left={<Icon name="search" size={16} color={theme.textFaint} />}
           containerStyle={styles.searchWrap}
@@ -196,13 +198,13 @@ export function RegisterScreen({ navigation }: Props) {
             else if (search.trim()) setQuickAddBarcode(search.trim())
           }}
         />
-        <Button title="Scan" icon="scan" onPress={() => setScannerOpen(true)} />
+        <Button title={t('common.scan')} icon="scan" onPress={() => setScannerOpen(true)} />
         <IconButton
           icon="banknote"
           size={24}
           color={theme.warning}
           variant="outline"
-          accessibilityLabel="Debtors"
+          accessibilityLabel={t('pos.debtors')}
           onPress={() => setDebtorsOpen(true)}
         />
       </View>
@@ -239,9 +241,9 @@ export function RegisterScreen({ navigation }: Props) {
       <Dialog
         visible={stockWarning !== null}
         onClose={() => setStockWarning(null)}
-        title="Stock warning"
+        title={t('pos.stockWarningTitle')}
         message={stockWarning?.message ?? ''}
-        actions={[{ label: 'OK', tone: 'primary', onPress: () => setStockWarning(null) }]}
+        actions={[{ label: t('common.ok'), tone: 'primary', onPress: () => setStockWarning(null) }]}
       />
       {calculatorProduct && (
         <UnitCalculatorModal
@@ -292,7 +294,7 @@ export function RegisterScreen({ navigation }: Props) {
       {/* Safe-area aware floating cart bar (used to clip under the gesture bar). */}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Open cart, ${itemCount} items, total ${fmtUZS(total)}`}
+        accessibilityLabel={t('pos.openCart', { count: itemCount, amount: fmtUZS(total) })}
         onPress={() => setCartOpen(true)}
         style={({ pressed }) => [
           styles.cartBar,
@@ -302,7 +304,7 @@ export function RegisterScreen({ navigation }: Props) {
       >
         <View style={styles.cartBarLeft}>
           <Icon name="cart" size={20} color={theme.onPrimary} />
-          <Text style={[typeScale.md, { color: theme.onPrimary, fontWeight: '700' }]}>{itemCount} items</Text>
+          <Text style={[typeScale.md, { color: theme.onPrimary, fontWeight: '700' }]}>{t('pos.itemsCount', { count: itemCount })}</Text>
         </View>
         <Text style={[typeScale.moneyLg, { color: theme.onPrimary }]}>{fmtUZS(total)}</Text>
       </Pressable>

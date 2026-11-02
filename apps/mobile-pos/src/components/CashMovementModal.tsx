@@ -12,6 +12,7 @@ import {
   toast,
   useTheme,
 } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
@@ -19,9 +20,21 @@ import { CustomerPickerModal } from './CustomerPickerModal'
 
 // Reason picklists (analysis takeaway: free text alone makes Z-reports
 // unreadable — a short picklist plus an optional note reads at a glance).
-const REASONS: Record<'cash_in' | 'cash_out', string[]> = {
+// Keys, not display text — translated at render time; the stored `reason`
+// stays this English key either way (sessions.repo.ts/reports read it as
+// plain data, same convention as desktop's writeoff/stocktake reasons).
+const REASON_KEYS: Record<'cash_in' | 'cash_out', string[]> = {
   cash_in: ['Float top-up', 'Customer debt payment', 'Other'],
   cash_out: ['Supplier payment', 'Owner draw', 'Bank drop', 'Correction', 'Other'],
+}
+const REASON_I18N: Record<string, string> = {
+  'Float top-up': 'cashMovement.reasonFloatTopUp',
+  'Customer debt payment': 'cashMovement.reasonDebtPayment',
+  'Supplier payment': 'cashMovement.reasonSupplierPayment',
+  'Owner draw': 'cashMovement.reasonOwnerDraw',
+  'Bank drop': 'cashMovement.reasonBankDrop',
+  Correction: 'cashMovement.reasonCorrection',
+  Other: 'cashMovement.reasonOther',
 }
 
 interface Props {
@@ -32,6 +45,7 @@ interface Props {
 
 export function CashMovementModal({ type, onClose, onDone }: Props) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const { user, store, session } = useAuthStore()
   const [amount, setAmount] = useState('')
@@ -45,7 +59,7 @@ export function CashMovementModal({ type, onClose, onDone }: Props) {
       setAmount('')
       setNote('')
       setCustomer(null)
-      setReason(REASONS[type][0])
+      setReason(REASON_KEYS[type][0])
     }
   }, [type])
 
@@ -55,11 +69,11 @@ export function CashMovementModal({ type, onClose, onDone }: Props) {
   function save() {
     const value = Number(amount) || 0
     if (value <= 0) {
-      toast.error('Enter an amount')
+      toast.error(t('cashMovement.enterAmount'))
       return
     }
     if (isDebtPayment && !customer) {
-      toast.error('Select whose debt is being paid')
+      toast.error(t('cashMovement.selectCustomerForDebt'))
       setPickerOpen(true)
       return
     }
@@ -74,10 +88,10 @@ export function CashMovementModal({ type, onClose, onDone }: Props) {
         note: note.trim() || null,
         contactId: isDebtPayment ? customer!.id : null,
       })
-      toast.success(`${type === 'cash_in' ? 'Cash in' : 'Cash out'} recorded — ${fmtUZS(value)}`)
+      toast.success(t('cashMovement.recorded', { type: type === 'cash_in' ? t('session.cashIn') : t('session.cashOut'), amount: fmtUZS(value) }))
       onDone()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Cannot record movement')
+      toast.error(err instanceof Error ? err.message : t('cashMovement.cannotRecord'))
     }
   }
 
@@ -86,17 +100,17 @@ export function CashMovementModal({ type, onClose, onDone }: Props) {
       <Dialog
         visible={!pickerOpen}
         onClose={onClose}
-        title={type === 'cash_in' ? 'Cash In' : 'Cash Out'}
+        title={type === 'cash_in' ? t('cashMovement.cashInTitle') : t('cashMovement.cashOutTitle')}
         actions={[
-          { label: 'Cancel', onPress: onClose },
-          { label: 'Record', tone: type === 'cash_in' ? 'primary' : 'danger', onPress: save },
+          { label: t('common.cancel'), onPress: onClose },
+          { label: t('common.record'), tone: type === 'cash_in' ? 'primary' : 'danger', onPress: save },
         ]}
       >
         <View style={styles.reasonRow}>
-          {REASONS[type].map((r) => (
+          {REASON_KEYS[type].map((r) => (
             <Chip
               key={r}
-              label={r}
+              label={t(REASON_I18N[r])}
               selected={reason === r}
               onPress={() => {
                 setReason(r)
@@ -108,7 +122,7 @@ export function CashMovementModal({ type, onClose, onDone }: Props) {
 
         {isDebtPayment && (
           <Button
-            title={customer ? `${customer.name} — owes ${fmtUZS(customer.balance)}` : 'Select customer'}
+            title={customer ? t('cashMovement.owes', { name: customer.name, amount: fmtUZS(customer.balance) }) : t('cashMovement.selectCustomer')}
             variant="secondary"
             icon="user"
             size="sm"
@@ -116,7 +130,7 @@ export function CashMovementModal({ type, onClose, onDone }: Props) {
           />
         )}
 
-        <Input value={note} onChangeText={setNote} placeholder="Note (optional)" />
+        <Input value={note} onChangeText={setNote} placeholder={t('cashMovement.notePlaceholder')} />
 
         <Text
           style={[typeScale.moneyDisplay, styles.amount, { color: theme.text }]}

@@ -4,12 +4,14 @@ import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { SaleHistoryItem } from '@baraka/data'
 import { Badge, Button, Dialog, EmptyState, ListRow, PinConfirmModal, Screen, toast, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
 
 export function SalesHistoryScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos, engine } = getServices()
   const { user, session } = useAuthStore()
   const [sales, setSales] = useState<SaleHistoryItem[]>([])
@@ -31,7 +33,7 @@ export function SalesHistoryScreen() {
     // be an open session here to file it under — it must not land on the
     // original (possibly already-closed) shift.
     if (!session) {
-      toast.error('Open a shift before refunding a sale')
+      toast.error(t('sales.refundOpenShift'))
       return
     }
     const invoiceNumber =
@@ -44,14 +46,14 @@ export function SalesHistoryScreen() {
         sessionId: session.id,
       })
       if (!result) {
-        toast.error('This sale was already refunded or is not refundable')
+        toast.error(t('sales.refundAlreadyDone'))
         return
       }
       engine.flushOutbox().catch(() => {})
       load()
-      toast.success(`Refunded ${result.invoiceNumber} — ${fmtUZS(result.total)}`)
+      toast.success(t('sales.refundSuccess', { invoice: result.invoiceNumber, amount: fmtUZS(result.total) }))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Refund failed — please retry')
+      toast.error(err instanceof Error ? err.message : t('sales.refundFailed'))
     }
   }
 
@@ -74,11 +76,11 @@ export function SalesHistoryScreen() {
                     {fmtUZS(item.totalAmount)}
                   </Text>
                   <View style={styles.badges}>
-                    {isReturn ? <Badge label="Refund" tone="info" /> : null}
-                    {item.status === 'refunded' ? <Badge label="Refunded" tone="neutral" /> : null}
+                    {isReturn ? <Badge label={t('sales.refund')} tone="info" /> : null}
+                    {item.status === 'refunded' ? <Badge label={t('sales.refunded')} tone="neutral" /> : null}
                     {refundable ? (
                       <Button
-                        title="Refund"
+                        title={t('sales.refund')}
                         variant="danger"
                         size="sm"
                         haptic
@@ -86,7 +88,7 @@ export function SalesHistoryScreen() {
                       />
                     ) : (
                       <Badge
-                        label={item.syncStatus === 'synced' ? 'Synced' : 'Pending'}
+                        label={item.syncStatus === 'synced' ? t('sales.synced') : t('sales.pending')}
                         tone={item.syncStatus === 'synced' ? 'success' : 'warning'}
                       />
                     )}
@@ -97,23 +99,23 @@ export function SalesHistoryScreen() {
           )
         }}
         ListEmptyComponent={
-          <EmptyState icon="sales" title="No sales yet" message="Sales made on this register appear here" />
+          <EmptyState icon="sales" title={t('sales.noSalesYet')} message={t('sales.noSalesHint')} />
         }
       />
 
       <Dialog
         visible={refundTarget !== null}
         onClose={() => setRefundTarget(null)}
-        title="Refund sale?"
+        title={t('sales.refundTitle')}
         message={
           refundTarget
-            ? `${refundTarget.invoiceNumber} — ${fmtUZS(refundTarget.totalAmount)}\nStock is restored and payments are reversed.`
+            ? t('sales.refundMessage', { invoice: refundTarget.invoiceNumber, amount: fmtUZS(refundTarget.totalAmount) })
             : ''
         }
         actions={[
-          { label: 'Cancel', onPress: () => setRefundTarget(null) },
+          { label: t('common.cancel'), onPress: () => setRefundTarget(null) },
           {
-            label: 'Refund',
+            label: t('sales.refund'),
             tone: 'danger',
             onPress: () => {
               if (!refundTarget) return
@@ -131,7 +133,7 @@ export function SalesHistoryScreen() {
       <PinConfirmModal
         visible={pinTarget !== null}
         expectedPin={ownerPin}
-        title="Owner PIN required to refund"
+        title={t('sales.ownerPinForRefund')}
         onClose={() => setPinTarget(null)}
         onConfirmed={() => {
           const target = pinTarget
