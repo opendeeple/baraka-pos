@@ -15,12 +15,14 @@ import {
   toast,
   useTheme,
 } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
 
 export function WarehouseScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos, engine } = getServices()
   const { user } = useAuthStore()
   const [search, setSearch] = useState('')
@@ -51,11 +53,11 @@ export function WarehouseScreen() {
     <Screen padded={false}>
       <View style={styles.totals}>
         <View style={styles.totalCard}>
-          <Text style={[typeScale.sm, { color: theme.textMuted }]}>In shop</Text>
+          <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('warehouse.inShop')}</Text>
           <Text style={[typeScale.lg, { color: theme.text, fontWeight: '700' }]}>{totals.shop}</Text>
         </View>
         <View style={styles.totalCard}>
-          <Text style={[typeScale.sm, { color: theme.textMuted }]}>In warehouse</Text>
+          <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('warehouse.inWarehouse')}</Text>
           <Text style={[typeScale.lg, { color: theme.text, fontWeight: '700' }]}>{totals.warehouse}</Text>
         </View>
       </View>
@@ -65,14 +67,14 @@ export function WarehouseScreen() {
           value={search}
           onChangeText={setSearch}
           onSubmitEditing={load}
-          placeholder="Search products…"
+          placeholder={t('warehouse.searchPlaceholder')}
           returnKeyType="search"
           left={<Icon name="search" size={16} color={theme.textFaint} />}
         />
       </View>
       <View style={styles.actionRow}>
-        <Button title="Stocktake" variant="secondary" size="sm" onPress={() => setStocktakeOpen(true)} style={styles.flex1} />
-        <Button title="Write off" variant="secondary" size="sm" onPress={() => setWriteOffOpen(true)} style={styles.flex1} />
+        <Button title={t('warehouse.stocktake')} variant="secondary" size="sm" onPress={() => setStocktakeOpen(true)} style={styles.flex1} />
+        <Button title={t('warehouse.writeOff')} variant="secondary" size="sm" onPress={() => setWriteOffOpen(true)} style={styles.flex1} />
       </View>
 
       <FlatList
@@ -82,25 +84,25 @@ export function WarehouseScreen() {
         renderItem={({ item }) => (
           <ListRow
             title={item.name}
-            subtitle={`Shop ${item.shopQty} · Warehouse ${item.warehouseQty}`}
+            subtitle={t('warehouse.shopWarehouseQty', { shop: item.shopQty, warehouse: item.warehouseQty })}
             onPress={() => setActionsFor(item)}
             right={<Icon name="chevronRight" size={20} color={theme.textFaint} />}
           />
         )}
-        ListEmptyComponent={<EmptyState icon="warehouse" title="No stock-managed products found" />}
+        ListEmptyComponent={<EmptyState icon="warehouse" title={t('warehouse.noProductsFound')} />}
       />
 
       <Dialog
         visible={actionsFor !== null}
         onClose={() => setActionsFor(null)}
         title={actionsFor?.name ?? ''}
-        message={actionsFor ? `Shop ${actionsFor.shopQty} · Warehouse ${actionsFor.warehouseQty}` : ''}
+        message={actionsFor ? t('warehouse.shopWarehouseQty', { shop: actionsFor.shopQty, warehouse: actionsFor.warehouseQty }) : ''}
         actions={[
-          { label: 'Cancel', onPress: () => setActionsFor(null) },
+          { label: t('common.cancel'), onPress: () => setActionsFor(null) },
           ...(actionsFor && actionsFor.warehouseQty > 0
-            ? [{ label: 'Transfer to shop', onPress: () => { setTransferFor(actionsFor); setActionsFor(null) } }]
+            ? [{ label: t('warehouse.transferToShop'), onPress: () => { setTransferFor(actionsFor); setActionsFor(null) } }]
             : []),
-          { label: 'Receive', tone: 'primary' as const, onPress: () => { setReceiveFor(actionsFor); setActionsFor(null) } },
+          { label: t('warehouse.receive'), tone: 'primary' as const, onPress: () => { setReceiveFor(actionsFor); setActionsFor(null) } },
         ]}
       />
 
@@ -116,7 +118,7 @@ export function WarehouseScreen() {
             })
             setReceiveFor(null)
             afterMutate()
-            toast.success(`Received into ${location === 'shop' ? 'the shop' : 'the warehouse'}`)
+            toast.success(t('warehouse.receivedInto', { place: location === 'shop' ? t('warehouse.theShop') : t('warehouse.theWarehouse') }))
           }}
         />
       )}
@@ -131,9 +133,9 @@ export function WarehouseScreen() {
               repos.warehouse.transferToShop({ productId: transferFor.id, batchId: transferFor.batchId, qty, userId: user?.id ?? 1 })
               setTransferFor(null)
               afterMutate()
-              toast.success('Transferred to the shop')
+              toast.success(t('warehouse.transferred'))
             } catch (err) {
-              toast.error(err instanceof Error ? err.message : 'Transfer failed')
+              toast.error(err instanceof Error ? err.message : t('warehouse.transferFailed'))
             }
           }}
         />
@@ -145,7 +147,7 @@ export function WarehouseScreen() {
           onDone={(changed) => {
             setStocktakeOpen(false)
             afterMutate()
-            toast.success(`Stocktake saved — ${changed} product(s) adjusted`)
+            toast.success(t('warehouse.stocktakeSaved', { count: changed }))
           }}
         />
       )}
@@ -157,7 +159,7 @@ export function WarehouseScreen() {
           onDone={(name, qty) => {
             setWriteOffOpen(false)
             afterMutate()
-            toast.success(`Wrote off ${qty} × ${name}`)
+            toast.success(t('warehouse.wroteOff', { qty, name }))
           }}
         />
       )}
@@ -173,6 +175,7 @@ function ReceiveSheet({
   onConfirm: (qty: number, location: StockLocation, reason: string, unitCost?: number) => void
 }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const [qty, setQty] = useState('')
   const [location, setLocation] = useState<StockLocation>('shop')
   const [cost, setCost] = useState(product.cost ? String(product.cost) : '')
@@ -181,7 +184,7 @@ function ReceiveSheet({
   function confirm() {
     const n = Number(qty)
     if (!n || n <= 0 || !product.batchId) {
-      toast.error('Enter a quantity')
+      toast.error(t('warehouse.enterQuantity'))
       return
     }
     const costNum = cost.trim() === '' ? undefined : Number(cost)
@@ -189,19 +192,19 @@ function ReceiveSheet({
   }
 
   return (
-    <Sheet visible onClose={onClose} title={`Receive — ${product.name}`}>
+    <Sheet visible onClose={onClose} title={t('warehouse.receiveTitle', { name: product.name })}>
       <View style={styles.form}>
-        <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Where to</Text>
+        <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('warehouse.whereTo')}</Text>
         <View style={styles.chipRow}>
-          <Chip label="Shop" selected={location === 'shop'} onPress={() => setLocation('shop')} />
-          <Chip label="Warehouse" selected={location === 'warehouse'} onPress={() => setLocation('warehouse')} />
+          <Chip label={t('warehouse.shop')} selected={location === 'shop'} onPress={() => setLocation('shop')} />
+          <Chip label={t('warehouse.warehouseLabel')} selected={location === 'warehouse'} onPress={() => setLocation('warehouse')} />
         </View>
-        <Input label="Quantity" value={qty} onChangeText={setQty} keyboardType="numeric" autoFocus />
-        <Input label="Unit cost (optional)" value={cost} onChangeText={setCost} keyboardType="numeric" />
-        <Input label="Reason (optional)" value={reason} onChangeText={setReason} />
+        <Input label={t('warehouse.quantity')} value={qty} onChangeText={setQty} keyboardType="numeric" autoFocus />
+        <Input label={t('warehouse.unitCostOptional')} value={cost} onChangeText={setCost} keyboardType="numeric" />
+        <Input label={t('warehouse.reasonOptional')} value={reason} onChangeText={setReason} />
         <View style={styles.actions}>
-          <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
-          <Button title="Save" onPress={confirm} style={styles.flex2} />
+          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button title={t('common.save')} onPress={confirm} style={styles.flex2} />
         </View>
       </View>
     </Sheet>
@@ -216,29 +219,30 @@ function TransferSheet({
   onConfirm: (qty: number) => void
 }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const [qty, setQty] = useState('')
 
   function confirm() {
     const n = Number(qty)
     if (!n || n <= 0) {
-      toast.error('Enter a quantity')
+      toast.error(t('warehouse.enterQuantity'))
       return
     }
     if (n > product.warehouseQty) {
-      toast.error(`Only ${product.warehouseQty} available in the warehouse`)
+      toast.error(t('warehouse.onlyAvailable', { count: product.warehouseQty }))
       return
     }
     onConfirm(n)
   }
 
   return (
-    <Sheet visible onClose={onClose} title={`Transfer to shop — ${product.name}`}>
+    <Sheet visible onClose={onClose} title={t('warehouse.transferTitle', { name: product.name })}>
       <View style={styles.form}>
-        <Text style={[typeScale.sm, { color: theme.textMuted }]}>{product.warehouseQty} available in the warehouse</Text>
-        <Input label="Quantity" value={qty} onChangeText={setQty} keyboardType="numeric" autoFocus />
+        <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('warehouse.availableInWarehouse', { count: product.warehouseQty })}</Text>
+        <Input label={t('warehouse.quantity')} value={qty} onChangeText={setQty} keyboardType="numeric" autoFocus />
         <View style={styles.actions}>
-          <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
-          <Button title="Transfer" onPress={confirm} style={styles.flex2} />
+          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button title={t('warehouse.transfer')} onPress={confirm} style={styles.flex2} />
         </View>
       </View>
     </Sheet>
@@ -247,6 +251,7 @@ function TransferSheet({
 
 function StocktakeSheet({ onClose, onDone }: { onClose: () => void; onDone: (changed: number) => void }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const { user } = useAuthStore()
   const [location, setLocation] = useState<StockLocation | null>(null)
@@ -281,30 +286,30 @@ function StocktakeSheet({ onClose, onDone }: { onClose: () => void; onDone: (cha
   }
 
   return (
-    <Sheet visible onClose={onClose} title="Stocktake">
+    <Sheet visible onClose={onClose} title={t('warehouse.stocktake')}>
       <View style={styles.form}>
         {!location ? (
           <>
-            <Text style={[typeScale.sm, { color: theme.textMuted }]}>Count what's physically there — the system records the differences.</Text>
+            <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('warehouse.stocktakeIntro')}</Text>
             <View style={styles.chipRow}>
-              <Chip label="Shop" onPress={() => pickLocation('shop')} />
-              <Chip label="Warehouse" onPress={() => pickLocation('warehouse')} />
+              <Chip label={t('warehouse.shop')} onPress={() => pickLocation('shop')} />
+              <Chip label={t('warehouse.warehouseLabel')} onPress={() => pickLocation('warehouse')} />
             </View>
           </>
         ) : confirming ? (
           <>
             <Text style={[typeScale.sm, { color: theme.text }]}>
-              {counted.length} product(s) will be adjusted. Continue?
+              {t('warehouse.willBeAdjusted', { count: counted.length })}
             </Text>
             <View style={styles.actions}>
-              <Button title="Back" variant="secondary" onPress={() => setConfirming(false)} style={styles.flex1} />
-              <Button title="Finish" onPress={finish} style={styles.flex2} />
+              <Button title={t('warehouse.back')} variant="secondary" onPress={() => setConfirming(false)} style={styles.flex1} />
+              <Button title={t('warehouse.finish')} onPress={finish} style={styles.flex2} />
             </View>
           </>
         ) : (
           <>
-            <Input value={search} onChangeText={setSearch} placeholder="Search products…" left={<Icon name="search" size={16} color={theme.textFaint} />} />
-            <Text style={[typeScale.xs, { color: theme.textFaint }]}>{counted.length} of {items.length} counted</Text>
+            <Input value={search} onChangeText={setSearch} placeholder={t('warehouse.searchPlaceholder')} left={<Icon name="search" size={16} color={theme.textFaint} />} />
+            <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('warehouse.countedOfTotal', { counted: counted.length, total: items.length })}</Text>
             <ScrollView style={styles.stocktakeList} contentContainerStyle={styles.stocktakeListInner} keyboardShouldPersistTaps="handled">
               {visible.map((r) => {
                 const d = diffOf(r)
@@ -312,7 +317,7 @@ function StocktakeSheet({ onClose, onDone }: { onClose: () => void; onDone: (cha
                   <View key={r.productId} style={[styles.rowItem, { borderColor: theme.border }]}>
                     <View style={styles.flex1}>
                       <Text style={[typeScale.sm, { color: theme.text }]} numberOfLines={1}>{r.name}</Text>
-                      <Text style={[typeScale.xs, { color: theme.textFaint }]}>System: {r.system}</Text>
+                      <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('warehouse.system', { count: r.system })}</Text>
                     </View>
                     <Input
                       value={counts[r.productId] ?? ''}
@@ -327,10 +332,10 @@ function StocktakeSheet({ onClose, onDone }: { onClose: () => void; onDone: (cha
                 )
               })}
             </ScrollView>
-            <Input label="Note (optional)" value={note} onChangeText={setNote} />
+            <Input label={t('common.noteOptional')} value={note} onChangeText={setNote} />
             <View style={styles.actions}>
-              <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
-              <Button title="Finish" disabled={counted.length === 0} onPress={() => setConfirming(true)} style={styles.flex2} />
+              <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
+              <Button title={t('warehouse.finish')} disabled={counted.length === 0} onPress={() => setConfirming(true)} style={styles.flex2} />
             </View>
           </>
         )}
@@ -340,6 +345,13 @@ function StocktakeSheet({ onClose, onDone }: { onClose: () => void; onDone: (cha
 }
 
 const WRITEOFF_REASONS: WriteOffReason[] = ['damaged', 'expired', 'lost', 'internal', 'other']
+const WRITEOFF_REASON_I18N: Record<WriteOffReason, string> = {
+  damaged: 'warehouse.writeOffReasonDamaged',
+  expired: 'warehouse.writeOffReasonExpired',
+  lost: 'warehouse.writeOffReasonLost',
+  internal: 'warehouse.writeOffReasonInternal',
+  other: 'warehouse.writeOffReasonOther',
+}
 
 function WriteOffSheet({
   products, onClose, onDone,
@@ -349,6 +361,7 @@ function WriteOffSheet({
   onDone: (productName: string, qty: number) => void
 }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const { user } = useAuthStore()
   const [search, setSearch] = useState('')
@@ -374,17 +387,17 @@ function WriteOffSheet({
   }
 
   return (
-    <Sheet visible onClose={onClose} title="Write off">
+    <Sheet visible onClose={onClose} title={t('warehouse.writeOff')}>
       <View style={styles.form}>
         {!picked ? (
           <>
-            <Input value={search} onChangeText={setSearch} placeholder="Search products…" left={<Icon name="search" size={16} color={theme.textFaint} />} autoFocus />
+            <Input value={search} onChangeText={setSearch} placeholder={t('warehouse.searchPlaceholder')} left={<Icon name="search" size={16} color={theme.textFaint} />} autoFocus />
             <ScrollView style={styles.stocktakeList} contentContainerStyle={styles.stocktakeListInner} keyboardShouldPersistTaps="handled">
               {matches.map((p) => (
                 <ListRow
                   key={p.id}
                   title={p.name}
-                  subtitle={`Shop ${p.shopQty} · Warehouse ${p.warehouseQty}`}
+                  subtitle={t('warehouse.shopWarehouseQty', { shop: p.shopQty, warehouse: p.warehouseQty })}
                   onPress={() => setPicked(p)}
                 />
               ))}
@@ -394,30 +407,30 @@ function WriteOffSheet({
           <>
             <Text style={[typeScale.md, { color: theme.text, fontWeight: '700' }]}>{picked.name}</Text>
             <View style={styles.chipRow}>
-              <Chip label={`Shop (${picked.shopQty})`} selected={location === 'shop'} onPress={() => setLocation('shop')} />
-              <Chip label={`Warehouse (${picked.warehouseQty})`} selected={location === 'warehouse'} onPress={() => setLocation('warehouse')} />
+              <Chip label={`${t('warehouse.shop')} (${picked.shopQty})`} selected={location === 'shop'} onPress={() => setLocation('shop')} />
+              <Chip label={`${t('warehouse.warehouseLabel')} (${picked.warehouseQty})`} selected={location === 'warehouse'} onPress={() => setLocation('warehouse')} />
             </View>
             <Input
-              label={`Quantity (max ${available})`}
+              label={`${t('warehouse.quantity')} (${t('warehouse.available', { count: available })})`}
               value={qty}
               onChangeText={setQty}
               keyboardType="decimal-pad"
-              error={qty.trim() !== '' && !qtyValid ? `Only ${available} available` : null}
+              error={qty.trim() !== '' && !qtyValid ? t('warehouse.onlyAvailableShort', { count: available }) : null}
             />
-            <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Reason</Text>
+            <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('warehouse.reason')}</Text>
             <View style={styles.chipRow}>
               {WRITEOFF_REASONS.map((r) => (
-                <Chip key={r} label={r} selected={reason === r} onPress={() => setReason(r)} />
+                <Chip key={r} label={t(WRITEOFF_REASON_I18N[r])} selected={reason === r} onPress={() => setReason(r)} />
               ))}
             </View>
             <Input
-              label={reason === 'other' ? 'Note (required)' : 'Note (optional)'}
+              label={reason === 'other' ? t('warehouse.noteRequired') : t('common.noteOptional')}
               value={note}
               onChangeText={setNote}
             />
             <View style={styles.actions}>
-              <Button title="Back" variant="secondary" onPress={() => setPicked(null)} style={styles.flex1} />
-              <Button title="Save" disabled={!valid} onPress={save} style={styles.flex2} />
+              <Button title={t('warehouse.back')} variant="secondary" onPress={() => setPicked(null)} style={styles.flex1} />
+              <Button title={t('common.save')} disabled={!valid} onPress={save} style={styles.flex2} />
             </View>
           </>
         )}

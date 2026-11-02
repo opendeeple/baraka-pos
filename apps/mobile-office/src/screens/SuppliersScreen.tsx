@@ -16,15 +16,23 @@ import {
   toast,
   useTheme,
 } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
 
 const EMPTY_FORM: SupplierForm = { name: '', phone: '', address: '', notes: '' }
 const METHODS: PayMethod[] = ['Cash', 'Card', 'Click', 'Transfer']
+const METHOD_I18N: Record<PayMethod, string> = {
+  Cash: 'payment.methodCash',
+  Card: 'payment.methodCard',
+  Click: 'payment.methodClick',
+  Transfer: 'payment.methodTransfer',
+}
 
 export function SuppliersScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const { user, store } = useAuthStore()
   const [search, setSearch] = useState('')
@@ -51,19 +59,19 @@ export function SuppliersScreen() {
 
   function save() {
     if (!form.name.trim()) {
-      toast.error('Name is required')
+      toast.error(t('common.nameRequired'))
       return
     }
     repos.suppliers.save(editId, form)
     setShowForm(false)
-    toast.success(editId ? 'Supplier updated' : 'Supplier created')
+    toast.success(editId ? t('suppliers.updated') : t('suppliers.created'))
     load()
   }
 
   function afterPaid() {
     setPayTarget(null)
     load()
-    toast.success('Payment recorded')
+    toast.success(t('suppliers.paymentRecorded'))
   }
 
   return (
@@ -73,17 +81,17 @@ export function SuppliersScreen() {
           value={search}
           onChangeText={setSearch}
           onSubmitEditing={load}
-          placeholder="Search suppliers…"
+          placeholder={t('suppliers.searchPlaceholder')}
           returnKeyType="search"
           left={<Icon name="search" size={16} color={theme.textFaint} />}
           containerStyle={styles.searchWrap}
         />
-        <Button title="New" icon="plus" onPress={openCreate} />
+        <Button title={t('common.new')} icon="plus" onPress={openCreate} />
       </View>
 
       {totalOwed > 0 && (
         <View style={styles.totalBar}>
-          <Text style={[typeScale.sm, { color: theme.textMuted }]}>Total we owe</Text>
+          <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('suppliers.totalWeOwe')}</Text>
           <Text style={[typeScale.md, { color: theme.danger, fontWeight: '700' }]}>{fmtUZS(totalOwed)}</Text>
         </View>
       )}
@@ -96,11 +104,11 @@ export function SuppliersScreen() {
         renderItem={({ item }) => (
           <ListRow
             title={item.name}
-            subtitle={`${item.phone ?? '—'} · ${item.orders} orders`}
+            subtitle={`${item.phone ?? '—'} · ${t('suppliers.ordersCount', { count: item.orders })}`}
             onPress={() => setDetailTarget(item)}
             right={
               item.owed > 0 ? (
-                <Badge label={`Owe ${fmtUZS(item.owed)}`} tone="danger" />
+                <Badge label={t('suppliers.owe', { amount: fmtUZS(item.owed) })} tone="danger" />
               ) : (
                 <Text style={[typeScale.sm, { color: theme.textMuted }]}>{fmtUZS(item.bought)}</Text>
               )
@@ -110,22 +118,22 @@ export function SuppliersScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="truck"
-            title={search ? 'No suppliers found' : 'No suppliers yet'}
-            message={search ? 'Try a different search' : 'Suppliers you buy from appear here'}
-            action={search ? undefined : { label: 'New supplier', onPress: openCreate }}
+            title={search ? t('suppliers.noneFound') : t('suppliers.noneYet')}
+            message={search ? t('common.tryDifferentSearch') : t('suppliers.emptyHint')}
+            action={search ? undefined : { label: t('suppliers.newSupplier'), onPress: openCreate }}
           />
         }
       />
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? 'Edit supplier' : 'New supplier'}>
+      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? t('suppliers.editSupplier') : t('suppliers.newSupplier')}>
         <View style={styles.form}>
-          <Input label="Name" value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} autoFocus />
-          <Input label="Phone" value={form.phone ?? ''} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} keyboardType="phone-pad" />
-          <Input label="Address" value={form.address ?? ''} onChangeText={(v) => setForm((p) => ({ ...p, address: v }))} />
-          <Input label="Notes" value={form.notes ?? ''} onChangeText={(v) => setForm((p) => ({ ...p, notes: v }))} />
+          <Input label={t('common.name')} value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} autoFocus />
+          <Input label={t('common.phone')} value={form.phone ?? ''} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} keyboardType="phone-pad" />
+          <Input label={t('common.address')} value={form.address ?? ''} onChangeText={(v) => setForm((p) => ({ ...p, address: v }))} />
+          <Input label={t('common.note')} value={form.notes ?? ''} onChangeText={(v) => setForm((p) => ({ ...p, notes: v }))} />
           <View style={styles.actions}>
-            <Button title="Cancel" variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
-            <Button title="Save" onPress={save} style={styles.flex2} />
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title={t('common.save')} onPress={save} style={styles.flex2} />
           </View>
         </View>
       </Sheet>
@@ -152,9 +160,9 @@ export function SuppliersScreen() {
             try {
               const result = repos.suppliers.pay(payTarget.id, amount, method, { userId: user?.id ?? null, storeId: store?.id ?? 1, note })
               afterPaid()
-              toast.success(`Paid ${fmtUZS(result.applied)} to ${payTarget.name}`)
+              toast.success(t('suppliers.paidTo', { amount: fmtUZS(result.applied), name: payTarget.name }))
             } catch (err) {
-              toast.error(err instanceof Error ? err.message : 'Payment failed')
+              toast.error(err instanceof Error ? err.message : t('suppliers.paymentFailed'))
             }
           }}
         />
@@ -172,6 +180,7 @@ function SupplierDetailSheet({
   onPay: () => void
 }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const [orders] = useState<SupplierOrderRow[]>(() => repos.suppliers.orders(supplier.id))
   const [payments] = useState<SupplierPaymentRow[]>(() => repos.suppliers.payments(supplier.id))
@@ -181,24 +190,24 @@ function SupplierDetailSheet({
       <View style={styles.form}>
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={[typeScale.xs, { color: theme.textFaint }]}>Bought</Text>
+            <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('suppliers.bought')}</Text>
             <Text style={[typeScale.md, { color: theme.text, fontWeight: '700' }]}>{fmtUZS(supplier.bought)}</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={[typeScale.xs, { color: theme.textFaint }]}>We owe</Text>
+            <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('suppliers.weOwe')}</Text>
             <Text style={[typeScale.md, { color: supplier.owed > 0 ? theme.danger : theme.success, fontWeight: '700' }]}>
               {fmtUZS(supplier.owed)}
             </Text>
           </View>
         </View>
         <View style={styles.actions}>
-          <Button title="Edit" variant="secondary" onPress={onEdit} style={styles.flex1} />
-          {supplier.owed > 0 && <Button title="Pay" onPress={onPay} style={styles.flex2} />}
+          <Button title={t('suppliers.edit')} variant="secondary" onPress={onEdit} style={styles.flex1} />
+          {supplier.owed > 0 && <Button title={t('suppliers.pay')} onPress={onPay} style={styles.flex2} />}
         </View>
 
-        <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Orders</Text>
+        <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('suppliers.orders')}</Text>
         {orders.length === 0 ? (
-          <Text style={[typeScale.sm, { color: theme.textFaint }]}>No orders yet</Text>
+          <Text style={[typeScale.sm, { color: theme.textFaint }]}>{t('suppliers.noOrdersYet')}</Text>
         ) : (
           orders.map((o) => {
             const due = o.totalAmount - o.amountPaid
@@ -208,7 +217,7 @@ function SupplierDetailSheet({
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={[typeScale.sm, { color: theme.text }]}>{fmtUZS(o.totalAmount)}</Text>
                   <Text style={[typeScale.xs, { color: o.status !== 'received' ? theme.warning : due > 0.001 ? theme.danger : theme.success }]}>
-                    {o.status !== 'received' ? 'Pending' : due > 0.001 ? `Due ${fmtUZS(due)}` : 'Paid in full'}
+                    {o.status !== 'received' ? t('suppliers.pendingStatus') : due > 0.001 ? t('suppliers.due', { amount: fmtUZS(due) }) : t('suppliers.paidInFull')}
                   </Text>
                 </View>
               </View>
@@ -218,11 +227,11 @@ function SupplierDetailSheet({
 
         {payments.length > 0 && (
           <>
-            <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Payments</Text>
+            <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('suppliers.payments')}</Text>
             {payments.map((p) => (
               <View key={p.id} style={[styles.rowItem, { borderColor: theme.border }]}>
                 <Text style={[typeScale.sm, { color: theme.textMuted }]}>
-                  {String(p.createdAt).slice(0, 10)} · {p.paymentMethod ?? 'Cash'}
+                  {String(p.createdAt).slice(0, 10)} · {t(METHOD_I18N[(p.paymentMethod as PayMethod) ?? 'Cash'])}
                 </Text>
                 <Text style={[typeScale.sm, { color: theme.success, fontWeight: '600' }]}>{fmtUZS(p.amount)}</Text>
               </View>
@@ -242,6 +251,7 @@ function SupplierPaySheet({
   onPaid: (amount: number, method: PayMethod, note: string) => void
 }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const [amount, setAmount] = useState(String(Math.round(supplier.owed * 100) / 100))
   const [method, setMethod] = useState<PayMethod>('Cash')
   const [note, setNote] = useState('')
@@ -250,29 +260,29 @@ function SupplierPaySheet({
   const valid = Number.isFinite(value) && value > 0 && value <= supplier.owed + 0.001
 
   return (
-    <Sheet visible onClose={onClose} title={`Pay — ${supplier.name}`}>
+    <Sheet visible onClose={onClose} title={t('suppliers.payTitle', { name: supplier.name })}>
       <View style={styles.form}>
         <View style={[styles.statCard, styles.fullWidthCard]}>
-          <Text style={[typeScale.xs, { color: theme.textFaint }]}>We owe</Text>
+          <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('suppliers.weOwe')}</Text>
           <Text style={[typeScale.lg, { color: theme.danger, fontWeight: '700' }]}>{fmtUZS(supplier.owed)}</Text>
         </View>
         <Input
-          label="Amount"
+          label={t('suppliers.amount')}
           value={amount}
           onChangeText={setAmount}
           keyboardType="numeric"
-          error={amount && !valid ? 'Amount is too big' : null}
+          error={amount && !valid ? t('suppliers.amountTooBig') : null}
         />
-        <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Method</Text>
+        <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('suppliers.method')}</Text>
         <View style={styles.chipRow}>
           {METHODS.map((m) => (
-            <Chip key={m} label={m} selected={method === m} onPress={() => setMethod(m)} />
+            <Chip key={m} label={t(METHOD_I18N[m])} selected={method === m} onPress={() => setMethod(m)} />
           ))}
         </View>
-        <Input label="Note (optional)" value={note} onChangeText={setNote} />
+        <Input label={t('common.noteOptional')} value={note} onChangeText={setNote} />
         <View style={styles.actions}>
-          <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
-          <Button title="Pay" disabled={!valid} onPress={() => onPaid(value, method, note)} style={styles.flex2} />
+          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button title={t('suppliers.pay')} disabled={!valid} onPress={() => onPaid(value, method, note)} style={styles.flex2} />
         </View>
       </View>
     </Sheet>
