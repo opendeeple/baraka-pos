@@ -20,15 +20,22 @@ import {
   toast,
   useTheme,
 } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
 import { buildDebtMessage, buildHistoryMessage, sendTelegramMessage, telegramConfigured } from '../lib/telegram'
 
 const EMPTY_FORM = { name: '', phone: '', email: '', address: '' }
+const METHOD_I18N: Record<'Cash' | 'Card' | 'Click', string> = {
+  Cash: 'payment.methodCash',
+  Card: 'payment.methodCard',
+  Click: 'payment.methodClick',
+}
 
 export function CustomersScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos, engine } = getServices()
   const [search, setSearch] = useState('')
   const [customers, setCustomers] = useState<ContactListItem[]>([])
@@ -52,7 +59,7 @@ export function CustomersScreen() {
 
   function save() {
     if (!form.name.trim()) {
-      toast.error('Name is required')
+      toast.error(t('common.nameRequired'))
       return
     }
     const input = {
@@ -65,7 +72,7 @@ export function CustomersScreen() {
     else repos.contacts.create(input)
     engine.flushOutbox().catch(() => {})
     setShowForm(false)
-    toast.success(editId ? 'Customer updated' : 'Customer created')
+    toast.success(editId ? t('customers.updated') : t('customers.created'))
     load()
   }
 
@@ -76,12 +83,12 @@ export function CustomersScreen() {
           value={search}
           onChangeText={setSearch}
           onSubmitEditing={load}
-          placeholder="Search by name or phone…"
+          placeholder={t('pos.searchNameOrPhone')}
           returnKeyType="search"
           left={<Icon name="search" size={16} color={theme.textFaint} />}
           containerStyle={styles.searchWrap}
         />
-        <Button title="New" icon="plus" onPress={openCreate} />
+        <Button title={t('common.new')} icon="plus" onPress={openCreate} />
       </View>
 
       <FlatList
@@ -110,12 +117,12 @@ export function CustomersScreen() {
                     icon="banknote"
                     size={20}
                     color={theme.danger}
-                    accessibilityLabel={`Debt history for ${item.name}`}
+                    accessibilityLabel={t('customers.debtHistoryFor', { name: item.name })}
                     onPress={() => setDebtTarget(item)}
                   />
                 ) : null}
                 {item.balance > 0 ? (
-                  <Badge label={`Debt ${fmtUZS(item.balance)}`} tone="danger" />
+                  <Badge label={t('pos.debtBadge', { amount: fmtUZS(item.balance) })} tone="danger" />
                 ) : (
                   <Text style={[typeScale.sm, { color: theme.textMuted }]}>{fmtUZS(item.balance)}</Text>
                 )}
@@ -124,7 +131,7 @@ export function CustomersScreen() {
                     icon="send"
                     size={20}
                     color={theme.primary}
-                    accessibilityLabel={`Message ${item.name} on Telegram`}
+                    accessibilityLabel={t('customers.messageOnTelegram', { name: item.name })}
                     onPress={() => setMessageTarget(item)}
                   />
                 )}
@@ -135,34 +142,34 @@ export function CustomersScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="users"
-            title={search ? 'No customers found' : 'No customers yet'}
-            message={search ? 'Try a different search' : 'Customers you add appear here'}
-            action={search ? undefined : { label: 'New customer', onPress: openCreate }}
+            title={search ? t('customers.noneFound') : t('customers.noneYet')}
+            message={search ? t('common.tryDifferentSearch') : t('customers.emptyHint')}
+            action={search ? undefined : { label: t('customers.newCustomer'), onPress: openCreate }}
           />
         }
       />
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? 'Edit customer' : 'New customer'}>
+      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? t('customers.editCustomer') : t('customers.newCustomer')}>
         <View style={styles.form}>
-          <Input label="Name" value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} />
+          <Input label={t('common.name')} value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} />
           <Input
-            label="Phone"
+            label={t('common.phone')}
             value={form.phone}
             onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))}
             keyboardType="phone-pad"
-            placeholder="+998 …"
+            placeholder={t('customers.phonePlaceholder')}
           />
           <Input
-            label="Email"
+            label={t('common.email')}
             value={form.email}
             onChangeText={(v) => setForm((p) => ({ ...p, email: v }))}
             autoCapitalize="none"
             keyboardType="email-address"
           />
-          <Input label="Address" value={form.address} onChangeText={(v) => setForm((p) => ({ ...p, address: v }))} />
+          <Input label={t('common.address')} value={form.address} onChangeText={(v) => setForm((p) => ({ ...p, address: v }))} />
           <View style={styles.actions}>
-            <Button title="Cancel" variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
-            <Button title="Save" onPress={save} style={styles.flex2} />
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title={t('common.save')} onPress={save} style={styles.flex2} />
           </View>
         </View>
       </Sheet>
@@ -184,6 +191,7 @@ export function CustomersScreen() {
 
 function MessageSheet({ contact, onClose }: { contact: ContactListItem; onClose: () => void }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const { store } = useAuthStore()
   const [template, setTemplate] = useState<'debt' | 'history'>(contact.balance > 0 ? 'debt' : 'history')
@@ -203,10 +211,10 @@ function MessageSheet({ contact, onClose }: { contact: ContactListItem; onClose:
       const result = await sendTelegramMessage(contact.telegramChatId, preview)
       repos.contacts.logMessage(contact.id, 'telegram', preview, result.success ? 'sent' : 'failed', result.error)
       if (result.success) {
-        toast.success('Message sent')
+        toast.success(t('customers.messageSent'))
         onClose()
       } else {
-        toast.error(result.error || 'Send failed')
+        toast.error(result.error || t('customers.sendFailed'))
       }
     } finally {
       setSending(false)
@@ -214,21 +222,21 @@ function MessageSheet({ contact, onClose }: { contact: ContactListItem; onClose:
   }
 
   return (
-    <Sheet visible onClose={onClose} title={`Message — ${contact.name}`}>
+    <Sheet visible onClose={onClose} title={t('customers.messageTitle', { name: contact.name })}>
       <View style={styles.form}>
         {!configured ? (
           <Text style={[typeScale.sm, { color: theme.warning }]}>
-            Telegram bot isn't configured yet — set it up in desktop Settings first.
+            {t('customers.botNotConfigured')}
           </Text>
         ) : !contact.telegramChatId ? (
           <Text style={[typeScale.sm, { color: theme.warning }]}>
-            This customer hasn't connected Telegram yet — send them the bot link from desktop.
+            {t('customers.notConnectedYet')}
           </Text>
         ) : (
           <>
             <View style={styles.chipRow}>
-              <Chip label="Debt reminder" selected={template === 'debt'} onPress={() => setTemplate('debt')} />
-              <Chip label="Purchase history" selected={template === 'history'} onPress={() => setTemplate('history')} />
+              <Chip label={t('customers.debtReminder')} selected={template === 'debt'} onPress={() => setTemplate('debt')} />
+              <Chip label={t('customers.purchaseHistory')} selected={template === 'history'} onPress={() => setTemplate('history')} />
             </View>
             <View style={[styles.preview, { borderColor: theme.border }]}>
               <Text style={[typeScale.xs, { color: theme.textMuted }]}>{preview}</Text>
@@ -236,9 +244,9 @@ function MessageSheet({ contact, onClose }: { contact: ContactListItem; onClose:
           </>
         )}
         <View style={styles.actions}>
-          <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
           <Button
-            title="Send"
+            title={t('customers.send')}
             icon="send"
             onPress={send}
             loading={sending}
@@ -259,6 +267,7 @@ function DebtHistorySheet({
   onChanged: () => void
 }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const { user, store } = useAuthStore()
   const [statement, setStatement] = useState(() => repos.contacts.debtStatement(contact.id))
@@ -286,7 +295,7 @@ function DebtHistorySheet({
 
   function confirmPay() {
     if (!entered || entered <= 0) {
-      toast.error('Enter a valid amount')
+      toast.error(t('debt.enterValidAmount'))
       return
     }
     setPaying(true)
@@ -297,9 +306,9 @@ function DebtHistorySheet({
       setEntry('')
       refresh()
       onChanged()
-      toast.success(result.change > 0 ? `Paid — change ${fmtUZS(result.change)}` : 'Payment recorded')
+      toast.success(result.change > 0 ? t('debt.paid', { change: fmtUZS(result.change) }) : t('debt.recorded'))
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Payment failed')
+      toast.error(err instanceof Error ? err.message : t('debt.paymentFailed'))
     } finally {
       setPaying(false)
     }
@@ -308,28 +317,28 @@ function DebtHistorySheet({
   function doClear() {
     try {
       repos.contacts.clearDebt(contact.id, totalDebt, totalPaid, user?.id ?? 1)
-      toast.success('Debt history cleared')
+      toast.success(t('customers.debtHistoryCleared'))
       onChanged()
       onClose()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to clear')
+      toast.error(err instanceof Error ? err.message : t('customers.clearFailed'))
     }
   }
 
   function doDelete() {
     repos.contacts.delete(contact.id, user?.id ?? 1)
-    toast.success(`${contact.name} deleted`)
+    toast.success(t('customers.deleted', { name: contact.name }))
     onChanged()
     onClose()
   }
 
   if (view === 'pay') {
     return (
-      <Sheet visible onClose={() => setView('statement')} title={`Pay debt — ${contact.name}`}>
+      <Sheet visible onClose={() => setView('statement')} title={t('debt.payDebtTitle', { name: contact.name })}>
         <View style={styles.form}>
           <View style={styles.chipRow}>
             {(['Cash', 'Card', 'Click'] as const).map((m) => (
-              <Chip key={m} label={m} selected={method === m} onPress={() => setMethod(m)} />
+              <Chip key={m} label={t(METHOD_I18N[m])} selected={method === m} onPress={() => setMethod(m)} />
             ))}
           </View>
           <Text style={[typeScale.moneyLg, { color: theme.text, textAlign: 'center' }]}>
@@ -339,18 +348,18 @@ function DebtHistorySheet({
           {change > 0 && (
             <View style={[styles.summaryBox, { borderColor: theme.success }]}>
               <View style={styles.rowBetween}>
-                <Text style={[typeScale.sm, { color: theme.textMuted }]}>Payment</Text>
+                <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('debt.payment')}</Text>
                 <Text style={[typeScale.sm, { color: theme.text, fontWeight: '700' }]}>{fmtUZS(Math.max(0, balance))}</Text>
               </View>
               <View style={styles.rowBetween}>
-                <Text style={[typeScale.md, { color: theme.success, fontWeight: '700' }]}>Change</Text>
+                <Text style={[typeScale.md, { color: theme.success, fontWeight: '700' }]}>{t('payment.change')}</Text>
                 <Text style={[typeScale.md, { color: theme.success, fontWeight: '700' }]}>{fmtUZS(change)}</Text>
               </View>
             </View>
           )}
           <View style={styles.actions}>
-            <Button title="Back" variant="secondary" onPress={() => setView('statement')} style={styles.flex1} />
-            <Button title="Confirm payment" onPress={confirmPay} loading={paying} disabled={!entered} style={styles.flex2} />
+            <Button title={t('common.back')} variant="secondary" onPress={() => setView('statement')} style={styles.flex1} />
+            <Button title={t('debt.confirmPayment')} onPress={confirmPay} loading={paying} disabled={!entered} style={styles.flex2} />
           </View>
         </View>
       </Sheet>
@@ -361,12 +370,12 @@ function DebtHistorySheet({
     <Sheet visible onClose={onClose} title={contact.name}>
       <View style={styles.form}>
         {!hasHistory ? (
-          <Text style={[typeScale.sm, { color: theme.textFaint }]}>No debt records</Text>
+          <Text style={[typeScale.sm, { color: theme.textFaint }]}>{t('debt.noRecords')}</Text>
         ) : (
           <ScrollView style={styles.historyList} contentContainerStyle={styles.historyListInner}>
             {statement.debts.length > 0 && (
               <>
-                <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Debts taken</Text>
+                <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('debt.debtsTaken')}</Text>
                 {statement.debts.map((d, i) => (
                   <View key={i} style={[styles.rowItem, { borderColor: theme.border }]}>
                     <View style={styles.flex1}>
@@ -380,7 +389,7 @@ function DebtHistorySheet({
             )}
             {statement.payments.length > 0 && (
               <>
-                <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Payments</Text>
+                <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('debt.payments')}</Text>
                 {statement.payments.map((p, i) => (
                   <View key={i} style={[styles.rowItem, { borderColor: theme.border }]}>
                     <Text style={[typeScale.xs, { color: theme.textFaint }]}>{String(p.date).slice(0, 16).replace('T', ' ')}</Text>
@@ -394,22 +403,22 @@ function DebtHistorySheet({
 
         <View style={[styles.summaryBox, { borderColor: fullyPaid ? theme.success : theme.danger }]}>
           <Text style={[typeScale.md, { color: fullyPaid ? theme.success : theme.danger, fontWeight: '700' }]}>
-            {fullyPaid ? 'Fully paid' : `Remaining: ${fmtUZS(Math.max(0, balance))}`}
+            {fullyPaid ? t('debt.fullyPaid') : t('debt.remaining', { amount: fmtUZS(Math.max(0, balance)) })}
           </Text>
         </View>
 
         {!fullyPaid && (
-          <Button title="Pay debt" icon="banknote" onPress={() => setView('pay')} fullWidth />
+          <Button title={t('debt.payDebt')} icon="banknote" onPress={() => setView('pay')} fullWidth />
         )}
 
         {hasHistory && (confirmClear ? (
           <View style={styles.actions}>
-            <Button title="Cancel" variant="secondary" onPress={() => setConfirmClear(false)} style={styles.flex1} />
-            <Button title="Yes, clear" variant="danger" onPress={doClear} style={styles.flex2} />
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setConfirmClear(false)} style={styles.flex1} />
+            <Button title={t('customers.yesClear')} variant="danger" onPress={doClear} style={styles.flex2} />
           </View>
         ) : (
           <Button
-            title="Clear debt history"
+            title={t('customers.clearDebtHistory')}
             variant="secondary"
             icon="trash"
             disabled={!fullyPaid}
@@ -418,7 +427,7 @@ function DebtHistorySheet({
         ))}
 
         <Button
-          title="Delete customer"
+          title={t('customers.deleteCustomer')}
           variant="ghost"
           icon="trash"
           onPress={() => (ownerPin ? setShowDeletePin(true) : doDelete())}
@@ -428,7 +437,7 @@ function DebtHistorySheet({
       <PinConfirmModal
         visible={showDeletePin}
         expectedPin={ownerPin}
-        title="Owner PIN required to delete"
+        title={t('customers.ownerPinToDelete')}
         onClose={() => setShowDeletePin(false)}
         onConfirmed={() => { setShowDeletePin(false); doDelete() }}
       />
