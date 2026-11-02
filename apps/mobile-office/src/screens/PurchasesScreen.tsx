@@ -18,6 +18,7 @@ import {
   toast,
   useTheme,
 } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
@@ -32,6 +33,7 @@ interface CartLine {
 
 export function PurchasesScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos, engine } = getServices()
   const { user, store } = useAuthStore()
   const [orders, setOrders] = useState<PurchaseListItem[]>([])
@@ -53,7 +55,7 @@ export function PurchasesScreen() {
   return (
     <Screen padded={false}>
       <View style={styles.toolbar}>
-        <Button title="New order" icon="plus" onPress={() => setNewOrderOpen(true)} fullWidth />
+        <Button title={t('purchases.newOrder')} icon="plus" onPress={() => setNewOrderOpen(true)} fullWidth />
       </View>
 
       <FlatList
@@ -63,20 +65,20 @@ export function PurchasesScreen() {
         renderItem={({ item }) => (
           <ListRow
             title={item.referenceNumber ?? `#${item.id}`}
-            subtitle={`${item.vendorName ?? 'No supplier'} · ${String(item.createdAt).slice(0, 16).replace('T', ' ')}`}
+            subtitle={`${item.vendorName ?? t('purchases.noSupplier')} · ${String(item.createdAt).slice(0, 16).replace('T', ' ')}`}
             onPress={() => (item.status === 'pending' ? setReceiveTarget(item) : setViewTarget(item))}
             right={
               <View style={styles.rowRight}>
                 <Text style={[typeScale.money, { color: theme.text }]}>{fmtUZS(item.totalAmount)}</Text>
                 <Badge
-                  label={item.status === 'received' ? 'Received' : 'Pending'}
+                  label={item.status === 'received' ? t('purchases.received') : t('purchases.pending')}
                   tone={item.status === 'received' ? 'success' : 'warning'}
                 />
               </View>
             }
           />
         )}
-        ListEmptyComponent={<EmptyState icon="truck" title="No purchase orders yet" message="Order goods from a supplier to track what's on the way" />}
+        ListEmptyComponent={<EmptyState icon="truck" title={t('purchases.noneYet')} message={t('purchases.emptyHint')} />}
       />
 
       {newOrderOpen && (
@@ -86,7 +88,7 @@ export function PurchasesScreen() {
             repos.purchases.create(lines, { storeId: store?.id ?? 1, userId: user?.id ?? 1 })
             setNewOrderOpen(false)
             afterMutate()
-            toast.success('Order created')
+            toast.success(t('purchases.created'))
           }}
         />
       )}
@@ -100,9 +102,9 @@ export function PurchasesScreen() {
               repos.purchases.receive(receiveTarget.id, location, checks, user?.id ?? 1)
               setReceiveTarget(null)
               afterMutate()
-              toast.success('Order received')
+              toast.success(t('purchases.receivedToast'))
             } catch (err) {
-              toast.error(err instanceof Error ? err.message : 'Receive failed')
+              toast.error(err instanceof Error ? err.message : t('purchases.receiveFailed'))
             }
           }}
         />
@@ -117,6 +119,7 @@ export function PurchasesScreen() {
 
 function NewOrderSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (lines: OrderLineInput[]) => void }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const [search, setSearch] = useState('')
   const [results, setResults] = useState<ProductListItem[]>([])
@@ -131,11 +134,11 @@ function NewOrderSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (
   const total = cart.reduce((s, l) => s + l.qty * l.unitCost, 0)
 
   return (
-    <Sheet visible onClose={onClose} title="New order">
+    <Sheet visible onClose={onClose} title={t('purchases.newOrder')}>
       <Input
         value={search}
         onChangeText={runSearch}
-        placeholder="Search products to add…"
+        placeholder={t('purchases.searchToAdd')}
         left={<Icon name="search" size={16} color={theme.textFaint} />}
         returnKeyType="search"
       />
@@ -148,7 +151,7 @@ function NewOrderSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (
           renderItem={({ item }) => (
             <ListRow
               title={item.name}
-              subtitle={`Cost ${fmtUZS(item.cost)} · Stock ${item.stock}`}
+              subtitle={t('purchases.costStock', { cost: fmtUZS(item.cost), stock: item.stock })}
               onPress={() => item.batchId && setQtyTarget(item)}
             />
           )}
@@ -156,9 +159,9 @@ function NewOrderSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (
       )}
 
       <View style={styles.cartSection}>
-        <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Order lines</Text>
+        <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('purchases.orderLines')}</Text>
         {cart.length === 0 ? (
-          <Text style={[typeScale.sm, { color: theme.textFaint }]}>Search above and tap a product to add it</Text>
+          <Text style={[typeScale.sm, { color: theme.textFaint }]}>{t('purchases.searchAndTap')}</Text>
         ) : (
           cart.map((l) => (
             <View key={l.productId} style={[styles.cartRow, { borderColor: theme.border }]}>
@@ -170,7 +173,7 @@ function NewOrderSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (
                 icon="x"
                 size={20}
                 color={theme.danger}
-                accessibilityLabel={`Remove ${l.name}`}
+                accessibilityLabel={`${t('common.delete')} ${l.name}`}
                 onPress={() => setCart((prev) => prev.filter((c) => c.productId !== l.productId))}
               />
             </View>
@@ -179,9 +182,9 @@ function NewOrderSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (
       </View>
 
       <View style={styles.actions}>
-        <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
+        <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
         <Button
-          title={`Create order (${fmtUZS(total)})`}
+          title={t('purchases.createOrder', { total: fmtUZS(total) })}
           disabled={cart.length === 0}
           onPress={() => onCreate(cart.map((l) => ({ productId: l.productId, batchId: l.batchId, qty: l.qty, unitCost: l.unitCost })))}
           style={styles.flex2}
@@ -216,6 +219,7 @@ function QtyCostDialog({
   onClose: () => void
   onConfirm: (qty: number, unitCost: number) => void
 }) {
+  const { t } = useTranslation()
   const [qty, setQty] = useState('')
   const [cost, setCost] = useState(String(product.cost || ''))
 
@@ -225,14 +229,14 @@ function QtyCostDialog({
       onClose={onClose}
       title={product.name}
       actions={[
-        { label: 'Cancel', onPress: onClose },
+        { label: t('common.cancel'), onPress: onClose },
         {
-          label: 'Add',
+          label: t('payment.add'),
           tone: 'primary',
           onPress: () => {
             const n = Number(qty)
             if (!n || n <= 0) {
-              toast.error('Enter a quantity')
+              toast.error(t('purchases.enterQuantity'))
               return
             }
             onConfirm(n, Number(cost) || 0)
@@ -240,8 +244,8 @@ function QtyCostDialog({
         },
       ]}
     >
-      <Input label="Quantity" value={qty} onChangeText={setQty} keyboardType="numeric" autoFocus containerStyle={styles.gapTop} />
-      <Input label="Unit cost" value={cost} onChangeText={setCost} keyboardType="numeric" containerStyle={styles.gapTop} />
+      <Input label={t('warehouse.quantity')} value={qty} onChangeText={setQty} keyboardType="numeric" autoFocus containerStyle={styles.gapTop} />
+      <Input label={t('purchases.unitCost')} value={cost} onChangeText={setCost} keyboardType="numeric" containerStyle={styles.gapTop} />
     </Dialog>
   )
 }
@@ -254,6 +258,7 @@ function ReceiveOrderSheet({
   onReceived: (location: StockLocation, checks: Array<{ itemId: number; receivedQty: number; unitCost?: number }>) => void
 }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const [items] = useState<PurchaseItemRow[]>(() => repos.purchases.items(order.id))
   const [location, setLocation] = useState<StockLocation>('shop')
@@ -262,11 +267,11 @@ function ReceiveOrderSheet({
   )
 
   return (
-    <Sheet visible onClose={onClose} title={`Receive — ${order.referenceNumber ?? order.id}`}>
-      <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Receive into</Text>
+    <Sheet visible onClose={onClose} title={t('purchases.receiveTitle', { ref: order.referenceNumber ?? order.id })}>
+      <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('purchases.receiveInto')}</Text>
       <View style={styles.chipRow}>
-        <Chip label="Shop" selected={location === 'shop'} onPress={() => setLocation('shop')} />
-        <Chip label="Warehouse" selected={location === 'warehouse'} onPress={() => setLocation('warehouse')} />
+        <Chip label={t('warehouse.shop')} selected={location === 'shop'} onPress={() => setLocation('shop')} />
+        <Chip label={t('warehouse.warehouseLabel')} selected={location === 'warehouse'} onPress={() => setLocation('warehouse')} />
       </View>
 
       <View style={styles.cartSection}>
@@ -274,7 +279,7 @@ function ReceiveOrderSheet({
           <View key={item.id} style={[styles.cartRow, { borderColor: theme.border }]}>
             <View style={styles.flex1}>
               <Text style={[typeScale.sm, { color: theme.text }]}>{item.productName}</Text>
-              <Text style={[typeScale.sm, { color: theme.textMuted }]}>Ordered {item.quantity}</Text>
+              <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('purchases.ordered', { count: item.quantity })}</Text>
             </View>
             <Input
               value={qtys[item.id] ?? ''}
@@ -287,9 +292,9 @@ function ReceiveOrderSheet({
       </View>
 
       <View style={styles.actions}>
-        <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
+        <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
         <Button
-          title="Mark received"
+          title={t('purchases.markReceived')}
           onPress={() =>
             onReceived(
               location,
@@ -305,6 +310,7 @@ function ReceiveOrderSheet({
 
 function OrderDetailSheet({ order, onClose }: { order: PurchaseListItem; onClose: () => void }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const [items] = useState<PurchaseItemRow[]>(() => repos.purchases.items(order.id))
 
@@ -318,7 +324,7 @@ function OrderDetailSheet({ order, onClose }: { order: PurchaseListItem; onClose
           </View>
         ))}
       </View>
-      <Button title="Close" variant="secondary" onPress={onClose} style={styles.gapTop} />
+      <Button title={t('purchases.close')} variant="secondary" onPress={onClose} style={styles.gapTop} />
     </Sheet>
   )
 }
