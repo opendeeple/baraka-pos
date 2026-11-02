@@ -20,6 +20,7 @@ import {
   toast,
   useTheme,
 } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
@@ -54,6 +55,7 @@ function toEditState(f: CreditorForm): EditState {
 
 export function CreditorsScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const { user } = useAuthStore()
   const [search, setSearch] = useState('')
@@ -108,14 +110,14 @@ export function CreditorsScreen() {
       note: form.note || null,
     }, user?.id ?? null)
     setShowForm(false)
-    toast.success('Saved')
+    toast.success(t('creditors.saved'))
     load()
   }
 
   function doReturn() {
     if (!returnTarget) return
     repos.creditors.markReturned(returnTarget.id)
-    toast.success(`${returnTarget.name} — marked returned`)
+    toast.success(t('creditors.returnedToast', { name: returnTarget.name }))
     setReturnTarget(null)
     load()
   }
@@ -129,10 +131,10 @@ export function CreditorsScreen() {
 
   function remaining(c: CreditorRow) {
     if (c.status === 'returned') {
-      return <Badge label={`Returned ${c.returnedAt ?? ''}`} tone="success" />
+      return <Badge label={t('creditors.returnedOn', { date: c.returnedAt ?? '' })} tone="success" />
     }
     const days = daysUntil(c.dueDate)
-    const label = days > 0 ? `${days}d left` : days === 0 ? 'Due today' : `${-days}d overdue`
+    const label = days > 0 ? t('creditors.daysLeft', { count: days }) : days === 0 ? t('creditors.dueToday') : t('creditors.daysOverdue', { count: -days })
     const tone = days <= 0 ? 'danger' : days <= c.remindDays ? 'warning' : 'neutral'
     return <Badge label={label} tone={tone} />
   }
@@ -144,23 +146,23 @@ export function CreditorsScreen() {
           value={search}
           onChangeText={setSearch}
           onSubmitEditing={load}
-          placeholder="Search by name or phone…"
+          placeholder={t('pos.searchNameOrPhone')}
           returnKeyType="search"
           left={<Icon name="search" size={16} color={theme.textFaint} />}
           containerStyle={styles.searchWrap}
         />
-        <Button title="New" icon="plus" onPress={openCreate} />
+        <Button title={t('common.new')} icon="plus" onPress={openCreate} />
       </View>
 
       <View style={styles.chipRow}>
-        <Chip label="Open" selected={status === 'open'} onPress={() => setStatus('open')} />
-        <Chip label="Returned" selected={status === 'returned'} onPress={() => setStatus('returned')} />
-        <Chip label="All" selected={status === 'all'} onPress={() => setStatus('all')} />
+        <Chip label={t('creditors.filterOpen')} selected={status === 'open'} onPress={() => setStatus('open')} />
+        <Chip label={t('creditors.filterReturned')} selected={status === 'returned'} onPress={() => setStatus('returned')} />
+        <Chip label={t('creditors.filterAll')} selected={status === 'all'} onPress={() => setStatus('all')} />
       </View>
 
       {(totalUzs > 0 || totalUsd > 0) && (
         <View style={styles.totalBar}>
-          <Text style={[typeScale.sm, { color: theme.textMuted }]}>Total we owe</Text>
+          <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('creditors.totalWeOwe')}</Text>
           <Text style={[typeScale.md, { color: theme.warning, fontWeight: '700' }]}>
             {totalUzs > 0 ? fmtCreditorAmount(totalUzs, 'UZS') : ''}
             {totalUzs > 0 && totalUsd > 0 ? ' + ' : ''}
@@ -183,49 +185,49 @@ export function CreditorsScreen() {
               <View style={styles.rowRight}>
                 {remaining(item)}
                 {item.status === 'open' && (
-                  <IconButton icon="check" size={20} color={theme.success} accessibilityLabel="Mark returned" onPress={() => setReturnTarget(item)} />
+                  <IconButton icon="check" size={20} color={theme.success} accessibilityLabel={t('creditors.markReturned')} onPress={() => setReturnTarget(item)} />
                 )}
-                <IconButton icon="trash" size={20} color={theme.danger} accessibilityLabel="Delete" onPress={() => setDeleteTarget(item)} />
+                <IconButton icon="trash" size={20} color={theme.danger} accessibilityLabel={t('common.delete')} onPress={() => setDeleteTarget(item)} />
               </View>
             }
           />
         )}
-        ListEmptyComponent={<EmptyState icon="banknote" title="No creditors" message="Money or goods taken from a customer, owed back later" />}
+        ListEmptyComponent={<EmptyState icon="banknote" title={t('creditors.none')} message={t('more.creditorsSubtitle')} />}
       />
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? 'Edit creditor' : 'New creditor'}>
+      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? t('creditors.editCreditor') : t('creditors.newCreditor')}>
         <View style={styles.form}>
-          <Input label="Name" value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} autoFocus />
-          <Input label="Phone" value={form.phone} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} keyboardType="phone-pad" />
+          <Input label={t('common.name')} value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} autoFocus />
+          <Input label={t('common.phone')} value={form.phone} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} keyboardType="phone-pad" />
           <View style={styles.row2}>
-            <Input label="Amount" value={form.amount} onChangeText={(v) => setForm((p) => ({ ...p, amount: v }))} keyboardType="numeric" containerStyle={styles.flex1} />
+            <Input label={t('creditors.amount')} value={form.amount} onChangeText={(v) => setForm((p) => ({ ...p, amount: v }))} keyboardType="numeric" containerStyle={styles.flex1} />
             <View style={styles.chipRow}>
               <Chip label="UZS" selected={form.currency === 'UZS'} onPress={() => setForm((p) => ({ ...p, currency: 'UZS' }))} />
               <Chip label="USD" selected={form.currency === 'USD'} onPress={() => setForm((p) => ({ ...p, currency: 'USD' }))} />
             </View>
           </View>
-          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Return as</Text>
+          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('creditors.returnAs')}</Text>
           <View style={styles.chipRow}>
-            <Chip label="Money" selected={form.returnType === 'money'} onPress={() => setForm((p) => ({ ...p, returnType: 'money' }))} />
-            <Chip label="Product" selected={form.returnType === 'product'} onPress={() => setForm((p) => ({ ...p, returnType: 'product' }))} />
+            <Chip label={t('creditors.asMoney')} selected={form.returnType === 'money'} onPress={() => setForm((p) => ({ ...p, returnType: 'money' }))} />
+            <Chip label={t('creditors.asGoods')} selected={form.returnType === 'product'} onPress={() => setForm((p) => ({ ...p, returnType: 'product' }))} />
           </View>
           {form.returnType === 'product' && (
-            <Input label="What product" value={form.productNote} onChangeText={(v) => setForm((p) => ({ ...p, productNote: v }))} />
+            <Input label={t('creditors.whichGoods')} value={form.productNote} onChangeText={(v) => setForm((p) => ({ ...p, productNote: v }))} />
           )}
           <View style={styles.row2}>
-            <Input label="Received (YYYY-MM-DD)" value={form.receivedAt} onChangeText={(v) => setForm((p) => ({ ...p, receivedAt: v }))} containerStyle={styles.flex1} />
-            <Input label="Due (YYYY-MM-DD)" value={form.dueDate} onChangeText={(v) => setForm((p) => ({ ...p, dueDate: v }))} containerStyle={styles.flex1} />
+            <Input label={t('creditors.receivedOn', { format: 'YYYY-MM-DD' })} value={form.receivedAt} onChangeText={(v) => setForm((p) => ({ ...p, receivedAt: v }))} containerStyle={styles.flex1} />
+            <Input label={t('creditors.dueDate', { format: 'YYYY-MM-DD' })} value={form.dueDate} onChangeText={(v) => setForm((p) => ({ ...p, dueDate: v }))} containerStyle={styles.flex1} />
           </View>
           <Input
-            label="Remind this many days before due"
+            label={t('creditors.remindDays')}
             value={form.remindDays}
             onChangeText={(v) => setForm((p) => ({ ...p, remindDays: v }))}
             keyboardType="numeric"
           />
-          <Input label="Note (optional)" value={form.note} onChangeText={(v) => setForm((p) => ({ ...p, note: v }))} />
+          <Input label={t('common.noteOptional')} value={form.note} onChangeText={(v) => setForm((p) => ({ ...p, note: v }))} />
           <View style={styles.actions}>
-            <Button title="Cancel" variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
-            <Button title="Save" disabled={!formValid} onPress={save} style={styles.flex2} />
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title={t('common.save')} disabled={!formValid} onPress={save} style={styles.flex2} />
           </View>
         </View>
       </Sheet>
@@ -233,22 +235,22 @@ export function CreditorsScreen() {
       <Dialog
         visible={returnTarget !== null}
         onClose={() => setReturnTarget(null)}
-        title="Mark returned?"
-        message={returnTarget ? `${returnTarget.name} — ${fmtCreditorAmount(returnTarget.amount, returnTarget.currency)}` : ''}
+        title={t('creditors.markReturnedTitle')}
+        message={returnTarget ? t('creditors.returnConfirm', { amount: fmtCreditorAmount(returnTarget.amount, returnTarget.currency), name: returnTarget.name }) : ''}
         actions={[
-          { label: 'Cancel', onPress: () => setReturnTarget(null) },
-          { label: 'Confirm', tone: 'primary', onPress: doReturn },
+          { label: t('common.cancel'), onPress: () => setReturnTarget(null) },
+          { label: t('common.confirm'), tone: 'primary', onPress: doReturn },
         ]}
       />
 
       <Dialog
         visible={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
-        title="Delete creditor?"
-        message={deleteTarget ? deleteTarget.name : ''}
+        title={t('creditors.deleteTitle')}
+        message={deleteTarget ? t('creditors.deleteConfirm', { name: deleteTarget.name }) : ''}
         actions={[
-          { label: 'Cancel', onPress: () => setDeleteTarget(null) },
-          { label: 'Delete', tone: 'danger', onPress: doDelete },
+          { label: t('common.cancel'), onPress: () => setDeleteTarget(null) },
+          { label: t('common.delete'), tone: 'danger', onPress: doDelete },
         ]}
       />
     </Screen>

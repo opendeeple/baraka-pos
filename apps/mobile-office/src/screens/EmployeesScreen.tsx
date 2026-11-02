@@ -17,10 +17,14 @@ import {
   toast,
   useTheme,
 } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 
 const ROLES: EmployeeRole[] = ['cashier', 'manager', 'admin']
+const ROLE_I18N: Record<string, string> = {
+  cashier: 'employees.roleCashier', manager: 'employees.roleManager', admin: 'employees.roleAdmin',
+}
 const ROLE_TONE: Record<string, 'success' | 'info' | 'warning' | 'neutral'> = {
   cashier: 'success', manager: 'info', admin: 'warning',
 }
@@ -39,6 +43,7 @@ const EMPTY_EDIT: EditState = { name: '', email: '', phone: '', role: 'cashier',
 
 export function EmployeesScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const [search, setSearch] = useState('')
   const [employees, setEmployees] = useState<EmployeeRow[]>([])
@@ -61,7 +66,7 @@ export function EmployeesScreen() {
 
   function save() {
     if (!form.name.trim()) {
-      toast.error('Name is required')
+      toast.error(t('common.nameRequired'))
       return
     }
     const input: EmployeeForm = {
@@ -75,7 +80,7 @@ export function EmployeesScreen() {
     }
     repos.employees.save(editId, input)
     setShowForm(false)
-    toast.success(editId ? 'Employee updated' : 'Employee added')
+    toast.success(editId ? t('employees.updated') : t('employees.added'))
     load()
     if (detailTarget) {
       const fresh = repos.employees.list().find((e) => e.id === detailTarget.id)
@@ -90,12 +95,12 @@ export function EmployeesScreen() {
           value={search}
           onChangeText={setSearch}
           onSubmitEditing={load}
-          placeholder="Search employees…"
+          placeholder={t('employees.searchPlaceholder')}
           returnKeyType="search"
           left={<Icon name="search" size={16} color={theme.textFaint} />}
           containerStyle={styles.searchWrap}
         />
-        <Button title="New" icon="plus" onPress={openCreate} />
+        <Button title={t('common.new')} icon="plus" onPress={openCreate} />
       </View>
 
       <FlatList
@@ -110,8 +115,8 @@ export function EmployeesScreen() {
             onPress={() => setDetailTarget(item)}
             right={
               <View style={styles.rowRight}>
-                {!item.isActive && <Badge label="Inactive" tone="neutral" />}
-                <Badge label={item.role} tone={ROLE_TONE[item.role] ?? 'neutral'} />
+                {!item.isActive && <Badge label={t('employees.inactive')} tone="neutral" />}
+                <Badge label={t(ROLE_I18N[item.role] ?? item.role)} tone={ROLE_TONE[item.role] ?? 'neutral'} />
               </View>
             }
           />
@@ -119,38 +124,38 @@ export function EmployeesScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="users"
-            title={search ? 'No employees found' : 'No employees yet'}
-            message={search ? 'Try a different search' : 'Staff you add appear here'}
-            action={search ? undefined : { label: 'New employee', onPress: openCreate }}
+            title={search ? t('employees.noneFound') : t('employees.noneYet')}
+            message={search ? t('common.tryDifferentSearch') : t('employees.emptyHint')}
+            action={search ? undefined : { label: t('employees.newEmployee'), onPress: openCreate }}
           />
         }
       />
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? 'Edit employee' : 'New employee'}>
+      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? t('employees.editEmployee') : t('employees.newEmployee')}>
         <ScrollView style={styles.formScroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-          <Input label="Name" value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} autoFocus />
-          <Input label="Email" value={form.email} onChangeText={(v) => setForm((p) => ({ ...p, email: v }))} autoCapitalize="none" keyboardType="email-address" />
-          <Input label="Phone" value={form.phone} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} keyboardType="phone-pad" />
-          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Role</Text>
+          <Input label={t('common.name')} value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} autoFocus />
+          <Input label={t('common.email')} value={form.email} onChangeText={(v) => setForm((p) => ({ ...p, email: v }))} autoCapitalize="none" keyboardType="email-address" />
+          <Input label={t('common.phone')} value={form.phone} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} keyboardType="phone-pad" />
+          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('employees.role')}</Text>
           <View style={styles.chipRow}>
             {ROLES.map((r) => (
-              <Chip key={r} label={r} selected={form.role === r} onPress={() => setForm((p) => ({ ...p, role: r }))} />
+              <Chip key={r} label={t(ROLE_I18N[r])} selected={form.role === r} onPress={() => setForm((p) => ({ ...p, role: r }))} />
             ))}
           </View>
           <Input
-            label="PIN code (leave blank to keep current)"
+            label={t('employees.pinCode')}
             value={form.pinCode}
             onChangeText={(v) => setForm((p) => ({ ...p, pinCode: v.replace(/\D/g, '').slice(0, 6) }))}
             keyboardType="number-pad"
             secureTextEntry
           />
           <View style={styles.row2}>
-            <Input label="Monthly salary (UZS)" value={form.salary} onChangeText={(v) => setForm((p) => ({ ...p, salary: v }))} keyboardType="numeric" containerStyle={styles.flex1} />
-            <Input label="Hire date (YYYY-MM-DD)" value={form.hireDate} onChangeText={(v) => setForm((p) => ({ ...p, hireDate: v }))} containerStyle={styles.flex1} />
+            <Input label={t('employees.monthlySalary')} value={form.salary} onChangeText={(v) => setForm((p) => ({ ...p, salary: v }))} keyboardType="numeric" containerStyle={styles.flex1} />
+            <Input label={t('employees.hireDate')} value={form.hireDate} onChangeText={(v) => setForm((p) => ({ ...p, hireDate: v }))} containerStyle={styles.flex1} />
           </View>
           <View style={styles.actions}>
-            <Button title="Cancel" variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
-            <Button title="Save" onPress={save} style={styles.flex2} />
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title={t('common.save')} onPress={save} style={styles.flex2} />
           </View>
         </ScrollView>
       </Sheet>
@@ -189,6 +194,7 @@ function EmployeeDetailSheet({
   onToggleActive: () => void
 }) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const [records, setRecords] = useState<SalaryRecordRow[]>(() => repos.employees.salaryRecords(employee.id))
   const [showSalaryForm, setShowSalaryForm] = useState(false)
@@ -197,25 +203,25 @@ function EmployeeDetailSheet({
   return (
     <Sheet visible onClose={onClose} title={employee.name}>
       <ScrollView style={styles.formScroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
-        <Badge label={employee.role} tone={ROLE_TONE[employee.role] ?? 'neutral'} />
+        <Badge label={t(ROLE_I18N[employee.role] ?? employee.role)} tone={ROLE_TONE[employee.role] ?? 'neutral'} />
         {employee.email && <Text style={[typeScale.sm, { color: theme.textMuted }]}>{employee.email}</Text>}
         {employee.phone && <Text style={[typeScale.sm, { color: theme.textMuted }]}>{employee.phone}</Text>}
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={[typeScale.xs, { color: theme.textFaint }]}>Monthly salary</Text>
+            <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('employees.monthlySalary')}</Text>
             <Text style={[typeScale.md, { color: theme.text, fontWeight: '700' }]}>{employee.salary ? fmtUZS(employee.salary) : '—'}</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={[typeScale.xs, { color: theme.textFaint }]}>Hired</Text>
+            <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('employees.hired')}</Text>
             <Text style={[typeScale.md, { color: theme.text, fontWeight: '700' }]}>{employee.hireDate ?? '—'}</Text>
           </View>
         </View>
 
         <View style={styles.actions}>
-          <Button title="Edit" variant="secondary" onPress={onEdit} style={styles.flex1} />
+          <Button title={t('suppliers.edit')} variant="secondary" onPress={onEdit} style={styles.flex1} />
           <Button
-            title={employee.isActive ? 'Deactivate' : 'Activate'}
+            title={employee.isActive ? t('employees.deactivate') : t('employees.activate')}
             variant={employee.isActive ? 'danger' : 'secondary'}
             onPress={() => (employee.isActive ? setConfirmDeactivate(true) : onToggleActive())}
             style={styles.flex1}
@@ -223,11 +229,11 @@ function EmployeeDetailSheet({
         </View>
 
         <View style={styles.rowBetween}>
-          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Salary payments</Text>
-          <Button title="Record payment" icon="plus" size="sm" variant="secondary" onPress={() => setShowSalaryForm(true)} />
+          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('employees.salaryPayments')}</Text>
+          <Button title={t('employees.recordPayment')} icon="plus" size="sm" variant="secondary" onPress={() => setShowSalaryForm(true)} />
         </View>
         {records.length === 0 ? (
-          <Text style={[typeScale.sm, { color: theme.textFaint }]}>No salary payments yet</Text>
+          <Text style={[typeScale.sm, { color: theme.textFaint }]}>{t('employees.noSalaryYet')}</Text>
         ) : (
           records.map((r) => (
             <View key={r.id} style={[styles.rowItem, { borderColor: theme.border }]}>
@@ -255,11 +261,11 @@ function EmployeeDetailSheet({
       <Dialog
         visible={confirmDeactivate}
         onClose={() => setConfirmDeactivate(false)}
-        title="Deactivate employee?"
-        message={`${employee.name} won't be able to sign in or use their badge.`}
+        title={t('employees.deactivateTitle')}
+        message={t('employees.deactivateConfirm', { name: employee.name })}
         actions={[
-          { label: 'Cancel', onPress: () => setConfirmDeactivate(false) },
-          { label: 'Deactivate', tone: 'danger', onPress: () => { setConfirmDeactivate(false); onToggleActive() } },
+          { label: t('common.cancel'), onPress: () => setConfirmDeactivate(false) },
+          { label: t('employees.deactivate'), tone: 'danger', onPress: () => { setConfirmDeactivate(false); onToggleActive() } },
         ]}
       />
     </Sheet>
@@ -273,6 +279,7 @@ function SalaryPaymentSheet({
   onClose: () => void
   onRecorded: () => void
 }) {
+  const { t } = useTranslation()
   const { repos } = getServices()
   const [amount, setAmount] = useState(employee.salary ? String(employee.salary) : '')
   const [periodFrom, setPeriodFrom] = useState('')
@@ -284,22 +291,22 @@ function SalaryPaymentSheet({
   function save() {
     if (!valid) return
     repos.employees.recordSalary(employee.id, employee.name, Number(amount), periodFrom, periodTo, note || null)
-    toast.success(`Recorded ${fmtUZS(Number(amount))} for ${employee.name}`)
+    toast.success(t('employees.recorded', { amount: fmtUZS(Number(amount)), name: employee.name }))
     onRecorded()
   }
 
   return (
-    <Sheet visible onClose={onClose} title={`Pay — ${employee.name}`}>
+    <Sheet visible onClose={onClose} title={t('employees.payTitle', { name: employee.name })}>
       <View style={styles.form}>
-        <Input label="Amount (UZS)" value={amount} onChangeText={setAmount} keyboardType="numeric" autoFocus />
+        <Input label={t('employees.amountUzs')} value={amount} onChangeText={setAmount} keyboardType="numeric" autoFocus />
         <View style={styles.row2}>
-          <Input label="Period from (YYYY-MM-DD)" value={periodFrom} onChangeText={setPeriodFrom} containerStyle={styles.flex1} />
-          <Input label="Period to (YYYY-MM-DD)" value={periodTo} onChangeText={setPeriodTo} containerStyle={styles.flex1} />
+          <Input label={t('employees.periodFrom')} value={periodFrom} onChangeText={setPeriodFrom} containerStyle={styles.flex1} />
+          <Input label={t('employees.periodTo')} value={periodTo} onChangeText={setPeriodTo} containerStyle={styles.flex1} />
         </View>
-        <Input label="Note (optional)" value={note} onChangeText={setNote} />
+        <Input label={t('common.noteOptional')} value={note} onChangeText={setNote} />
         <View style={styles.actions}>
-          <Button title="Cancel" variant="secondary" onPress={onClose} style={styles.flex1} />
-          <Button title="Record" disabled={!valid} onPress={save} style={styles.flex2} />
+          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button title={t('employees.record')} disabled={!valid} onPress={save} style={styles.flex2} />
         </View>
       </View>
     </Sheet>
