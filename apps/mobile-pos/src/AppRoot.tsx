@@ -57,7 +57,7 @@ export default function AppRoot() {
       loadPersistedLanguage(getServices().repos.settings)
       setReady(true)
     } catch (err) {
-      setBootError(err instanceof Error ? err.message : 'Database initialization failed')
+      setBootError(err instanceof Error ? err.message : t('common.dbInitFailed'))
     }
   }, [])
 

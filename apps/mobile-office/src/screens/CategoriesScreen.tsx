@@ -15,6 +15,7 @@ import {
   toast,
   useTheme,
 } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 
@@ -22,6 +23,7 @@ const EMPTY_FORM = { name: '', description: '' }
 
 export function CategoriesScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const [search, setSearch] = useState('')
   const [categories, setCategories] = useState<CategoryRow[]>([])
@@ -44,20 +46,20 @@ export function CategoriesScreen() {
 
   function save() {
     if (!form.name.trim()) {
-      toast.error('Name is required')
+      toast.error(t('common.nameRequired'))
       return
     }
     if (editId) repos.categories.update(editId, form.name, form.description)
     else repos.categories.create(form.name, form.description)
     setShowForm(false)
-    toast.success(editId ? 'Category updated' : 'Category created')
+    toast.success(editId ? t('categories.updated') : t('categories.created'))
     load()
   }
 
   function confirmDelete() {
     if (!deleteTarget) return
     repos.categories.softDelete(deleteTarget.id)
-    toast.success(`${deleteTarget.name} deleted`)
+    toast.success(t('categories.deleted', { name: deleteTarget.name }))
     setDeleteTarget(null)
     load()
   }
@@ -69,12 +71,12 @@ export function CategoriesScreen() {
           value={search}
           onChangeText={setSearch}
           onSubmitEditing={load}
-          placeholder="Search categories…"
+          placeholder={t('categories.searchPlaceholder')}
           returnKeyType="search"
           left={<Icon name="search" size={16} color={theme.textFaint} />}
           containerStyle={styles.searchWrap}
         />
-        <Button title="New" icon="plus" onPress={openCreate} />
+        <Button title={t('common.new')} icon="plus" onPress={openCreate} />
       </View>
 
       <FlatList
@@ -85,7 +87,7 @@ export function CategoriesScreen() {
         renderItem={({ item }) => (
           <ListRow
             title={item.name}
-            subtitle={item.description || `${item.productCount} products`}
+            subtitle={item.description || t('categories.productCount', { count: item.productCount })}
             onPress={() => {
               setEditId(item.id)
               setForm({ name: item.name, description: item.description ?? '' })
@@ -96,7 +98,7 @@ export function CategoriesScreen() {
                 icon="trash"
                 size={20}
                 color={theme.danger}
-                accessibilityLabel={`Delete ${item.name}`}
+                accessibilityLabel={`${t('common.delete')} ${item.name}`}
                 onPress={() => setDeleteTarget(item)}
               />
             }
@@ -105,20 +107,20 @@ export function CategoriesScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="package"
-            title={search ? 'No categories found' : 'No categories yet'}
-            message={search ? 'Try a different search' : 'Group products together to filter and report on them'}
-            action={search ? undefined : { label: 'New category', onPress: openCreate }}
+            title={search ? t('categories.noneFound') : t('categories.noneYet')}
+            message={search ? t('common.tryDifferentSearch') : t('categories.emptyHint')}
+            action={search ? undefined : { label: t('categories.newCategory'), onPress: openCreate }}
           />
         }
       />
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? 'Edit category' : 'New category'}>
+      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? t('categories.editCategory') : t('categories.newCategory')}>
         <View style={styles.form}>
-          <Input label="Name" value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} autoFocus />
-          <Input label="Description (optional)" value={form.description} onChangeText={(v) => setForm((p) => ({ ...p, description: v }))} />
+          <Input label={t('common.name')} value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} autoFocus />
+          <Input label={t('common.descriptionOptional')} value={form.description} onChangeText={(v) => setForm((p) => ({ ...p, description: v }))} />
           <View style={styles.actions}>
-            <Button title="Cancel" variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
-            <Button title="Save" onPress={save} style={styles.flex2} />
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title={t('common.save')} onPress={save} style={styles.flex2} />
           </View>
         </View>
       </Sheet>
@@ -126,15 +128,15 @@ export function CategoriesScreen() {
       <Dialog
         visible={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
-        title="Delete category?"
+        title={t('categories.deleteTitle')}
         message={
           deleteTarget
-            ? `${deleteTarget.name}${deleteTarget.productCount > 0 ? `\n${deleteTarget.productCount} products still use this category.` : ''}`
+            ? `${deleteTarget.name}${deleteTarget.productCount > 0 ? `\n${t('categories.deleteWithProducts', { count: deleteTarget.productCount })}` : ''}`
             : ''
         }
         actions={[
-          { label: 'Cancel', onPress: () => setDeleteTarget(null) },
-          { label: 'Delete', tone: 'danger', onPress: confirmDelete },
+          { label: t('common.cancel'), onPress: () => setDeleteTarget(null) },
+          { label: t('common.delete'), tone: 'danger', onPress: confirmDelete },
         ]}
       />
     </Screen>

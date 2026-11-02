@@ -8,7 +8,7 @@ import { StatusBar } from 'expo-status-bar'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
 import { Icon, SyncStatusBadge, ThemeProvider, ToastProvider, type IconName } from '@baraka/mobile-ui'
 import { useSyncStatus } from '@baraka/mobile-shell'
-import { initI18n, loadPersistedLanguage } from '@baraka/mobile-i18n'
+import { initI18n, loadPersistedLanguage, useTranslation } from '@baraka/mobile-i18n'
 import { openDatabase } from './platform/database'
 import { getServices } from './platform/services'
 import { useAuthStore } from './platform/authStore'
@@ -42,6 +42,7 @@ const MoreStack = createNativeStackNavigator<MoreStackParamList>()
 // The "More" tab's own stack — see navigation.ts. Shares the tab navigator's
 // header styling/sync badge via the same screenOptions as every other tab.
 function MoreTab() {
+  const { t } = useTranslation()
   return (
     <MoreStack.Navigator
       screenOptions={{
@@ -51,16 +52,16 @@ function MoreTab() {
         headerRight: () => <HeaderSyncBadge />,
       }}
     >
-      <MoreStack.Screen name="MoreMenu" component={MoreScreen} options={{ title: 'More' }} />
-      <MoreStack.Screen name="Expenses" component={ExpensesScreen} options={{ title: 'Expenses' }} />
-      <MoreStack.Screen name="Warehouse" component={WarehouseScreen} options={{ title: 'Warehouse' }} />
-      <MoreStack.Screen name="Purchases" component={PurchasesScreen} options={{ title: 'Purchases' }} />
-      <MoreStack.Screen name="Categories" component={CategoriesScreen} options={{ title: 'Categories' }} />
-      <MoreStack.Screen name="Suppliers" component={SuppliersScreen} options={{ title: 'Suppliers' }} />
-      <MoreStack.Screen name="Creditors" component={CreditorsScreen} options={{ title: 'Creditors' }} />
-      <MoreStack.Screen name="Employees" component={EmployeesScreen} options={{ title: 'Employees' }} />
-      <MoreStack.Screen name="Journal" component={JournalScreen} options={{ title: 'Journal' }} />
-      <MoreStack.Screen name="Reports" component={ReportsScreen} options={{ title: 'Reports' }} />
+      <MoreStack.Screen name="MoreMenu" component={MoreScreen} options={{ title: t('nav.moreMenu') }} />
+      <MoreStack.Screen name="Expenses" component={ExpensesScreen} options={{ title: t('nav.expenses') }} />
+      <MoreStack.Screen name="Warehouse" component={WarehouseScreen} options={{ title: t('nav.warehouse') }} />
+      <MoreStack.Screen name="Purchases" component={PurchasesScreen} options={{ title: t('nav.purchases') }} />
+      <MoreStack.Screen name="Categories" component={CategoriesScreen} options={{ title: t('nav.categories') }} />
+      <MoreStack.Screen name="Suppliers" component={SuppliersScreen} options={{ title: t('nav.suppliers') }} />
+      <MoreStack.Screen name="Creditors" component={CreditorsScreen} options={{ title: t('nav.creditors') }} />
+      <MoreStack.Screen name="Employees" component={EmployeesScreen} options={{ title: t('nav.employees') }} />
+      <MoreStack.Screen name="Journal" component={JournalScreen} options={{ title: t('nav.journal') }} />
+      <MoreStack.Screen name="Reports" component={ReportsScreen} options={{ title: t('nav.reports') }} />
     </MoreStack.Navigator>
   )
 }
@@ -95,7 +96,17 @@ const TAB_ICONS: Record<string, IconName> = {
   Settings: 'settings',
 }
 
+const TAB_TITLES: Record<string, string> = {
+  Dashboard: 'nav.dashboard',
+  Products: 'nav.products',
+  Customers: 'nav.customers',
+  Sales: 'nav.sales',
+  More: 'nav.more',
+  Settings: 'nav.settings',
+}
+
 export default function AppRoot() {
+  const { t } = useTranslation()
   const [ready, setReady] = useState(false)
   const [bootError, setBootError] = useState('')
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -106,7 +117,7 @@ export default function AppRoot() {
       loadPersistedLanguage(getServices().repos.settings)
       setReady(true)
     } catch (err) {
-      setBootError(err instanceof Error ? err.message : 'Database initialization failed')
+      setBootError(err instanceof Error ? err.message : t('common.dbInitFailed'))
     }
   }, [])
 
@@ -149,10 +160,12 @@ export default function AppRoot() {
         ) : (
           <Tab.Navigator
             screenOptions={({ route }) => ({
+              title: TAB_TITLES[route.name] ? t(TAB_TITLES[route.name]) : route.name,
               headerStyle: { backgroundColor: colors.surface },
               headerTintColor: colors.text,
               headerTitleStyle: { fontWeight: '700' },
               headerRight: () => <HeaderSyncBadge />,
+              tabBarLabel: TAB_TITLES[route.name] ? t(TAB_TITLES[route.name]) : route.name,
               tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
               tabBarActiveTintColor: colors.primary,
               tabBarInactiveTintColor: colors.textMuted,

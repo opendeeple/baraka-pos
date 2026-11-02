@@ -15,12 +15,29 @@ import {
   toast,
   useTheme,
 } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
 
 const CATEGORIES = ['Rent', 'Utilities', 'Salaries', 'Transport', 'Supplies', 'Repairs', 'Owner', 'Other']
+const CATEGORY_I18N: Record<string, string> = {
+  Rent: 'expenses.categoryRent',
+  Utilities: 'expenses.categoryUtilities',
+  Salaries: 'expenses.categorySalaries',
+  Transport: 'expenses.categoryTransport',
+  Supplies: 'expenses.categorySupplies',
+  Repairs: 'expenses.categoryRepairs',
+  Owner: 'expenses.categoryOwner',
+  Other: 'expenses.categoryOther',
+}
 const PAYMENT_METHODS = ['Cash', 'Card', 'Bank Transfer', 'Mobile Money']
+const PAYMENT_I18N: Record<string, string> = {
+  Cash: 'expenses.paymentCash',
+  Card: 'expenses.paymentCard',
+  'Bank Transfer': 'expenses.paymentBankTransfer',
+  'Mobile Money': 'expenses.paymentMobileMoney',
+}
 const OWNER_CATEGORY = 'Owner'
 
 function monthStart() {
@@ -43,6 +60,7 @@ const EMPTY_FORM: FormState = { category: 'Supplies', description: '', amount: '
 
 export function ExpensesScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos, engine } = getServices()
   const { user, store } = useAuthStore()
   const [expenses, setExpenses] = useState<ExpenseItem[]>([])
@@ -74,7 +92,7 @@ export function ExpensesScreen() {
     engine.flushOutbox().catch(() => {})
     setShowForm(false)
     setForm(EMPTY_FORM)
-    toast.success('Expense saved')
+    toast.success(t('expenses.saved'))
     load()
   }
 
@@ -82,7 +100,7 @@ export function ExpensesScreen() {
   // desktop's handleSaveClick; everything else saves immediately.
   function handleSaveClick() {
     if (!form.description.trim() || !form.amount) {
-      toast.error('Description and amount are required')
+      toast.error(t('expenses.descriptionRequired'))
       return
     }
     if (form.category === OWNER_CATEGORY && ownerPin) {
@@ -98,52 +116,52 @@ export function ExpensesScreen() {
     <Screen padded={false} scroll>
       <View style={styles.header}>
         <View style={styles.flex1}>
-          <Text style={[typeScale.sm, { color: theme.textMuted }]}>This month</Text>
+          <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('expenses.thisMonth')}</Text>
           <Text style={[typeScale.lg, { color: theme.danger, fontWeight: '700' }]}>{fmtUZS(totalExpenses)}</Text>
         </View>
-        <Button title="Add" icon="plus" size="sm" onPress={() => setShowForm(true)} />
+        <Button title={t('expenses.add')} icon="plus" size="sm" onPress={() => setShowForm(true)} />
       </View>
 
       <View style={styles.list}>
         {expenses.length === 0 ? (
-          <EmptyState icon="receipt" title="No expenses this month" message="Rent, utilities, salaries, supplies…" />
+          <EmptyState icon="receipt" title={t('expenses.noneThisMonth')} message={t('more.expensesSubtitle')} />
         ) : (
           expenses.map((e) => (
             <ListRow
               key={e.id}
-              title={e.description || e.category}
-              subtitle={`${e.category} · ${e.expenseDate} · ${e.paymentMethod}`}
+              title={e.description || t(CATEGORY_I18N[e.category] ?? e.category)}
+              subtitle={`${t(CATEGORY_I18N[e.category] ?? e.category)} · ${e.expenseDate} · ${t(PAYMENT_I18N[e.paymentMethod] ?? e.paymentMethod)}`}
               right={<Text style={[typeScale.money, { color: theme.text }]}>{fmtUZS(e.amount)}</Text>}
             />
           ))
         )}
       </View>
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title="New expense">
+      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={t('expenses.newExpense')}>
         <View style={styles.form}>
-          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Category</Text>
+          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('expenses.category')}</Text>
           <View style={styles.chipRow}>
             {CATEGORIES.map((c) => (
-              <Chip key={c} label={c} selected={form.category === c} onPress={() => set('category', c)} />
+              <Chip key={c} label={t(CATEGORY_I18N[c])} selected={form.category === c} onPress={() => set('category', c)} />
             ))}
           </View>
-          <Input label="Description" value={form.description} onChangeText={(v) => set('description', v)} />
+          <Input label={t('common.description')} value={form.description} onChangeText={(v) => set('description', v)} />
           <Input
-            label="Amount"
+            label={t('expenses.amount')}
             value={form.amount}
             onChangeText={(v) => set('amount', v)}
             keyboardType="numeric"
           />
-          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Paid by</Text>
+          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('expenses.paidBy')}</Text>
           <View style={styles.chipRow}>
             {PAYMENT_METHODS.map((m) => (
-              <Chip key={m} label={m} selected={form.paymentMethod === m} onPress={() => set('paymentMethod', m)} />
+              <Chip key={m} label={t(PAYMENT_I18N[m])} selected={form.paymentMethod === m} onPress={() => set('paymentMethod', m)} />
             ))}
           </View>
-          <Input label="Reference (optional)" value={form.reference} onChangeText={(v) => set('reference', v)} />
+          <Input label={t('expenses.referenceOptional')} value={form.reference} onChangeText={(v) => set('reference', v)} />
           <View style={styles.actions}>
-            <Button title="Cancel" variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
-            <Button title="Save" onPress={handleSaveClick} style={styles.flex2} />
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title={t('common.save')} onPress={handleSaveClick} style={styles.flex2} />
           </View>
         </View>
       </Sheet>
@@ -151,7 +169,7 @@ export function ExpensesScreen() {
       <PinConfirmModal
         visible={pendingSave}
         expectedPin={ownerPin}
-        title="Owner PIN required"
+        title={t('expenses.ownerPinRequired')}
         onClose={() => setPendingSave(false)}
         onConfirmed={() => { setPendingSave(false); saveExpense() }}
       />
