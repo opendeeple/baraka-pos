@@ -3,16 +3,42 @@ import { FlatList, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { JOURNAL_ATTENTION, type JournalEntry, type JournalGroup } from '@baraka/data'
 import { Chip, EmptyState, Input, ListRow, Screen, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 
 const GROUPS: JournalGroup[] = ['all', 'sales', 'stock', 'money', 'products', 'system']
-const PERIODS: Array<{ label: string; value: number | 'all' }> = [
-  { label: 'Today', value: 1 },
-  { label: 'Last 7 days', value: 7 },
-  { label: 'Last 30 days', value: 30 },
-  { label: 'All time', value: 'all' },
+const GROUP_I18N: Record<JournalGroup, string> = {
+  all: 'journal.groupAll', sales: 'journal.groupSales', stock: 'journal.groupStock',
+  money: 'journal.groupMoney', products: 'journal.groupProducts', system: 'journal.groupSystem',
+}
+const PERIODS: Array<{ i18nKey: string; value: number | 'all' }> = [
+  { i18nKey: 'journal.today', value: 1 },
+  { i18nKey: 'journal.last7', value: 7 },
+  { i18nKey: 'journal.last30', value: 30 },
+  { i18nKey: 'journal.allTime', value: 'all' },
 ]
+const ACTION_I18N: Record<string, string> = {
+  sale_void: 'journal.actionSaleVoid',
+  sale_return: 'journal.actionSaleReturn',
+  stock_receive: 'journal.actionStockReceive',
+  stock_transfer: 'journal.actionStockTransfer',
+  stocktake: 'journal.actionStocktake',
+  writeoff: 'journal.actionWriteoff',
+  purchase_order: 'journal.actionPurchaseOrder',
+  purchase_receive: 'journal.actionPurchaseReceive',
+  supplier_payment: 'journal.actionSupplierPayment',
+  price_change: 'journal.actionPriceChange',
+  product_create: 'journal.actionProductCreate',
+  product_delete: 'journal.actionProductDelete',
+  expense: 'journal.actionExpense',
+  debt_payment: 'journal.actionDebtPayment',
+  debt_clear: 'journal.actionDebtClear',
+  contact_delete: 'journal.actionContactDelete',
+  debt_reminder: 'journal.actionDebtReminder',
+  shift_close: 'journal.actionShiftClose',
+  settings_change: 'journal.actionSettingsChange',
+}
 
 const money = (v: unknown) => `UZS ${Math.round(Number(v) || 0).toLocaleString('en-US')}`
 const place = (loc: unknown) => (loc === 'warehouse' ? 'warehouse' : 'shop')
@@ -66,6 +92,7 @@ function describe(e: JournalEntry, d: Record<string, any>): string {
 
 export function JournalScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const [group, setGroup] = useState<JournalGroup>('all')
   const [period, setPeriod] = useState<number | 'all'>(7)
@@ -90,19 +117,19 @@ export function JournalScreen() {
       <View style={styles.filterArea}>
         <View style={styles.chipRow}>
           {GROUPS.map((g) => (
-            <Chip key={g} label={g} selected={group === g} onPress={() => setGroup(g)} />
+            <Chip key={g} label={t(GROUP_I18N[g])} selected={group === g} onPress={() => setGroup(g)} />
           ))}
         </View>
         <View style={styles.chipRow}>
           {PERIODS.map((p) => (
-            <Chip key={String(p.value)} label={p.label} selected={period === p.value} onPress={() => setPeriod(p.value)} />
+            <Chip key={String(p.value)} label={t(p.i18nKey)} selected={period === p.value} onPress={() => setPeriod(p.value)} />
           ))}
         </View>
         <Input
           value={search}
           onChangeText={setSearch}
           onSubmitEditing={load}
-          placeholder="Search…"
+          placeholder={t('journal.searchPlaceholder')}
           returnKeyType="search"
         />
       </View>
@@ -113,7 +140,7 @@ export function JournalScreen() {
         contentContainerStyle={styles.list}
         renderItem={({ item: { e, text, attention } }) => (
           <ListRow
-            title={e.action}
+            title={ACTION_I18N[e.action] ? t(ACTION_I18N[e.action]) : e.action}
             subtitle={`${String(e.occurredAt).slice(0, 16).replace('T', ' ')} · ${e.userName ?? '—'}`}
             right={
               <Text style={[typeScale.sm, { color: attention ? theme.danger : theme.textMuted, maxWidth: 160, textAlign: 'right' }]} numberOfLines={3}>
@@ -122,7 +149,7 @@ export function JournalScreen() {
             }
           />
         )}
-        ListEmptyComponent={<EmptyState icon="history" title="No journal entries" message="Voids, write-offs, price changes and more show up here" />}
+        ListEmptyComponent={<EmptyState icon="history" title={t('journal.empty')} message={t('journal.emptyHint')} />}
       />
     </Screen>
   )

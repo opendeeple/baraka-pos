@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { DeadStockRow, LossRow, ProductSalesRow } from '@baraka/data'
 import { Badge, Chip, Screen, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 
@@ -16,13 +17,20 @@ function daysAgoYmd(n: number): string {
   return new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10)
 }
 
-const RANGE_PRESETS: Array<{ label: string; days: number }> = [
-  { label: '7 days', days: 7 },
-  { label: '30 days', days: 30 },
-  { label: '90 days', days: 90 },
+const RANGE_PRESETS: Array<{ i18nKey: string; days: number }> = [
+  { i18nKey: 'reports.days7', days: 7 },
+  { i18nKey: 'reports.days30', days: 30 },
+  { i18nKey: 'reports.days90', days: 90 },
 ]
 const DEAD_STOCK_PRESETS = [30, 60, 90]
 const ABC_TONE: Record<AbcClass, 'success' | 'warning' | 'neutral'> = { A: 'success', B: 'warning', C: 'neutral' }
+const WRITEOFF_REASON_I18N: Record<string, string> = {
+  damaged: 'warehouse.writeOffReasonDamaged',
+  expired: 'warehouse.writeOffReasonExpired',
+  lost: 'warehouse.writeOffReasonLost',
+  internal: 'warehouse.writeOffReasonInternal',
+  other: 'warehouse.writeOffReasonOther',
+}
 
 /**
  * Local-data product analysis — ABC classification, dead stock, and
@@ -36,6 +44,7 @@ const ABC_TONE: Record<AbcClass, 'success' | 'warning' | 'neutral'> = { A: 'succ
  */
 export function ReportsScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const [rangeDays, setRangeDays] = useState(30)
   const [deadDays, setDeadDays] = useState(30)
@@ -80,12 +89,12 @@ export function ReportsScreen() {
     <Screen scroll>
       <View style={styles.chipRow}>
         {RANGE_PRESETS.map((p) => (
-          <Chip key={p.days} label={p.label} selected={rangeDays === p.days} onPress={() => setRangeDays(p.days)} />
+          <Chip key={p.days} label={t(p.i18nKey)} selected={rangeDays === p.days} onPress={() => setRangeDays(p.days)} />
         ))}
       </View>
 
-      <Text style={[typeScale.lg, { color: theme.text, fontWeight: '700' }, styles.sectionTitle]}>ABC analysis</Text>
-      <Text style={[typeScale.sm, { color: theme.textMuted }]}>Which products bring 80% of revenue (A), the next 15% (B), the rest (C).</Text>
+      <Text style={[typeScale.lg, { color: theme.text, fontWeight: '700' }, styles.sectionTitle]}>{t('reports.abcTitle')}</Text>
+      <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('reports.abcHint')}</Text>
       <View style={styles.abcRow}>
         {abc.summary.map((s) => (
           <Pressable
@@ -100,12 +109,12 @@ export function ReportsScreen() {
           >
             <Badge label={`${s.cls} · ${s.count}`} tone={ABC_TONE[s.cls]} />
             <Text style={[typeScale.sm, { color: theme.text, fontWeight: '700' }]}>{fmtUZS(s.revenue)}</Text>
-            <Text style={[typeScale.xs, { color: theme.success }]}>profit {fmtUZS(s.profit)}</Text>
+            <Text style={[typeScale.xs, { color: theme.success }]}>{t('reports.profit', { amount: fmtUZS(s.profit) })}</Text>
           </Pressable>
         ))}
       </View>
       {shown.length === 0 ? (
-        <Text style={[typeScale.sm, { color: theme.textFaint }]}>No sales in this range</Text>
+        <Text style={[typeScale.sm, { color: theme.textFaint }]}>{t('reports.noSalesRange')}</Text>
       ) : (
         shown.slice(0, 50).map((r) => (
           <View key={r.productId} style={[styles.rowItem, { borderColor: theme.border }]}>
@@ -114,7 +123,7 @@ export function ReportsScreen() {
                 <Badge label={r.cls} tone={ABC_TONE[r.cls]} />
                 <Text style={[typeScale.sm, { color: theme.text, flex: 1, marginLeft: spacing.sm }]} numberOfLines={1}>{r.name}</Text>
               </View>
-              <Text style={[typeScale.xs, { color: theme.textFaint }]}>sold {Math.round(r.qty * 1000) / 1000} · {r.pct.toFixed(1)}%</Text>
+              <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('reports.sold', { qty: Math.round(r.qty * 1000) / 1000, pct: r.pct.toFixed(1) })}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={[typeScale.sm, { color: theme.text, fontWeight: '700' }]}>{fmtUZS(r.revenue)}</Text>
@@ -124,24 +133,24 @@ export function ReportsScreen() {
         ))
       )}
 
-      <Text style={[typeScale.lg, { color: theme.text, fontWeight: '700' }, styles.sectionTitle]}>Dead stock</Text>
-      <Text style={[typeScale.sm, { color: theme.textMuted }]}>On the shelf, hasn't sold in a while — money frozen there.</Text>
+      <Text style={[typeScale.lg, { color: theme.text, fontWeight: '700' }, styles.sectionTitle]}>{t('reports.deadStockTitle')}</Text>
+      <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('reports.deadStockHint')}</Text>
       <View style={styles.chipRow}>
         {DEAD_STOCK_PRESETS.map((d) => (
-          <Chip key={d} label={`${d} days`} selected={deadDays === d} onPress={() => setDeadDays(d)} />
+          <Chip key={d} label={t(`reports.days${d}`)} selected={deadDays === d} onPress={() => setDeadDays(d)} />
         ))}
       </View>
       <Text style={[typeScale.sm, { color: theme.textMuted }]}>
-        Frozen: <Text style={{ color: theme.warning, fontWeight: '700' }}>{fmtUZS(deadValue)}</Text> · {dead.length} product(s)
+        {t('reports.frozen', { amount: fmtUZS(deadValue), count: dead.length })}
       </Text>
       {dead.length === 0 ? (
-        <Text style={[typeScale.sm, { color: theme.textFaint }]}>Nothing frozen</Text>
+        <Text style={[typeScale.sm, { color: theme.textFaint }]}>{t('reports.nothingFrozen')}</Text>
       ) : (
         dead.slice(0, 30).map((r) => (
           <View key={r.productId} style={[styles.rowItem, { borderColor: theme.border }]}>
             <View style={styles.flex1}>
               <Text style={[typeScale.sm, { color: theme.text }]} numberOfLines={1}>{r.name}</Text>
-              <Text style={[typeScale.xs, { color: theme.textFaint }]}>{r.lastSold ? `Last sold ${r.lastSold}` : 'Never sold'}</Text>
+              <Text style={[typeScale.xs, { color: theme.textFaint }]}>{r.lastSold ? t('reports.lastSold', { date: r.lastSold }) : t('reports.neverSold')}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={[typeScale.sm, { color: theme.text }]}>{r.stock}</Text>
@@ -151,25 +160,25 @@ export function ReportsScreen() {
         ))
       )}
 
-      <Text style={[typeScale.lg, { color: theme.text, fontWeight: '700' }, styles.sectionTitle]}>Losses</Text>
+      <Text style={[typeScale.lg, { color: theme.text, fontWeight: '700' }, styles.sectionTitle]}>{t('reports.lossesTitle')}</Text>
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
-          <Text style={[typeScale.xs, { color: theme.textFaint }]}>Write-offs</Text>
+          <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('reports.writeOffs')}</Text>
           <Text style={[typeScale.md, { color: theme.danger, fontWeight: '700' }]}>{fmtUZS(writeoffTotal)}</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={[typeScale.xs, { color: theme.textFaint }]}>Stocktake net ({losses.stocktakeCount})</Text>
+          <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('reports.stocktakeNet', { count: losses.stocktakeCount })}</Text>
           <Text style={[typeScale.md, { color: losses.stocktakeSurplus - losses.stocktakeShortage >= 0 ? theme.success : theme.danger, fontWeight: '700' }]}>
             {fmtUZS(losses.stocktakeSurplus - losses.stocktakeShortage)}
           </Text>
         </View>
       </View>
       {losses.byReason.length === 0 ? (
-        <Text style={[typeScale.sm, { color: theme.textFaint }]}>No write-offs in this range</Text>
+        <Text style={[typeScale.sm, { color: theme.textFaint }]}>{t('reports.noWriteOffs')}</Text>
       ) : (
         losses.byReason.map((l) => (
           <View key={l.reason} style={styles.rowBetween}>
-            <Text style={[typeScale.sm, { color: theme.textMuted }]}>{l.reason} ×{l.count}</Text>
+            <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t(WRITEOFF_REASON_I18N[l.reason] ?? l.reason)} ×{l.count}</Text>
             <Text style={[typeScale.sm, { color: theme.danger, fontWeight: '700' }]}>{fmtUZS(l.value)}</Text>
           </View>
         ))
