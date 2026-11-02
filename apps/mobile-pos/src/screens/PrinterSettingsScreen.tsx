@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { StyleSheet, View } from 'react-native'
-import { Button, Card, Chip, Input, Row, Screen, toast } from '@baraka/mobile-ui'
-import { spacing } from '@baraka/ui-tokens'
+import { StyleSheet, Text, View } from 'react-native'
+import { Button, Card, Chip, Input, Row, Screen, toast, useTheme } from '@baraka/mobile-ui'
+import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { probePrinter, printReceipt, type PrinterConfig } from '../printing'
 import { useAuthStore } from '../platform/authStore'
@@ -11,6 +11,7 @@ const TYPES: Array<{ value: PrinterConfig['type']; label: string }> = [
   { value: 'network', label: 'Network (ESC/POS)' },
   { value: 'bluetooth', label: 'Bluetooth' },
   { value: 'sunmi', label: 'Sunmi built-in' },
+  { value: 'system', label: 'System print / Save PDF' },
 ]
 
 const WIDTHS: Array<32 | 48> = [32, 48]
@@ -18,6 +19,7 @@ const WIDTHS: Array<32 | 48> = [32, 48]
 /** Receipt-printer setup — before this screen, printing was configured
  * nowhere and therefore unreachable for end users. */
 export function PrinterSettingsScreen() {
+  const theme = useTheme()
   const { repos } = getServices()
   const store = useAuthStore((s) => s.store)
   const saved = repos.settings.getJson<PrinterConfig>('printer_config')
@@ -97,6 +99,16 @@ export function PrinterSettingsScreen() {
           />
           <Input label="Port" value={port} onChangeText={setPort} keyboardType="numeric" helperText="9100 for most ESC/POS printers" />
         </View>
+      )}
+
+      {type === 'system' && (
+        <Text style={[typeScale.sm, { color: theme.textMuted, marginTop: spacing.md }]}>
+          Opens Android's own print dialog after every sale — pick any
+          printer app already on the phone (a Bluetooth/USB printer's own
+          app included, if it has one) or save the receipt as a PDF. A
+          receipt's "Print" and "Save PDF" buttons work this way regardless
+          of what's set here.
+        </Text>
       )}
 
       {type !== 'none' && (

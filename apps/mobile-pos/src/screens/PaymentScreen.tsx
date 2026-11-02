@@ -22,7 +22,7 @@ import { radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
 import { CustomerPickerModal } from '../components/CustomerPickerModal'
-import { printReceipt, type PrinterConfig } from '../printing'
+import { printReceipt, printViaSystemDialog, shareReceiptPdf, type PrinterConfig } from '../printing'
 import type { RootStackParamList } from '../navigation'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Payment'>
@@ -55,6 +55,7 @@ export function PaymentScreen({ navigation }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [largeAmount, setLargeAmount] = useState<number | null>(null)
   const [receipt, setReceipt] = useState<{ doc: ReceiptDoc; change: number } | null>(null)
+  const [receiptBusy, setReceiptBusy] = useState<'print' | 'pdf' | null>(null)
 
   const hasDebt = payments.some((p) => p.paymentMethod === 'Debt') || method === 'Debt'
 
@@ -140,6 +141,36 @@ export function PaymentScreen({ navigation }: Props) {
       toast.error(err instanceof Error ? err.message : 'Payment failed — please retry')
     } finally {
       setProcessing(false)
+    }
+  }
+
+  // Manual fallback independent of printer_config — useful on its own when
+  // no network/Bluetooth printer is set up, and always available even when
+  // one is: Android's system print dialog lists every print-capable app on
+  // the phone (a thermal printer's own vendor app included, if it registers
+  // as a print service), so this works without BarakaPOS needing its own
+  // driver for whatever printer the shop actually has.
+  async function printNow() {
+    if (!receipt || receiptBusy) return
+    setReceiptBusy('print')
+    try {
+      await printViaSystemDialog(receipt.doc)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Print failed')
+    } finally {
+      setReceiptBusy(null)
+    }
+  }
+
+  async function sharePdf() {
+    if (!receipt || receiptBusy) return
+    setReceiptBusy('pdf')
+    try {
+      await shareReceiptPdf(receipt.doc)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not create the PDF')
+    } finally {
+      setReceiptBusy(null)
     }
   }
 
@@ -286,6 +317,26 @@ export function PaymentScreen({ navigation }: Props) {
                 {renderReceiptText(receipt.doc, 32)}
               </Text>
             </View>
+            <View style={styles.receiptActions}>
+              <Button
+                title="Print"
+                variant="secondary"
+                icon="printer"
+                loading={receiptBusy === 'print'}
+                disabled={receiptBusy !== null && receiptBusy !== 'print'}
+                onPress={printNow}
+                style={styles.flex1}
+              />
+              <Button
+                title="Save PDF"
+                variant="secondary"
+                icon="send"
+                loading={receiptBusy === 'pdf'}
+                disabled={receiptBusy !== null && receiptBusy !== 'pdf'}
+                onPress={sharePdf}
+                style={styles.flex1}
+              />
+            </View>
             <Button
               title="Done"
               size="lg"
@@ -320,6 +371,7 @@ const styles = StyleSheet.create({
   paymentRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   completeBtn: { marginTop: spacing.xl },
   changeCard: { marginBottom: spacing.sm },
+  receiptActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
   receiptBox: { borderWidth: 1, borderRadius: radius.md, padding: spacing.md },
   receiptText: { fontFamily: 'monospace', fontSize: 11, lineHeight: 16 },
   doneBtn: { marginTop: spacing.md },

@@ -1,7 +1,7 @@
 import type { ReceiptDoc } from '@baraka/app-core'
 
 export interface PrinterConfig {
-  type: 'network' | 'bluetooth' | 'sunmi' | 'none'
+  type: 'network' | 'bluetooth' | 'sunmi' | 'system' | 'none'
   /** network: printer IP; bluetooth: bonded MAC address */
   address?: string
   port?: number
