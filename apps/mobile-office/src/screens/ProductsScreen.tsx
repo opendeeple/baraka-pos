@@ -18,6 +18,7 @@ import {
   toast,
   useTheme,
 } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 
@@ -38,6 +39,7 @@ const EMPTY_FORM: FormState = {
 
 export function ProductsScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos, engine } = getServices()
   const [search, setSearch] = useState('')
   const [products, setProducts] = useState<ProductListItem[]>([])
@@ -79,7 +81,7 @@ export function ProductsScreen() {
 
   function save() {
     if (!form.name.trim() || !form.price) {
-      toast.error('Name and price are required')
+      toast.error(t('products.nameAndPriceRequired'))
       return
     }
     const input = {
@@ -96,7 +98,7 @@ export function ProductsScreen() {
     else repos.products.create(input)
     engine.flushOutbox().catch(() => {})
     setShowForm(false)
-    toast.success(editId ? 'Product updated' : 'Product created')
+    toast.success(editId ? t('products.updated') : t('products.created'))
     load()
   }
 
@@ -116,7 +118,7 @@ export function ProductsScreen() {
       setEditId(null)
       setForm({ ...EMPTY_FORM, barcode })
       setShowForm(true)
-      toast.info('No product with this barcode yet — fill in the rest and save')
+      toast.info(t('products.noBarcodeMatchYet'))
     }
   }
 
@@ -127,13 +129,13 @@ export function ProductsScreen() {
           value={search}
           onChangeText={setSearch}
           onSubmitEditing={load}
-          placeholder="Search products…"
+          placeholder={t('products.searchPlaceholder')}
           returnKeyType="search"
           left={<Icon name="search" size={16} color={theme.textFaint} />}
           containerStyle={styles.searchWrap}
         />
-        <IconButton icon="scan" accessibilityLabel="Scan barcode" onPress={() => setScanMode('lookup')} />
-        <Button title="New" icon="plus" size="md" onPress={openCreate} />
+        <IconButton icon="scan" accessibilityLabel={t('products.scanBarcode')} onPress={() => setScanMode('lookup')} />
+        <Button title={t('common.new')} icon="plus" size="md" onPress={openCreate} />
       </View>
 
       <FlatList
@@ -144,12 +146,12 @@ export function ProductsScreen() {
         renderItem={({ item }) => (
           <ListRow
             title={item.name}
-            subtitle={`${item.barcode ?? item.sku ?? '—'} · ${item.isStockManaged ? `stock ${item.stock}` : 'unmanaged'}`}
+            subtitle={`${item.barcode ?? item.sku ?? '—'} · ${item.isStockManaged ? t('products.stock', { count: item.stock }) : t('products.unmanaged')}`}
             onPress={() => openEdit(item)}
             right={
               <View style={styles.rowRight}>
                 {item.isStockManaged && item.alertQuantity > 0 && item.stock <= item.alertQuantity ? (
-                  <Badge label="Low" tone="warning" />
+                  <Badge label={t('products.low')} tone="warning" />
                 ) : null}
                 <Text style={[typeScale.money, { color: theme.primary }]}>{fmtUZS(item.price)}</Text>
               </View>
@@ -159,26 +161,26 @@ export function ProductsScreen() {
         ListEmptyComponent={
           <EmptyState
             icon="package"
-            title={search ? 'No products found' : 'No products yet'}
-            message={search ? 'Try a different search' : 'Create your first product to start selling'}
-            action={search ? undefined : { label: 'New product', onPress: openCreate }}
+            title={search ? t('products.noneFound') : t('products.noneYet')}
+            message={search ? t('common.tryDifferentSearch') : t('products.emptyHint')}
+            action={search ? undefined : { label: t('products.newProduct'), onPress: openCreate }}
           />
         }
       />
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? 'Edit product' : 'New product'}>
+      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? t('products.editProduct') : t('products.newProduct')}>
         <View style={styles.form}>
-          <Input label="Name" value={form.name} onChangeText={(v) => set('name', v)} />
+          <Input label={t('common.name')} value={form.name} onChangeText={(v) => set('name', v)} />
           <View style={styles.row2}>
             <Input
-              label="Price"
+              label={t('pos.priceLabel')}
               value={form.price}
               onChangeText={(v) => set('price', v)}
               keyboardType="numeric"
               containerStyle={styles.flex1}
             />
             <Input
-              label="Cost"
+              label={t('pos.costLabel')}
               value={form.cost}
               onChangeText={(v) => set('cost', v)}
               keyboardType="numeric"
@@ -187,24 +189,24 @@ export function ProductsScreen() {
           </View>
           <View style={styles.row2}>
             <Input
-              label="Barcode"
+              label={t('pos.barcode')}
               value={form.barcode}
               onChangeText={(v) => set('barcode', v)}
               right={
                 <IconButton
                   icon="scan"
                   size={20}
-                  accessibilityLabel="Scan barcode"
+                  accessibilityLabel={t('products.scanBarcode')}
                   onPress={() => setScanMode('fill')}
                 />
               }
               containerStyle={styles.flex1}
             />
-            <Input label="SKU" value={form.sku} onChangeText={(v) => set('sku', v)} containerStyle={styles.flex1} />
+            <Input label={t('products.sku')} value={form.sku} onChangeText={(v) => set('sku', v)} containerStyle={styles.flex1} />
           </View>
-          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Category</Text>
+          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('products.category')}</Text>
           <View style={styles.chipRow}>
-            <Chip label="None" selected={form.categoryId === null} onPress={() => setForm((p) => ({ ...p, categoryId: null }))} />
+            <Chip label={t('products.none')} selected={form.categoryId === null} onPress={() => setForm((p) => ({ ...p, categoryId: null }))} />
             {categories.map((c) => (
               <Chip
                 key={c.id}
@@ -216,15 +218,15 @@ export function ProductsScreen() {
           </View>
           <View style={styles.row2}>
             <Input
-              label="Low-stock alert at"
+              label={t('products.lowStockAlertAt')}
               value={form.alertQuantity}
               onChangeText={(v) => set('alertQuantity', v)}
               keyboardType="numeric"
-              helperText="0 disables the low-stock warning"
+              helperText={t('products.lowStockAlertHint')}
               containerStyle={styles.flex1}
             />
             <View style={[styles.flex1, styles.switchCol]}>
-              <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>Track stock</Text>
+              <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('products.trackStock')}</Text>
               <Switch
                 value={form.isStockManaged}
                 onValueChange={(v) => set('isStockManaged', v)}
@@ -233,8 +235,8 @@ export function ProductsScreen() {
             </View>
           </View>
           <View style={styles.actions}>
-            <Button title="Cancel" variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
-            <Button title="Save" onPress={save} style={styles.flex2} />
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title={t('common.save')} onPress={save} style={styles.flex2} />
           </View>
         </View>
       </Sheet>

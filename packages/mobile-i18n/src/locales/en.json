@@ -92,6 +92,43 @@
     "paymentBankTransfer": "Bank Transfer",
     "paymentMobileMoney": "Mobile Money"
   },
+  "dashboard": {
+    "today": "Today",
+    "sales": "Sales",
+    "revenue": "Revenue",
+    "discounts": "Discounts",
+    "avgSale": "Avg sale",
+    "byPaymentMethod": "By payment method",
+    "noSalesToday": "No sales yet today",
+    "topProducts": "Top products (7 days)",
+    "noSalesWeek": "No sales in the last week",
+    "lowStock": "Low stock",
+    "allStockedUp": "All stocked up",
+    "sold": "{{count}} sold",
+    "left": "{{count}} left"
+  },
+  "products": {
+    "searchPlaceholder": "Search products…",
+    "scanBarcode": "Scan barcode",
+    "nameAndPriceRequired": "Name and price are required",
+    "updated": "Product updated",
+    "created": "Product created",
+    "noneFound": "No products found",
+    "noneYet": "No products yet",
+    "emptyHint": "Create your first product to start selling",
+    "newProduct": "New product",
+    "editProduct": "Edit product",
+    "low": "Low",
+    "stock": "stock {{count}}",
+    "unmanaged": "unmanaged",
+    "category": "Category",
+    "none": "None",
+    "lowStockAlertAt": "Low-stock alert at",
+    "lowStockAlertHint": "0 disables the low-stock warning",
+    "trackStock": "Track stock",
+    "sku": "SKU",
+    "noBarcodeMatchYet": "No product with this barcode yet — fill in the rest and save"
+  },
   "more": {
     "expensesSubtitle": "Rent, utilities, salaries, supplies…",
     "warehouseSubtitle": "Receive deliveries, transfer stock to the shop",
@@ -184,7 +221,8 @@
     "refundAlreadyDone": "This sale was already refunded or is not refundable",
     "refundSuccess": "Refunded {{invoice}} — {{amount}}",
     "refundFailed": "Refund failed — please retry",
-    "ownerPinForRefund": "Owner PIN required to refund"
+    "ownerPinForRefund": "Owner PIN required to refund",
+    "noSalesOfficeHint": "Completed sales appear here as they sync"
   },
   "pos": {
     "searchPlaceholder": "Search or scan barcode…",

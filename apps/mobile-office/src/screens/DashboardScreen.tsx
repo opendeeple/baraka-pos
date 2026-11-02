@@ -5,6 +5,7 @@ import { fmtUZS } from '@baraka/app-core'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
 import { useSyncSocket } from '@baraka/mobile-shell'
 import { Badge, Card, EmptyState, KpiTile, Row, SectionHeader, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 
@@ -22,6 +23,7 @@ function pctDelta(current: number, previous: number): number | null {
 
 export function DashboardScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos, engine } = getServices()
   const [refreshing, setRefreshing] = useState(false)
   const [summary, setSummary] = useState(() => repos.reports.dailySummary(today()))
@@ -64,42 +66,42 @@ export function DashboardScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.primary} />}
     >
-      <SectionHeader title="Today" />
+      <SectionHeader title={t('dashboard.today')} />
       <View style={styles.tiles}>
         <KpiTile
-          label="Sales"
+          label={t('dashboard.sales')}
           value={String(summary.salesCount)}
           deltaPct={pctDelta(summary.salesCount, yesterday?.salesCount ?? 0)}
           sparkline={salesSpark}
         />
         <KpiTile
-          label="Revenue"
+          label={t('dashboard.revenue')}
           value={fmtUZS(summary.grossSales)}
           deltaPct={pctDelta(summary.grossSales, yesterday?.revenue ?? 0)}
           sparkline={revenueSpark}
         />
       </View>
       <View style={[styles.tiles, styles.tilesGap]}>
-        <KpiTile label="Discounts" value={fmtUZS(summary.discounts)} />
+        <KpiTile label={t('dashboard.discounts')} value={fmtUZS(summary.discounts)} />
         <KpiTile
-          label="Avg sale"
+          label={t('dashboard.avgSale')}
           value={summary.salesCount ? fmtUZS(summary.grossSales / summary.salesCount) : '—'}
         />
       </View>
 
-      <SectionHeader title="By payment method" />
+      <SectionHeader title={t('dashboard.byPaymentMethod')} />
       <Card>
         {summary.byMethod.length === 0 ? (
-          <Text style={[typeScale.sm, { color: theme.textFaint }]}>No sales yet today</Text>
+          <Text style={[typeScale.sm, { color: theme.textFaint }]}>{t('dashboard.noSalesToday')}</Text>
         ) : (
           summary.byMethod.map((m) => <Row key={m.paymentMethod} label={m.paymentMethod} value={fmtUZS(m.total)} />)
         )}
       </Card>
 
-      <SectionHeader title="Top products (7 days)" />
+      <SectionHeader title={t('dashboard.topProducts')} />
       {top.length === 0 ? (
         <Card>
-          <EmptyState icon="barChart" title="No sales in the last week" />
+          <EmptyState icon="barChart" title={t('dashboard.noSalesWeek')} />
         </Card>
       ) : (
         <Card>
@@ -109,7 +111,7 @@ export function DashboardScreen() {
                 <Text style={[typeScale.md, { color: theme.text, fontWeight: '600' }]} numberOfLines={1}>
                   {p.name}
                 </Text>
-                <Text style={[typeScale.xs, { color: theme.textFaint }]}>{p.quantity} sold</Text>
+                <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('dashboard.sold', { count: p.quantity })}</Text>
               </View>
               <Text style={[typeScale.money, { color: theme.text }]}>{fmtUZS(p.revenue)}</Text>
             </View>
@@ -117,11 +119,11 @@ export function DashboardScreen() {
         </Card>
       )}
 
-      <SectionHeader title="Low stock" />
+      <SectionHeader title={t('dashboard.lowStock')} />
       {low.length === 0 ? (
         <Card>
           <View style={styles.stockedUp}>
-            <Badge label="All stocked up" tone="success" />
+            <Badge label={t('dashboard.allStockedUp')} tone="success" />
           </View>
         </Card>
       ) : (
@@ -131,7 +133,7 @@ export function DashboardScreen() {
               <Text style={[typeScale.md, styles.topLeft, { color: theme.text, fontWeight: '600' }]} numberOfLines={1}>
                 {p.name}
               </Text>
-              <Badge label={`${p.stock} left`} tone={p.stock <= 0 ? 'danger' : 'warning'} />
+              <Badge label={t('dashboard.left', { count: p.stock })} tone={p.stock <= 0 ? 'danger' : 'warning'} />
             </View>
           ))}
         </Card>

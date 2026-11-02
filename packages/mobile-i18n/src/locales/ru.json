@@ -92,6 +92,43 @@
     "paymentBankTransfer": "Банковский перевод",
     "paymentMobileMoney": "Мобильный платёж"
   },
+  "dashboard": {
+    "today": "Сегодня",
+    "sales": "Продажи",
+    "revenue": "Выручка",
+    "discounts": "Скидки",
+    "avgSale": "Средний чек",
+    "byPaymentMethod": "По способу оплаты",
+    "noSalesToday": "Сегодня продаж пока нет",
+    "topProducts": "Топ товаров (7 дней)",
+    "noSalesWeek": "За последнюю неделю продаж нет",
+    "lowStock": "Мало на складе",
+    "allStockedUp": "Всё в достатке",
+    "sold": "продано {{count}}",
+    "left": "осталось {{count}}"
+  },
+  "products": {
+    "searchPlaceholder": "Поиск товаров…",
+    "scanBarcode": "Сканировать штрих-код",
+    "nameAndPriceRequired": "Укажите название и цену",
+    "updated": "Товар обновлён",
+    "created": "Товар создан",
+    "noneFound": "Товары не найдены",
+    "noneYet": "Товаров пока нет",
+    "emptyHint": "Создайте первый товар, чтобы начать продавать",
+    "newProduct": "Новый товар",
+    "editProduct": "Редактировать товар",
+    "low": "Мало",
+    "stock": "остаток {{count}}",
+    "unmanaged": "без учёта",
+    "category": "Категория",
+    "none": "Нет",
+    "lowStockAlertAt": "Предупреждать при остатке",
+    "lowStockAlertHint": "0 отключает предупреждение о низком остатке",
+    "trackStock": "Учитывать остаток",
+    "sku": "Артикул",
+    "noBarcodeMatchYet": "Товар с этим штрих-кодом не найден — заполните остальное и сохраните"
+  },
   "more": {
     "expensesSubtitle": "Аренда, коммунальные, зарплата, снабжение…",
     "warehouseSubtitle": "Приём поставок, перемещение в магазин",
@@ -184,7 +221,8 @@
     "refundAlreadyDone": "Эта продажа уже возвращена или возврат недоступен",
     "refundSuccess": "Возврат {{invoice}} — {{amount}}",
     "refundFailed": "Возврат не удался — попробуйте ещё раз",
-    "ownerPinForRefund": "Для возврата нужен PIN владельца"
+    "ownerPinForRefund": "Для возврата нужен PIN владельца",
+    "noSalesOfficeHint": "Завершённые продажи появятся здесь после синхронизации"
   },
   "pos": {
     "searchPlaceholder": "Поиск или сканирование штрих-кода…",

@@ -92,6 +92,43 @@
     "paymentBankTransfer": "Bank o'tkazmasi",
     "paymentMobileMoney": "Mobil to'lov"
   },
+  "dashboard": {
+    "today": "Bugun",
+    "sales": "Sotuvlar",
+    "revenue": "Tushum",
+    "discounts": "Chegirmalar",
+    "avgSale": "O'rtacha sotuv",
+    "byPaymentMethod": "To'lov turi bo'yicha",
+    "noSalesToday": "Bugun hali sotuv bo'lmagan",
+    "topProducts": "Eng ko'p sotilganlar (7 kun)",
+    "noSalesWeek": "Oxirgi haftada sotuv bo'lmagan",
+    "lowStock": "Kam qolgan",
+    "allStockedUp": "Hammasi yetarli",
+    "sold": "{{count}} sotildi",
+    "left": "{{count}} qoldi"
+  },
+  "products": {
+    "searchPlaceholder": "Mahsulotlarni qidirish…",
+    "scanBarcode": "Shtrix-kodni skanerlash",
+    "nameAndPriceRequired": "Nomi va narxi kiritilishi shart",
+    "updated": "Mahsulot yangilandi",
+    "created": "Mahsulot yaratildi",
+    "noneFound": "Mahsulot topilmadi",
+    "noneYet": "Hali mahsulot yo'q",
+    "emptyHint": "Sotishni boshlash uchun birinchi mahsulotni yarating",
+    "newProduct": "Yangi mahsulot",
+    "editProduct": "Mahsulotni tahrirlash",
+    "low": "Kam",
+    "stock": "qoldiq {{count}}",
+    "unmanaged": "hisoblanmaydi",
+    "category": "Kategoriya",
+    "none": "Yo'q",
+    "lowStockAlertAt": "Shu miqdorda kam qoldiq ogohlantirishi",
+    "lowStockAlertHint": "0 — kam qoldiq ogohlantirishini o'chiradi",
+    "trackStock": "Qoldiqni hisoblash",
+    "sku": "SKU",
+    "noBarcodeMatchYet": "Bu shtrix-kodga mos mahsulot yo'q — qolganini to'ldirib saqlang"
+  },
   "more": {
     "expensesSubtitle": "Ijara, komunal, maosh, ta'minot…",
     "warehouseSubtitle": "Yetkazilganlarni qabul qilish, do'konga ko'chirish",
@@ -184,7 +221,8 @@
     "refundAlreadyDone": "Bu sotuv allaqachon qaytarilgan yoki qaytarib bo'lmaydi",
     "refundSuccess": "{{invoice}} qaytarildi — {{amount}}",
     "refundFailed": "Qaytarish amalga oshmadi — qaytadan urinib ko'ring",
-    "ownerPinForRefund": "Qaytarish uchun egasi PIN-kodi kerak"
+    "ownerPinForRefund": "Qaytarish uchun egasi PIN-kodi kerak",
+    "noSalesOfficeHint": "Yakunlangan sotuvlar sinxronlanganda shu yerda ko'rinadi"
   },
   "pos": {
     "searchPlaceholder": "Qidirish yoki shtrix-kodni skanerlash…",

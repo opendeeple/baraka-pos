@@ -4,11 +4,13 @@ import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { SaleHistoryItem } from '@baraka/data'
 import { Badge, EmptyState, ListRow, Screen, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 
 export function SalesScreen() {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos } = getServices()
   const [sales, setSales] = useState<SaleHistoryItem[]>([])
 
@@ -39,9 +41,9 @@ export function SalesScreen() {
                   {fmtUZS(item.totalAmount)}
                 </Text>
                 <View style={styles.badges}>
-                  {item.saleType === 'return' ? <Badge label="Refund" tone="info" /> : null}
+                  {item.saleType === 'return' ? <Badge label={t('sales.refund')} tone="info" /> : null}
                   <Badge
-                    label={item.syncStatus === 'synced' ? 'Synced' : 'Pending'}
+                    label={item.syncStatus === 'synced' ? t('sales.synced') : t('sales.pending')}
                     tone={item.syncStatus === 'synced' ? 'success' : 'warning'}
                   />
                 </View>
@@ -50,7 +52,7 @@ export function SalesScreen() {
           />
         )}
         ListEmptyComponent={
-          <EmptyState icon="sales" title="No sales yet" message="Completed sales appear here as they sync" />
+          <EmptyState icon="sales" title={t('sales.noSalesYet')} message={t('sales.noSalesOfficeHint')} />
         }
       />
     </Screen>
