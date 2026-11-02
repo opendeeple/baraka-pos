@@ -10,6 +10,7 @@
     "@baraka/app-core": "workspace:*",
     "@baraka/data": "workspace:*",
     "@baraka/db-schema": "workspace:*",
+    "@baraka/mobile-i18n": "workspace:*",
     "@baraka/mobile-ui": "workspace:*",
     "@baraka/shared": "workspace:*",
     "@baraka/sync-engine": "workspace:*",

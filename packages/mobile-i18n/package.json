@@ -1,0 +1,19 @@
+{
+  "name": "@baraka/mobile-i18n",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "source": "src/index.ts",
+  "types": "src/index.ts",
+  "react-native": "src/index.ts",
+  "dependencies": {
+    "i18next": "^23.16.4",
+    "react-i18next": "^15.7.4"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.0"
+  }
+}

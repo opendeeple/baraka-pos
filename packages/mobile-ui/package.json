@@ -7,6 +7,7 @@
   "types": "src/index.ts",
   "react-native": "src/index.ts",
   "dependencies": {
+    "@baraka/mobile-i18n": "workspace:*",
     "@baraka/ui-tokens": "workspace:*"
   },
   "peerDependencies": {

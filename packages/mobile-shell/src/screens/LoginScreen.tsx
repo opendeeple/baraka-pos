@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import type { AuthUser } from '@baraka/shared'
 import { Button, Input, Screen, useTheme } from '@baraka/mobile-ui'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { type as typeScale, spacing } from '@baraka/ui-tokens'
 import { DEFAULT_SERVER_URL } from '@baraka/shared'
 import { getServices } from '../platform/services'
@@ -18,6 +19,7 @@ export interface LoginScreenProps {
 /** Shared login: the two apps differ only by subtitle. */
 export function LoginScreen({ subtitle }: LoginScreenProps) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const { repos, engine } = getServices()
   const setAuth = useAuthStore((s) => s.setAuth)
   const [username, setUsername] = useState('')
@@ -60,7 +62,7 @@ export function LoginScreen({ subtitle }: LoginScreenProps) {
         // arrays) leaking into the form — only plain messages are shown.
         const msg = typeof data?.error === 'string' && !data.error.trimStart().startsWith('[') && !data.error.trimStart().startsWith('{')
           ? data.error
-          : 'Login failed — check your username and password'
+          : t('auth.loginFailedHint')
         throw new Error(msg)
       }
 
@@ -78,7 +80,7 @@ export function LoginScreen({ subtitle }: LoginScreenProps) {
 
       setAuth(data.user, data.token, data.store)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed')
+      setError(err instanceof Error ? err.message : t('auth.loginFailed'))
     } finally {
       setLoading(false)
     }
@@ -97,8 +99,8 @@ export function LoginScreen({ subtitle }: LoginScreenProps) {
             <Input
               value={username}
               onChangeText={setUsername}
-              label="Username"
-              placeholder="Username"
+              label={t('auth.username')}
+              placeholder={t('auth.username')}
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="next"
@@ -106,15 +108,15 @@ export function LoginScreen({ subtitle }: LoginScreenProps) {
             <Input
               value={password}
               onChangeText={setPassword}
-              label="Password"
-              placeholder="Password"
+              label={t('auth.password')}
+              placeholder={t('auth.password')}
               secureTextEntry
               returnKeyType="go"
               onSubmitEditing={handleLogin}
               error={error || null}
             />
             <Button
-              title="Sign In"
+              title={t('auth.signIn')}
               onPress={handleLogin}
               loading={loading}
               size="lg"

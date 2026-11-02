@@ -5,6 +5,7 @@ import { DEFAULT_SERVER_URL } from '@baraka/shared'
 import {
   Button,
   Card,
+  Chip,
   Dialog,
   Input,
   Row,
@@ -14,6 +15,7 @@ import {
   toast,
   useTheme,
 } from '@baraka/mobile-ui'
+import { LANGUAGES, setAppLanguage, useTranslation, type AppLanguage } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
@@ -23,6 +25,7 @@ import { outboxCounts } from '../platform/maintenance'
  * app append its own sections (e.g. the POS printer setup link). */
 export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
   const theme = useTheme()
+  const { t, i18n } = useTranslation()
   const { repos, engine } = getServices()
   const logoutStore = useAuthStore((s) => s.logout)
   const authUser = useAuthStore((s) => s.user)
@@ -70,7 +73,7 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
       })
       const data = await res.json()
       if (res.status !== 200) {
-        setReauthError(typeof data?.error === 'string' ? data.error : 'Sign-in failed')
+        setReauthError(typeof data?.error === 'string' ? data.error : t('settings.signInFailed'))
         return
       }
       // Only refreshes the device's sync credential — the cashier's own
@@ -78,10 +81,10 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
       await engine.setTerminalToken(data.token, data.user.role)
       setReauthOpen(false)
       setReauthPassword('')
-      toast.success('Sync signed in again')
+      toast.success(t('settings.syncSignedInAgain'))
       refresh()
     } catch (err) {
-      setReauthError(err instanceof Error ? err.message : 'Sign-in failed')
+      setReauthError(err instanceof Error ? err.message : t('settings.signInFailed'))
     } finally {
       setReauthBusy(false)
     }
@@ -99,7 +102,11 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
 
   function saveUrl() {
     repos.settings.set('server_url', serverUrl.replace(/\/+$/, ''))
-    toast.success('Server URL saved')
+    toast.success(t('settings.serverUrlSaved'))
+  }
+
+  function changeLanguage(lang: AppLanguage) {
+    setAppLanguage(repos.settings, lang)
   }
 
   async function syncNow() {
@@ -111,10 +118,10 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
         const r = await engine.pullTableV2(table)
         pulled += r.count
       }
-      setLastResult(`Pushed ${flush.synced}, pulled ${pulled} records`)
-      toast.success('Sync complete')
+      setLastResult(t('settings.syncResult', { pushed: flush.synced, pulled }))
+      toast.success(t('settings.syncComplete'))
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Sync failed'
+      const msg = err instanceof Error ? err.message : t('settings.syncFailed')
       setLastResult(msg)
       toast.error(msg)
     } finally {
@@ -125,23 +132,30 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
 
   return (
     <Screen scroll maxWidth={560}>
-      <SectionHeader title="Server" />
+      <SectionHeader title={t('settings.language')} />
+      <View style={styles.chipRow}>
+        {LANGUAGES.map((l) => (
+          <Chip key={l.code} label={l.label} selected={i18n.language === l.code} onPress={() => changeLanguage(l.code)} />
+        ))}
+      </View>
+
+      <SectionHeader title={t('settings.server')} />
       <Input
         value={serverUrl}
         onChangeText={setServerUrl}
         autoCapitalize="none"
-        placeholder="Server URL"
+        placeholder={t('settings.serverUrlPlaceholder')}
         keyboardType="url"
       />
-      <Button title="Save URL" variant="secondary" size="sm" onPress={saveUrl} style={styles.gapTop} />
+      <Button title={t('settings.saveUrl')} variant="secondary" size="sm" onPress={saveUrl} style={styles.gapTop} />
 
-      <SectionHeader title="Device" />
+      <SectionHeader title={t('settings.device')} />
       <Card>
-        <Row label="Terminal" value={terminalId || '—'} />
+        <Row label={t('settings.terminal')} value={terminalId || '—'} />
       </Card>
 
       <SectionHeader
-        title="Sync"
+        title={t('settings.sync')}
         right={
           <SyncStatusBadge
             state={!tokenOk ? 'error' : dead > 0 ? 'error' : pending > 0 ? 'pending' : 'synced'}
@@ -151,11 +165,9 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
       />
       {!tokenOk && (
         <Card style={[styles.gapTop, { borderColor: theme.danger, borderWidth: 1 }]}>
-          <Text style={[typeScale.sm, { color: theme.text }]}>
-            Sync paused: sign in again with username and password (7 days since the last sign-in, or never signed in).
-          </Text>
+          <Text style={[typeScale.sm, { color: theme.text }]}>{t('settings.syncPaused')}</Text>
           <Button
-            title="Sign in again"
+            title={t('settings.signInAgain')}
             variant="danger"
             size="sm"
             style={styles.gapTop}
@@ -169,12 +181,12 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
         </Card>
       )}
       <Card style={styles.gapTop}>
-        <Row label="Pending" value={String(pending)} />
-        <Row label="Failed (dead)" value={String(dead)} valueColor={dead > 0 ? theme.danger : undefined} />
-        {lastResult ? <Row label="Last sync" value={lastResult} /> : null}
+        <Row label={t('settings.pending')} value={String(pending)} />
+        <Row label={t('settings.failedDead')} value={String(dead)} valueColor={dead > 0 ? theme.danger : undefined} />
+        {lastResult ? <Row label={t('settings.lastSync')} value={lastResult} /> : null}
       </Card>
       <Button
-        title={syncing ? 'Syncing…' : 'Sync Now'}
+        title={syncing ? t('settings.syncing') : t('settings.syncNow')}
         onPress={syncNow}
         loading={syncing}
         fullWidth
@@ -182,13 +194,13 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
       />
       {dead > 0 && (
         <Button
-          title="Retry failed items"
+          title={t('settings.retryFailed')}
           variant="danger"
           size="sm"
           onPress={() => {
             engine.retryDeadLetters()
             refresh()
-            toast.info('Retrying failed items')
+            toast.info(t('settings.retryingFailed'))
           }}
           style={styles.gapTop}
         />
@@ -197,23 +209,23 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
       {extras}
 
       <View style={styles.logoutWrap}>
-        <Button title="Log out" variant="secondary" icon="logout" onPress={logout} fullWidth />
+        <Button title={t('settings.logOut')} variant="secondary" icon="logout" onPress={logout} fullWidth />
       </View>
 
       <Dialog
         visible={reauthOpen}
         onClose={() => setReauthOpen(false)}
-        title="Sign in to sync"
-        message="Only refreshes this device's sync connection — you stay signed in."
+        title={t('settings.signInToSync')}
+        message={t('settings.signInToSyncHint')}
         actions={[
-          { label: 'Cancel', onPress: () => setReauthOpen(false) },
-          { label: 'Sign in', tone: 'primary', onPress: reauth },
+          { label: t('common.cancel'), onPress: () => setReauthOpen(false) },
+          { label: t('auth.signIn'), tone: 'primary', onPress: reauth },
         ]}
       >
         <Input
           value={reauthUsername}
           onChangeText={setReauthUsername}
-          label="Username"
+          label={t('auth.username')}
           autoCapitalize="none"
           autoCorrect={false}
           containerStyle={styles.gapTop}
@@ -221,7 +233,7 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
         <Input
           value={reauthPassword}
           onChangeText={setReauthPassword}
-          label="Password"
+          label={t('auth.password')}
           secureTextEntry
           onSubmitEditing={reauth}
           error={reauthError || null}
@@ -234,5 +246,6 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
 
 const styles = StyleSheet.create({
   gapTop: { marginTop: spacing.sm },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
   logoutWrap: { marginTop: spacing.x3l },
 })

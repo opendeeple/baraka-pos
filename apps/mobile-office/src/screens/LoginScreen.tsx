@@ -1,5 +1,7 @@
 import { LoginScreen as SharedLoginScreen } from '@baraka/mobile-shell'
+import { useTranslation } from '@baraka/mobile-i18n'
 
 export function LoginScreen() {
-  return <SharedLoginScreen subtitle="Back Office" />
+  const { t } = useTranslation()
+  return <SharedLoginScreen subtitle={t('auth.officeSubtitle')} />
 }

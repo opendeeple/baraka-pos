@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Modal, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { useTheme } from '../theme/ThemeProvider'
 import { Button } from './Button'
 import { radius, spacing, type as typeScale } from '@baraka/ui-tokens'
@@ -14,6 +15,7 @@ export interface BarcodeScannerModalProps {
 
 export function BarcodeScannerModal({ visible, onClose, onScan }: BarcodeScannerModalProps) {
   const theme = useTheme()
+  const { t } = useTranslation()
   const insets = useSafeAreaInsets()
   const [permission, requestPermission] = useCameraPermissions()
   // Debounce: the camera fires the same code many times per second.
@@ -43,15 +45,15 @@ export function BarcodeScannerModal({ visible, onClose, onScan }: BarcodeScanner
         ) : (
           <View style={styles.center}>
             <Text style={[typeScale.md, styles.hint, { color: theme.text }]}>
-              Camera permission is required to scan barcodes
+              {t('scanner.permissionHint')}
             </Text>
-            <Button title="Grant permission" onPress={requestPermission} />
+            <Button title={t('scanner.grantPermission')} onPress={requestPermission} />
           </View>
         )}
         <View style={[styles.frame, { borderColor: theme.primary }]} pointerEvents="none" />
         {/* Safe-area aware: sits above the gesture bar on edge-to-edge Android. */}
         <View style={[styles.closeWrap, { bottom: Math.max(insets.bottom, spacing.lg) + spacing.sm }]}>
-          <Button title="Done" size="lg" onPress={onClose} style={styles.closeBtn} />
+          <Button title={t('common.done')} size="lg" onPress={onClose} style={styles.closeBtn} />
         </View>
       </View>
     </Modal>

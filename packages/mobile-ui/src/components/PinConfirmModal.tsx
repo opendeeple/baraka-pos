@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from '@baraka/mobile-i18n'
 import { Dialog } from './Dialog'
 import { Input } from './Input'
 import { spacing } from '@baraka/ui-tokens'
@@ -20,6 +21,7 @@ export interface PinConfirmModalProps {
  * client/src/components/ui/PinConfirmModal.tsx.
  */
 export function PinConfirmModal({ visible, expectedPin, title, onClose, onConfirmed }: PinConfirmModalProps) {
+  const { t } = useTranslation()
   const [pin, setPin] = useState('')
   const [error, setError] = useState(false)
 
@@ -41,10 +43,10 @@ export function PinConfirmModal({ visible, expectedPin, title, onClose, onConfir
     <Dialog
       visible={visible}
       onClose={() => { reset(); onClose() }}
-      title={title ?? 'Owner PIN'}
+      title={title ?? t('common.ownerPinTitle')}
       actions={[
-        { label: 'Cancel', onPress: () => { reset(); onClose() } },
-        { label: 'Confirm', tone: 'primary', onPress: submit },
+        { label: t('common.cancel'), onPress: () => { reset(); onClose() } },
+        { label: t('common.confirm'), tone: 'primary', onPress: submit },
       ]}
     >
       <Input
@@ -54,7 +56,7 @@ export function PinConfirmModal({ visible, expectedPin, title, onClose, onConfir
         secureTextEntry
         autoFocus
         onSubmitEditing={submit}
-        error={error ? 'Wrong PIN' : null}
+        error={error ? t('common.wrongPin') : null}
         containerStyle={{ marginTop: spacing.sm }}
       />
     </Dialog>

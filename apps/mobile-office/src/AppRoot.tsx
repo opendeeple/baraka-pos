@@ -8,9 +8,15 @@ import { StatusBar } from 'expo-status-bar'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
 import { Icon, SyncStatusBadge, ThemeProvider, ToastProvider, type IconName } from '@baraka/mobile-ui'
 import { useSyncStatus } from '@baraka/mobile-shell'
+import { initI18n, loadPersistedLanguage } from '@baraka/mobile-i18n'
 import { openDatabase } from './platform/database'
 import { getServices } from './platform/services'
 import { useAuthStore } from './platform/authStore'
+
+// Starts synchronously on the default language so nothing blocks on a DB
+// read — loadPersistedLanguage() below reconciles with the saved choice
+// once the database is open. Mirrors desktop's client/src/i18n/index.ts.
+initI18n()
 import { LoginScreen } from './screens/LoginScreen'
 import { DashboardScreen } from './screens/DashboardScreen'
 import { ProductsScreen } from './screens/ProductsScreen'
@@ -97,6 +103,7 @@ export default function AppRoot() {
   useEffect(() => {
     try {
       openDatabase()
+      loadPersistedLanguage(getServices().repos.settings)
       setReady(true)
     } catch (err) {
       setBootError(err instanceof Error ? err.message : 'Database initialization failed')

@@ -6,9 +6,15 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { StatusBar } from 'expo-status-bar'
 import { IconButton, SyncStatusBadge, ThemeProvider, ToastProvider } from '@baraka/mobile-ui'
 import { useSyncStatus } from '@baraka/mobile-shell'
+import { initI18n, loadPersistedLanguage, useTranslation } from '@baraka/mobile-i18n'
 import { openDatabase } from './platform/database'
 import { getServices } from './platform/services'
 import { useAuthStore } from './platform/authStore'
+
+// Starts synchronously on the default language so nothing blocks on a DB
+// read — loadPersistedLanguage() below reconciles with the saved choice
+// once the database is open. Mirrors desktop's client/src/i18n/index.ts.
+initI18n()
 import { LoginScreen } from './screens/LoginScreen'
 import { OpenSessionScreen } from './screens/OpenSessionScreen'
 import { RegisterScreen } from './screens/RegisterScreen'
@@ -40,6 +46,7 @@ const navTheme = {
 }
 
 export default function AppRoot() {
+  const { t } = useTranslation()
   const [ready, setReady] = useState(false)
   const [bootError, setBootError] = useState('')
   const { isAuthenticated, session, setSession } = useAuthStore()
@@ -47,6 +54,7 @@ export default function AppRoot() {
   useEffect(() => {
     try {
       openDatabase() // runs shared migrations on first open
+      loadPersistedLanguage(getServices().repos.settings)
       setReady(true)
     } catch (err) {
       setBootError(err instanceof Error ? err.message : 'Database initialization failed')
@@ -120,11 +128,11 @@ export default function AppRoot() {
                 ),
               })}
             />
-            <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payment' }} />
-            <Stack.Screen name="CloseSession" component={CloseSessionScreen} options={{ title: 'Close Register' }} />
-            <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
-            <Stack.Screen name="SalesHistory" component={SalesHistoryScreen} options={{ title: 'Sales' }} />
-            <Stack.Screen name="PrinterSettings" component={PrinterSettingsScreen} options={{ title: 'Printer' }} />
+            <Stack.Screen name="Payment" component={PaymentScreen} options={{ title: t('nav.payment') }} />
+            <Stack.Screen name="CloseSession" component={CloseSessionScreen} options={{ title: t('nav.closeRegister') }} />
+            <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: t('nav.settings') }} />
+            <Stack.Screen name="SalesHistory" component={SalesHistoryScreen} options={{ title: t('nav.sales') }} />
+            <Stack.Screen name="PrinterSettings" component={PrinterSettingsScreen} options={{ title: t('nav.printer') }} />
           </Stack.Navigator>
         )}
       </NavigationContainer>
