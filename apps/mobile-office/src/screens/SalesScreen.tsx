@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { FlatList, StyleSheet, Text } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { SaleHistoryItem } from '@baraka/data'
@@ -30,24 +30,24 @@ export function SalesScreen() {
           <ListRow
             title={item.invoiceNumber}
             subtitle={`${String(item.saleTime).slice(0, 16).replace('T', ' ')}${item.contactName ? ` · ${item.contactName}` : ''}`}
+            meta={
+              <>
+                {item.saleType === 'return' ? <Badge label={t('sales.refund')} tone="info" /> : null}
+                <Badge
+                  label={item.syncStatus === 'synced' ? t('sales.synced') : t('sales.pending')}
+                  tone={item.syncStatus === 'synced' ? 'success' : 'warning'}
+                />
+              </>
+            }
             right={
-              <View style={styles.right}>
-                <Text
-                  style={[
-                    typeScale.money,
-                    { color: item.totalAmount < 0 ? theme.danger : theme.text },
-                  ]}
-                >
-                  {fmtUZS(item.totalAmount)}
-                </Text>
-                <View style={styles.badges}>
-                  {item.saleType === 'return' ? <Badge label={t('sales.refund')} tone="info" /> : null}
-                  <Badge
-                    label={item.syncStatus === 'synced' ? t('sales.synced') : t('sales.pending')}
-                    tone={item.syncStatus === 'synced' ? 'success' : 'warning'}
-                  />
-                </View>
-              </View>
+              <Text
+                style={[typeScale.money, { color: item.totalAmount < 0 ? theme.danger : theme.text }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
+              >
+                {fmtUZS(item.totalAmount)}
+              </Text>
             }
           />
         )}
@@ -61,6 +61,5 @@ export function SalesScreen() {
 
 const styles = StyleSheet.create({
   list: { padding: spacing.md, gap: spacing.sm, flexGrow: 1 },
-  right: { alignItems: 'flex-end', gap: spacing.xs },
-  badges: { flexDirection: 'row', gap: spacing.xs },
+
 })

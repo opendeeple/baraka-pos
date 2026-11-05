@@ -26,11 +26,14 @@ export interface ListRowProps {
   subtitle?: string
   left?: ReactNode
   right?: ReactNode
+  /** Extra line under the subtitle (badges, amounts) — keeps the right
+   * slot narrow so the title isn't squeezed to nothing. */
+  meta?: ReactNode
   onPress?: () => void
   testID?: string
 }
 
-export function ListRow({ title, subtitle, left, right, onPress, testID }: ListRowProps) {
+export function ListRow({ title, subtitle, left, right, meta, onPress, testID }: ListRowProps) {
   const theme = useTheme()
   const body = (
     <>
@@ -40,8 +43,9 @@ export function ListRow({ title, subtitle, left, right, onPress, testID }: ListR
         {subtitle ? (
           <Text style={[type.sm, { color: theme.textMuted }]} numberOfLines={1}>{subtitle}</Text>
         ) : null}
+        {meta ? <View style={rowStyles.meta}>{meta}</View> : null}
       </View>
-      {right}
+      {right ? <View style={rowStyles.right}>{right}</View> : null}
     </>
   )
   const frame = [rowStyles.base, { backgroundColor: theme.surfaceRaised, borderColor: theme.border }]
@@ -66,10 +70,13 @@ const rowStyles = StyleSheet.create({
     gap: spacing.md,
     borderRadius: radius.md,
     borderWidth: 1,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
     minHeight: touch.minTarget + spacing.md,
   },
-  mid: { flex: 1, gap: spacing.xxs },
+  mid: { flex: 1, minWidth: 0, gap: spacing.xxs },
+  meta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xxs },
+  right: { flexShrink: 1, maxWidth: '55%', alignItems: 'flex-end' },
 })
 
 /* ----------------------------------------------------------------- Row */
@@ -91,12 +98,18 @@ export function Row({
   const theme = useTheme()
   return (
     <View style={kvStyles.base}>
-      <Text style={[big ? type.lg : type.sm, { color: theme.textMuted }]}>{label}</Text>
+      <Text style={[big ? type.lg : type.sm, kvStyles.label, { color: theme.textMuted }]} numberOfLines={2}>
+        {label}
+      </Text>
       <Text
         style={[
           big ? type.moneyLg : type.money,
+          kvStyles.value,
           { color: valueColor ?? (accent ? theme.primary : theme.text) },
         ]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
       >
         {value}
       </Text>
@@ -106,6 +119,8 @@ export function Row({
 
 const kvStyles = StyleSheet.create({
   base: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
+  label: { flex: 1 },
+  value: { flexShrink: 0, maxWidth: '65%', textAlign: 'right' },
 })
 
 /* ---------------------------------------------------------------- Chip */
@@ -116,12 +131,15 @@ export function Chip({
   onPress,
   icon,
   testID,
+  style,
 }: {
   label: string
   selected?: boolean
   onPress: () => void
   icon?: IconName
   testID?: string
+  /** e.g. `{ flex: 1 }` for an equal-width segmented row. */
+  style?: StyleProp<ViewStyle>
 }) {
   const theme = useTheme()
   return (
@@ -139,10 +157,15 @@ export function Chip({
           borderColor: selected ? theme.primary : theme.border,
           opacity: pressed ? opacity.pressed : 1,
         },
+        style,
       ]}
     >
       {icon && <Icon name={icon} size={14} color={selected ? theme.onPrimary : theme.textMuted} />}
-      <Text style={[type.sm, { color: selected ? theme.onPrimary : theme.textMuted, fontWeight: '600' }]}>
+      <Text
+        style={[type.sm, { color: selected ? theme.onPrimary : theme.textMuted, fontWeight: '600', flexShrink: 1 }]}
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.25}
+      >
         {label}
       </Text>
     </Pressable>
@@ -153,12 +176,14 @@ const chipStyles = StyleSheet.create({
   base: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
     borderWidth: 1,
     minHeight: 36,
+    maxWidth: 240,
   },
 })
 
@@ -176,7 +201,9 @@ export function Badge({ label, tone = 'neutral' }: { label: string; tone?: Badge
     : theme.textMuted
   return (
     <View style={[badgeStyles.base, { backgroundColor: `${color}22`, borderColor: `${color}55` }]}>
-      <Text style={[type.xs, { color, fontWeight: '700' }]}>{label}</Text>
+      <Text style={[type.xs, { color, fontWeight: '700' }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+        {label}
+      </Text>
     </View>
   )
 }
@@ -188,6 +215,8 @@ const badgeStyles = StyleSheet.create({
     borderRadius: radius.full,
     borderWidth: 1,
     alignSelf: 'flex-start',
+    flexShrink: 1,
+    maxWidth: '100%',
   },
 })
 
@@ -197,7 +226,9 @@ export function SectionHeader({ title, right }: { title: string; right?: ReactNo
   const theme = useTheme()
   return (
     <View style={sectionStyles.base}>
-      <Text style={[type.xs, sectionStyles.title, { color: theme.textMuted }]}>{title.toUpperCase()}</Text>
+      <Text style={[type.xs, sectionStyles.title, { color: theme.textMuted }]} numberOfLines={1}>
+        {title.toUpperCase()}
+      </Text>
       {right}
     </View>
   )
@@ -208,10 +239,11 @@ const sectionStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.sm,
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
   },
-  title: { fontWeight: '700', letterSpacing: 1 },
+  title: { fontWeight: '700', letterSpacing: 1, flex: 1 },
 })
 
 /* ---------------------------------------------------------- EmptyState */

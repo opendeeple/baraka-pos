@@ -141,7 +141,9 @@ export function Sheet({
               </View>
               {title ? (
                 <View style={styles.header}>
-                  <Text style={[type.lg, { color: theme.text }]}>{title}</Text>
+                  <Text style={[type.lg, styles.title, { color: theme.text }]} numberOfLines={2} maxFontSizeMultiplier={1.3}>
+                    {title}
+                  </Text>
                   <IconButton icon="x" size={20} accessibilityLabel="Close" onPress={onClose} />
                 </View>
               ) : null}
@@ -193,7 +195,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.sm,
     marginBottom: spacing.sm,
   },
+  title: { flex: 1 },
   scrollBody: { flexGrow: 1 },
 })

@@ -55,13 +55,15 @@ export function CartPanel({ onPay, onHold, onDiscountPress, expanded = false }: 
               <Text style={[typeScale.sm, { color: theme.text, fontWeight: '600' }]} numberOfLines={1}>
                 {item.name}
               </Text>
-              <Text style={[typeScale.xs, { color: theme.textFaint }]}>{fmtUZS(item.unitPrice)} each</Text>
+              <Text style={[typeScale.xs, { color: theme.textFaint }]} numberOfLines={1}>
+                {t('pos.each', { price: fmtUZS(item.unitPrice) })}
+              </Text>
             </View>
             <View style={styles.qtyControls}>
               <IconButton
                 icon="minus"
                 size={20}
-                accessibilityLabel={`Decrease ${item.name} quantity`}
+                accessibilityLabel={t('pos.decreaseQty', { name: item.name })}
                 onPress={() => {
                   // Floors at 1 for whole-unit quantities, but never floors
                   // ABOVE the current quantity — a weighed kg/box line
@@ -74,11 +76,13 @@ export function CartPanel({ onPay, onHold, onDiscountPress, expanded = false }: 
                 }}
                 variant="filled"
               />
-              <Text style={[typeScale.money, styles.qtyText, { color: theme.text }]}>{item.quantity}</Text>
+              <Text style={[typeScale.money, styles.qtyText, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                {item.quantity}
+              </Text>
               <IconButton
                 icon="plus"
                 size={20}
-                accessibilityLabel={`Increase ${item.name} quantity`}
+                accessibilityLabel={t('pos.increaseQty', { name: item.name })}
                 onPress={() => {
                   if (setQuantity(index, item.quantity + 1)) {
                     toast.info(t('pos.onlyInStock', { stock: item.maxStock, name: item.name }))
@@ -100,7 +104,9 @@ export function CartPanel({ onPay, onHold, onDiscountPress, expanded = false }: 
         />
         <View style={styles.totalRow}>
           <Text style={[typeScale.md, { color: theme.textMuted }]}>{t('pos.total')}</Text>
-          <Text style={[typeScale.moneyLg, { color: theme.text }]}>{fmtUZS(total)}</Text>
+          <Text style={[typeScale.moneyLg, styles.totalValue, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+            {fmtUZS(total)}
+          </Text>
         </View>
         {heldCarts.length > 0 && (
           <Button
@@ -130,7 +136,7 @@ export function CartPanel({ onPay, onHold, onDiscountPress, expanded = false }: 
 
 const styles = StyleSheet.create({
   body: { flexGrow: 1, flexShrink: 1 },
-  title: { marginBottom: spacing.sm },
+  title: { marginBottom: spacing.sm, marginTop: spacing.xs },
   listInner: { gap: spacing.xs, flexGrow: 1 },
   row: {
     flexDirection: 'row',
@@ -142,9 +148,10 @@ const styles = StyleSheet.create({
   },
   rowMid: { flex: 1, gap: 1 },
   qtyControls: { flexDirection: 'row', alignItems: 'center' },
-  qtyText: { minWidth: touch.minTarget - 16, textAlign: 'center' },
+  qtyText: { minWidth: touch.minTarget - 12, maxWidth: 64, textAlign: 'center' },
   footer: { borderTopWidth: 1, paddingTop: spacing.sm, marginTop: spacing.sm, gap: spacing.sm },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md },
+  totalValue: { flexShrink: 1, textAlign: 'right' },
   heldBtn: { alignSelf: 'stretch' },
   actions: { flexDirection: 'row', gap: spacing.sm },
   flex1: { flex: 1 },

@@ -179,11 +179,11 @@ export function CreditorsScreen() {
         renderItem={({ item }) => (
           <ListRow
             title={item.name}
-            subtitle={`${fmtCreditorAmount(item.amount, item.currency)} · Due ${item.dueDate}`}
+            subtitle={`${fmtCreditorAmount(item.amount, item.currency)} · ${t('creditors.dueOn', { date: item.dueDate })}`}
             onPress={() => openEdit(item)}
+            meta={remaining(item)}
             right={
               <View style={styles.rowRight}>
-                {remaining(item)}
                 {item.status === 'open' && (
                   <IconButton icon="check" size={20} color={theme.success} accessibilityLabel={t('creditors.markReturned')} onPress={() => setReturnTarget(item)} />
                 )}

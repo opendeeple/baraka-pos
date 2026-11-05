@@ -201,6 +201,7 @@ export function PaymentScreen({ navigation }: Props) {
             key={m}
             label={t(METHOD_I18N[m])}
             selected={method === m}
+            style={styles.methodChip}
             onPress={() => {
               setMethod(m)
               if (m === 'Debt' && !customer) setPickerOpen(true)
@@ -244,6 +245,9 @@ export function PaymentScreen({ navigation }: Props) {
       )}
 
       <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.6}
         style={[typeScale.moneyDisplay, styles.entry, { color: entry ? theme.text : theme.textFaint }]}
         accessibilityLabel={`${fmtUZS(Number(entry) || remaining)}`}
       >
@@ -260,7 +264,7 @@ export function PaymentScreen({ navigation }: Props) {
 
       {payments.map((p, i) => (
         <View key={i} style={[styles.paymentRow, { backgroundColor: theme.surfaceRaised }]}>
-          <Text style={[typeScale.md, { color: theme.text, fontWeight: '600' }]}>{t(METHOD_I18N[p.paymentMethod as keyof typeof METHOD_I18N] ?? p.paymentMethod)}</Text>
+          <Text style={[typeScale.md, styles.flex1, { color: theme.text, fontWeight: '600' }]} numberOfLines={1}>{t(METHOD_I18N[p.paymentMethod as keyof typeof METHOD_I18N] ?? p.paymentMethod)}</Text>
           <View style={styles.paymentRight}>
             <Text style={[typeScale.money, { color: theme.text }]}>{fmtUZS(p.amount)}</Text>
             <IconButton
@@ -369,7 +373,8 @@ export function PaymentScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  methods: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg, marginBottom: spacing.md },
+  methods: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.lg, marginBottom: spacing.md },
+  methodChip: { flex: 1, paddingHorizontal: spacing.xs },
   customerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
   denomRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.md },
   entry: { textAlign: 'center', marginBottom: spacing.md },

@@ -21,6 +21,13 @@ import type { RootStackParamList } from '../navigation'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CloseSession'>
 
+const PAY_I18N: Record<string, string> = {
+  Cash: 'payment.methodCash',
+  Card: 'payment.methodCard',
+  Click: 'payment.methodClick',
+  Debt: 'payment.methodDebt',
+}
+
 export function CloseSessionScreen({ navigation }: Props) {
   const theme = useTheme()
   const { t } = useTranslation()
@@ -64,7 +71,9 @@ export function CloseSessionScreen({ navigation }: Props) {
       <Card>
         <Row label={t('session.openingBalance')} value={fmtUZS(Number(session?.opening_balance ?? 0))} />
         {summary.map((s) => (
-          <Row key={s.paymentMethod} label={`${s.paymentMethod} (${s.count})`} value={fmtUZS(s.total)} />
+          <Row
+            key={s.paymentMethod}
+            label={`${PAY_I18N[s.paymentMethod] ? t(PAY_I18N[s.paymentMethod]) : s.paymentMethod} (${s.count})`} value={fmtUZS(s.total)} />
         ))}
         {movements.map((m) => (
           <Row
@@ -106,7 +115,7 @@ export function CloseSessionScreen({ navigation }: Props) {
       />
 
       <Text style={[typeScale.sm, styles.label, { color: theme.textMuted }]}>{t('session.countedCash')}</Text>
-      <Text style={[typeScale.moneyDisplay, { color: theme.text }]}>
+      <Text style={[typeScale.moneyDisplay, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
         {actual ? fmtUZS(Number(actual)) : fmtUZS(0)}
       </Text>
       <View style={styles.padWrap}>

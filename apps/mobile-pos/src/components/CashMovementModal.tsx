@@ -134,6 +134,9 @@ export function CashMovementModal({ type, onClose, onDone }: Props) {
 
         <Text
           style={[typeScale.moneyDisplay, styles.amount, { color: theme.text }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.6}
           accessibilityLabel={`Amount ${amount || '0'}`}
         >
           {amount ? fmtUZS(Number(amount)) : fmtUZS(0)}

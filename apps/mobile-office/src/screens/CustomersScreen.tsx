@@ -110,6 +110,11 @@ export function CustomersScreen() {
               })
               setShowForm(true)
             }}
+            meta={
+              item.balance > 0 ? (
+                <Badge label={t('pos.debtBadge', { amount: fmtUZS(item.balance) })} tone="danger" />
+              ) : null
+            }
             right={
               <View style={styles.rowRight}>
                 {item.balance > 0 ? (
@@ -121,11 +126,6 @@ export function CustomersScreen() {
                     onPress={() => setDebtTarget(item)}
                   />
                 ) : null}
-                {item.balance > 0 ? (
-                  <Badge label={t('pos.debtBadge', { amount: fmtUZS(item.balance) })} tone="danger" />
-                ) : (
-                  <Text style={[typeScale.sm, { color: theme.textMuted }]}>{fmtUZS(item.balance)}</Text>
-                )}
                 {item.telegramChatId && (
                   <IconButton
                     icon="send"

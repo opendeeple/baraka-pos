@@ -20,6 +20,9 @@ export interface ButtonProps {
 
 const HEIGHTS = { sm: touch.minTarget, md: 48, lg: 54 } as const
 const FONTS = { sm: type.sm, md: type.md, lg: type.lg } as const
+// Narrower side padding for small buttons — they usually sit 2-3 abreast.
+const PAD_X = { sm: spacing.sm, md: spacing.md, lg: spacing.lg } as const
+const ICONS = { sm: 16, md: 20, lg: 24 } as const
 
 export function Button({
   title,
@@ -62,6 +65,7 @@ export function Button({
         {
           backgroundColor: pressed && variant === 'primary' ? theme.primaryPressed : bg,
           minHeight: HEIGHTS[size],
+          paddingHorizontal: PAD_X[size],
           borderColor: variant === 'secondary' ? theme.border : 'transparent',
           borderWidth: variant === 'secondary' ? 1 : 0,
           opacity: inactive ? opacity.disabled : pressed && variant !== 'primary' ? opacity.pressed : 1,
@@ -74,8 +78,18 @@ export function Button({
         <ActivityIndicator color={label} />
       ) : (
         <>
-          {icon && <Icon name={icon} size={size === 'lg' ? 24 : 20} color={label} />}
-          <Text style={[FONTS[size], styles.label, { color: label }]}>{title}</Text>
+          {icon && <Icon name={icon} size={ICONS[size]} color={label} />}
+          {/* One line, shrinks to fit: long uz/ru labels in side-by-side
+              buttons used to wrap and squash the button. */}
+          <Text
+            style={[FONTS[size], styles.label, { color: label }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            maxFontSizeMultiplier={1.25}
+          >
+            {title}
+          </Text>
         </>
       )}
     </Pressable>
@@ -89,8 +103,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
   },
-  label: { fontWeight: '700' },
+  label: { fontWeight: '700', flexShrink: 1, textAlign: 'center' },
 })

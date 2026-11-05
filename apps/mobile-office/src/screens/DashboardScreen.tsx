@@ -21,6 +21,13 @@ function pctDelta(current: number, previous: number): number | null {
   return ((current - previous) / previous) * 100
 }
 
+const PAY_I18N: Record<string, string> = {
+  Cash: 'payment.methodCash',
+  Card: 'payment.methodCard',
+  Click: 'payment.methodClick',
+  Debt: 'payment.methodDebt',
+}
+
 export function DashboardScreen() {
   const theme = useTheme()
   const { t } = useTranslation()
@@ -94,7 +101,13 @@ export function DashboardScreen() {
         {summary.byMethod.length === 0 ? (
           <Text style={[typeScale.sm, { color: theme.textFaint }]}>{t('dashboard.noSalesToday')}</Text>
         ) : (
-          summary.byMethod.map((m) => <Row key={m.paymentMethod} label={m.paymentMethod} value={fmtUZS(m.total)} />)
+          summary.byMethod.map((m) => (
+            <Row
+              key={m.paymentMethod}
+              label={PAY_I18N[m.paymentMethod] ? t(PAY_I18N[m.paymentMethod]) : m.paymentMethod}
+              value={fmtUZS(m.total)}
+            />
+          ))
         )}
       </Card>
 
@@ -111,9 +124,11 @@ export function DashboardScreen() {
                 <Text style={[typeScale.md, { color: theme.text, fontWeight: '600' }]} numberOfLines={1}>
                   {p.name}
                 </Text>
-                <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('dashboard.sold', { count: p.quantity })}</Text>
+                <Text style={[typeScale.xs, { color: theme.textFaint }]} numberOfLines={1}>{t('dashboard.sold', { count: p.quantity })}</Text>
               </View>
-              <Text style={[typeScale.money, { color: theme.text }]}>{fmtUZS(p.revenue)}</Text>
+              <Text style={[typeScale.money, styles.topValue, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                {fmtUZS(p.revenue)}
+              </Text>
             </View>
           ))}
         </Card>
@@ -147,6 +162,7 @@ const styles = StyleSheet.create({
   tiles: { flexDirection: 'row', gap: spacing.md },
   tilesGap: { marginTop: spacing.md },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xxs },
-  topLeft: { flex: 1 },
+  topLeft: { flex: 1, minWidth: 0 },
+  topValue: { flexShrink: 0, maxWidth: '50%' },
   stockedUp: { alignItems: 'flex-start' },
 })

@@ -30,7 +30,11 @@ const Stack = createNativeStackNavigator<RootStackParamList>()
 
 function HeaderSyncBadge() {
   const status = useSyncStatus()
-  return <SyncStatusBadge state={status.state} pendingCount={status.pendingCount} />
+  return (
+    <View style={styles.syncWrap}>
+      <SyncStatusBadge compact state={status.state} pendingCount={status.pendingCount} />
+    </View>
+  )
 }
 
 const navTheme = {
@@ -150,5 +154,6 @@ export default function AppRoot() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  headerActions: { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  headerActions: { flexDirection: 'row', gap: 0, alignItems: 'center' },
+  syncWrap: { marginRight: 6 },
 })

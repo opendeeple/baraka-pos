@@ -3,9 +3,9 @@ import { FlatList, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { SaleHistoryItem } from '@baraka/data'
-import { Badge, Button, Dialog, EmptyState, ListRow, PinConfirmModal, Screen, toast, useTheme } from '@baraka/mobile-ui'
+import { Badge, Button, Dialog, EmptyState, PinConfirmModal, Screen, toast, useTheme } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
-import { spacing, type as typeScale } from '@baraka/ui-tokens'
+import { radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
 
@@ -67,35 +67,43 @@ export function SalesHistoryScreen() {
           const isReturn = item.saleType === 'return'
           const refundable = !isReturn && item.status === 'completed'
           return (
-            <ListRow
-              title={item.invoiceNumber}
-              subtitle={`${String(item.saleTime).slice(0, 16).replace('T', ' ')}${item.contactName ? ` · ${item.contactName}` : ''}`}
-              right={
-                <View style={styles.right}>
-                  <Text style={[typeScale.money, { color: isReturn ? theme.danger : theme.text }]}>
-                    {fmtUZS(item.totalAmount)}
-                  </Text>
-                  <View style={styles.badges}>
-                    {isReturn ? <Badge label={t('sales.refund')} tone="info" /> : null}
-                    {item.status === 'refunded' ? <Badge label={t('sales.refunded')} tone="neutral" /> : null}
-                    {refundable ? (
-                      <Button
-                        title={t('sales.refund')}
-                        variant="danger"
-                        size="sm"
-                        haptic
-                        onPress={() => setRefundTarget(item)}
-                      />
-                    ) : (
-                      <Badge
-                        label={item.syncStatus === 'synced' ? t('sales.synced') : t('sales.pending')}
-                        tone={item.syncStatus === 'synced' ? 'success' : 'warning'}
-                      />
-                    )}
-                  </View>
+            <View style={[styles.card, { backgroundColor: theme.surfaceRaised, borderColor: theme.border }]}>
+              <View style={styles.topRow}>
+                <Text style={[typeScale.md, styles.flex1, { color: theme.text, fontWeight: '600' }]} numberOfLines={1}>
+                  {item.invoiceNumber}
+                </Text>
+                <Text
+                  style={[typeScale.money, styles.amount, { color: isReturn ? theme.danger : theme.text }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {fmtUZS(item.totalAmount)}
+                </Text>
+              </View>
+              <Text style={[typeScale.sm, { color: theme.textMuted }]} numberOfLines={1}>
+                {String(item.saleTime).slice(0, 16).replace('T', ' ')}
+                {item.contactName ? ` · ${item.contactName}` : ''}
+              </Text>
+              <View style={styles.bottomRow}>
+                <View style={styles.badges}>
+                  {isReturn ? <Badge label={t('sales.refund')} tone="info" /> : null}
+                  {item.status === 'refunded' ? <Badge label={t('sales.refunded')} tone="neutral" /> : null}
+                  <Badge
+                    label={item.syncStatus === 'synced' ? t('sales.synced') : t('sales.pending')}
+                    tone={item.syncStatus === 'synced' ? 'success' : 'warning'}
+                  />
                 </View>
-              }
-            />
+                {refundable ? (
+                  <Button
+                    title={t('sales.refund')}
+                    variant="danger"
+                    size="sm"
+                    icon="refund"
+                    onPress={() => setRefundTarget(item)}
+                  />
+                ) : null}
+              </View>
+            </View>
           )
         }}
         ListEmptyComponent={
@@ -147,6 +155,10 @@ export function SalesHistoryScreen() {
 
 const styles = StyleSheet.create({
   list: { padding: spacing.md, gap: spacing.sm, flexGrow: 1 },
-  right: { alignItems: 'flex-end', gap: spacing.xs },
-  badges: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  card: { borderWidth: 1, borderRadius: radius.md, padding: spacing.md, gap: spacing.xs },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  amount: { flexShrink: 0, maxWidth: '55%' },
+  bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginTop: spacing.xxs },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs, flex: 1 },
+  flex1: { flex: 1 },
 })

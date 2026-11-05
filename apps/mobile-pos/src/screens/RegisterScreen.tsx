@@ -352,9 +352,18 @@ export function RegisterScreen({ navigation }: Props) {
       >
         <View style={styles.cartBarLeft}>
           <Icon name="cart" size={20} color={theme.onPrimary} />
-          <Text style={[typeScale.md, { color: theme.onPrimary, fontWeight: '700' }]}>{t('pos.itemsCount', { count: itemCount })}</Text>
+          <Text style={[typeScale.md, styles.shrink, { color: theme.onPrimary, fontWeight: '700' }]} numberOfLines={1}>
+            {t('pos.itemsCount', { count: itemCount })}
+          </Text>
         </View>
-        <Text style={[typeScale.moneyLg, { color: theme.onPrimary }]}>{fmtUZS(total)}</Text>
+        <Text
+          style={[typeScale.moneyLg, styles.cartBarTotal, { color: theme.onPrimary }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+        >
+          {fmtUZS(total)}
+        </Text>
       </Pressable>
       <Sheet
         visible={cartOpen}
@@ -385,12 +394,16 @@ const styles = StyleSheet.create({
     left: spacing.md,
     right: spacing.md,
     borderRadius: radius.lg,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.md,
     minHeight: 56,
+    elevation: 6,
   },
-  cartBarLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  cartBarLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
+  cartBarTotal: { flexShrink: 0, maxWidth: '60%' },
+  shrink: { flexShrink: 1 },
 })

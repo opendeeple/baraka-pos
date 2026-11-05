@@ -58,8 +58,8 @@ const navTheme = {
 function HeaderSyncBadge() {
   const status = useSyncStatus()
   return (
-    <View style={{ marginRight: 16 }}>
-      <SyncStatusBadge state={status.state} pendingCount={status.pendingCount} />
+    <View style={styles.headerRight}>
+      <SyncStatusBadge compact state={status.state} pendingCount={status.pendingCount} />
     </View>
   )
 }
@@ -101,7 +101,15 @@ function MainTabs({ onOpenMenu }: { onOpenMenu: () => void }) {
           />
         ),
         headerRight: () => <HeaderSyncBadge />,
-        tabBarLabel: TAB_TITLES[route.name] ? t(TAB_TITLES[route.name]) : route.name,
+        headerTitleAlign: 'left',
+        headerTitleContainerStyle: styles.headerTitleContainer,
+        // Short tab label for Dashboard: "Boshqaruv paneli" didn't fit a
+        // 1/5-width tab and got ellipsized.
+        tabBarLabel:
+          route.name === 'Dashboard' ? t('nav.dashboardTab')
+          : TAB_TITLES[route.name] ? t(TAB_TITLES[route.name]) : route.name,
+        tabBarLabelStyle: styles.tabLabel,
+        tabBarAllowFontScaling: false,
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
@@ -220,5 +228,8 @@ export default function AppRoot() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  menuButton: { marginLeft: 8 },
+  menuButton: { marginLeft: 4 },
+  headerRight: { marginRight: 12 },
+  headerTitleContainer: { flexShrink: 1, maxWidth: '62%' },
+  tabLabel: { fontSize: 11, fontWeight: '600' },
 })

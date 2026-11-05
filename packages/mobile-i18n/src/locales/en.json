@@ -53,7 +53,8 @@
     "creditors": "Creditors",
     "employees": "Employees",
     "journal": "Journal",
-    "reports": "Reports"
+    "reports": "Reports",
+    "dashboardTab": "Home"
   },
   "categories": {
     "searchPlaceholder": "Search categories…",
@@ -233,7 +234,8 @@
     "deleteTitle": "Delete creditor?",
     "deleteConfirm": "Delete the entry for {{name}}? It is removed on every device.",
     "markReturned": "Mark returned",
-    "none": "No creditors"
+    "none": "No creditors",
+    "dueOn": "Due {{date}}"
   },
   "employees": {
     "searchPlaceholder": "Search employees…",
@@ -521,7 +523,6 @@
     "productName": "Name",
     "barcode": "Barcode",
     "addToCart": "Add to cart",
-    "selectCustomer": "Select customer",
     "newCustomer": "New customer",
     "customerName": "Customer name",
     "phoneOptional": "Phone (optional)",
@@ -535,7 +536,10 @@
     "duplicateWarning": "A product named \"{{name}}\" already exists — pick it from the grid instead.",
     "newProductWarning": "Make sure this product really is new, not a misread barcode for one you already have.",
     "similarProducts": "Similar products found",
-    "createdButNotFound": "Product created but could not be found — check the list"
+    "createdButNotFound": "Product created but could not be found — check the list",
+    "each": "{{price}} each",
+    "decreaseQty": "Decrease {{name}} quantity",
+    "increaseQty": "Increase {{name}} quantity"
   },
   "payment": {
     "total": "Total",
@@ -631,5 +635,12 @@
     "notReachable": "Printer not reachable — check the address and power",
     "testSent": "Test receipt sent",
     "testFailed": "Test print failed"
+  },
+  "syncStatus": {
+    "online": "Online",
+    "syncing": "Syncing",
+    "offline": "Offline",
+    "error": "Sync error",
+    "statusA11y": "Sync status: {{label}}"
   }
 }

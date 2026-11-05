@@ -53,7 +53,8 @@
     "creditors": "Haqdorlar",
     "employees": "Xodimlar",
     "journal": "Jurnal",
-    "reports": "Hisobotlar"
+    "reports": "Hisobotlar",
+    "dashboardTab": "Asosiy"
   },
   "categories": {
     "searchPlaceholder": "Kategoriyalarni qidirish…",
@@ -233,7 +234,8 @@
     "deleteTitle": "Haqdor o'chirilsinmi?",
     "deleteConfirm": "{{name}} yozuvi o'chirilsinmi? Bu barcha qurilmalardan o'chadi.",
     "markReturned": "Qaytarilgan deb belgilash",
-    "none": "Haqdorlar yo'q"
+    "none": "Haqdorlar yo'q",
+    "dueOn": "Muddat: {{date}}"
   },
   "employees": {
     "searchPlaceholder": "Xodimlarni qidirish…",
@@ -521,7 +523,6 @@
     "productName": "Nomi",
     "barcode": "Shtrix-kod",
     "addToCart": "Savatga qo'shish",
-    "selectCustomer": "Mijozni tanlash",
     "newCustomer": "Yangi mijoz",
     "customerName": "Mijoz ismi",
     "phoneOptional": "Telefon (ixtiyoriy)",
@@ -535,7 +536,10 @@
     "duplicateWarning": "\"{{name}}\" nomli mahsulot allaqachon mavjud — uni jadvaldan tanlang.",
     "newProductWarning": "Bu haqiqatan ham yangi mahsulot ekanligiga ishonch hosil qiling, noto'g'ri o'qilgan shtrix-kod emas.",
     "similarProducts": "O'xshash mahsulotlar topildi",
-    "createdButNotFound": "Mahsulot yaratildi, lekin topilmadi — ro'yxatni tekshiring"
+    "createdButNotFound": "Mahsulot yaratildi, lekin topilmadi — ro'yxatni tekshiring",
+    "each": "{{price}} / dona",
+    "decreaseQty": "{{name}} miqdorini kamaytirish",
+    "increaseQty": "{{name}} miqdorini oshirish"
   },
   "payment": {
     "total": "Jami",
@@ -631,5 +635,12 @@
     "notReachable": "Printer javob bermayapti — manzil va quvvatni tekshiring",
     "testSent": "Sinov cheki yuborildi",
     "testFailed": "Sinov chop etish amalga oshmadi"
+  },
+  "syncStatus": {
+    "online": "Onlayn",
+    "syncing": "Sinxronlanmoqda",
+    "offline": "Oflayn",
+    "error": "Sinxron xatosi",
+    "statusA11y": "Sinxronlash holati: {{label}}"
   }
 }

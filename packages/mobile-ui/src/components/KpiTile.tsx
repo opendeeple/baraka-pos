@@ -18,7 +18,9 @@ export function KpiTile({ label, value, deltaPct, sparkline }: KpiTileProps) {
 
   return (
     <View style={[styles.base, { backgroundColor: theme.surfaceRaised, borderColor: theme.border }]}>
-      <Text style={[type.xs, styles.label, { color: theme.textMuted }]}>{label.toUpperCase()}</Text>
+      <Text style={[type.xs, styles.label, { color: theme.textMuted }]} numberOfLines={2}>
+        {label.toUpperCase()}
+      </Text>
       <Text style={[type.moneyLg, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
@@ -41,11 +43,11 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: radius.lg,
     borderWidth: 1,
-    padding: spacing.lg,
+    padding: spacing.md,
     gap: spacing.xs,
     minWidth: 140,
   },
-  label: { fontWeight: '700', letterSpacing: 1 },
+  label: { fontWeight: '700', letterSpacing: 0.5 },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',

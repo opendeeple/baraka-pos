@@ -31,14 +31,17 @@ export function OpenSessionScreen() {
   }
 
   return (
-    <Screen edges={['top', 'bottom', 'left', 'right']}>
+    <Screen scroll edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.center}>
-        <Text style={[typeScale.title, { color: theme.text }]}>{t('session.openRegister')}</Text>
-        <Text style={[typeScale.sm, styles.subtitle, { color: theme.textMuted }]}>
+        <Text style={[typeScale.title, { color: theme.text, textAlign: 'center' }]}>{t('session.openRegister')}</Text>
+        <Text style={[typeScale.sm, styles.subtitle, { color: theme.textMuted, textAlign: 'center' }]}>
           {t('session.enterOpeningBalance')}
         </Text>
         <Text
           style={[typeScale.moneyDisplay, styles.amount, { color: theme.primary }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.6}
           accessibilityLabel={`${t('session.openingBalance')} ${amount || '0'}`}
         >
           {amount ? fmtUZS(Number(amount)) : fmtUZS(0)}
@@ -59,5 +62,5 @@ const styles = StyleSheet.create({
   amount: { marginBottom: spacing.xl },
   pad: { width: '100%', maxWidth: 360 },
   error: { marginTop: spacing.md },
-  submit: { marginTop: spacing.xxl, paddingHorizontal: spacing.x5l },
+  submit: { marginTop: spacing.xxl, alignSelf: 'stretch', maxWidth: 360, width: '100%' },
 })

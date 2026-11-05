@@ -113,11 +113,11 @@ export function EmployeesScreen() {
             title={item.name}
             subtitle={item.email ?? item.phone ?? '—'}
             onPress={() => setDetailTarget(item)}
-            right={
-              <View style={styles.rowRight}>
-                {!item.isActive && <Badge label={t('employees.inactive')} tone="neutral" />}
+            meta={
+              <>
                 <Badge label={t(ROLE_I18N[item.role] ?? item.role)} tone={ROLE_TONE[item.role] ?? 'neutral'} />
-              </View>
+                {!item.isActive && <Badge label={t('employees.inactive')} tone="neutral" />}
+              </>
             }
           />
         )}
