@@ -34,6 +34,7 @@ export function RegisterScreen({ navigation }: Props) {
   const [categoryId, setCategoryId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [cartOpen, setCartOpen] = useState(false)
+  const [cartExpanded, setCartExpanded] = useState(false)
   const [scannerOpen, setScannerOpen] = useState(false)
   const [discountOpen, setDiscountOpen] = useState(false)
   const [stockWarning, setStockWarning] = useState<{ product: ProductListItem; message: string } | null>(null)
@@ -355,11 +356,17 @@ export function RegisterScreen({ navigation }: Props) {
         </View>
         <Text style={[typeScale.moneyLg, { color: theme.onPrimary }]}>{fmtUZS(total)}</Text>
       </Pressable>
-      <Sheet visible={cartOpen} onClose={() => setCartOpen(false)}>
+      <Sheet
+        visible={cartOpen}
+        onClose={() => setCartOpen(false)}
+        expandable
+        onExpandChange={setCartExpanded}
+      >
         <CartPanel
           onPay={() => { setCartOpen(false); navigation.navigate('Payment') }}
           onHold={() => { holdCart(); setCartOpen(false) }}
           onDiscountPress={() => setDiscountOpen(true)}
+          expanded={cartExpanded}
         />
       </Sheet>
       {modals}

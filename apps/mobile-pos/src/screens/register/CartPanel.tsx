@@ -11,13 +11,15 @@ interface CartPanelProps {
   onPay: () => void
   onHold: () => void
   onDiscountPress: () => void
+  /** True while the enclosing Sheet has been dragged open to full screen. */
+  expanded?: boolean
 }
 
 /**
  * Cart contents + totals + actions. Subscribes to the cart store with
  * selectors so product-grid interactions don't re-render it (and vice versa).
  */
-export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
+export function CartPanel({ onPay, onHold, onDiscountPress, expanded = false }: CartPanelProps) {
   const theme = useTheme()
   const { t } = useTranslation()
   const { height: windowHeight } = useWindowDimensions()
@@ -43,7 +45,9 @@ export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
         // against, so a bare FlatList here measures to nothing and the cart
         // looks empty even with items in it. A fixed-pixel cap sidesteps
         // that Yoga ambiguity in both the Sheet and the two-pane sidebar.
-        style={{ maxHeight: windowHeight * 0.38 }}
+        // Widened when the sheet is dragged open to full screen so the
+        // extra height isn't wasted.
+        style={{ maxHeight: windowHeight * (expanded ? 0.62 : 0.38) }}
         contentContainerStyle={styles.listInner}
         renderItem={({ item, index }) => (
           <View style={[styles.row, { backgroundColor: theme.surfaceRaised }]}>
