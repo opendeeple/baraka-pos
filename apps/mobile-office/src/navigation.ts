@@ -1,8 +1,9 @@
-// The "More" tab's own stack — keeps the bottom tab bar at 6 top-level
-// destinations while this and future mobile-parity features (warehouse,
-// purchases) get their own drill-in screen instead of each needing a new tab.
-export type MoreStackParamList = {
-  MoreMenu: undefined
+// The app's top-level stack: the bottom-tab group plus every screen the
+// left slide-out menu (SideMenu) opens as a drill-in. Keeping these as
+// stack screens (not nested under a tab) is what lets the side menu
+// navigate to any of them from anywhere in the tab group.
+export type RootStackParamList = {
+  Tabs: undefined
   Expenses: undefined
   Warehouse: undefined
   Purchases: undefined
