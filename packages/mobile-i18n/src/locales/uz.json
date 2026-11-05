@@ -54,7 +54,8 @@
     "employees": "Xodimlar",
     "journal": "Jurnal",
     "reports": "Hisobotlar",
-    "dashboardTab": "Asosiy"
+    "dashboardTab": "Asosiy",
+    "productsTab": "Mahsulot"
   },
   "categories": {
     "searchPlaceholder": "Kategoriyalarni qidirish…",
@@ -678,5 +679,16 @@
     "method_Debt": "Qarzga",
     "expected": "Kassada bo'lishi kerak",
     "counted": "Sanalgan"
+  },
+  "saleDetail": {
+    "items": "Xarid qilingan mahsulotlar",
+    "noItems": "Mahsulotlar topilmadi",
+    "discount": "Chegirma",
+    "total": "Jami",
+    "payments": "To'lovlar",
+    "change": "Qaytim",
+    "customer": "Mijoz",
+    "qtyPrice": "{{qty}} × {{price}}",
+    "notFound": "Sotuv ma'lumoti topilmadi"
   }
 }

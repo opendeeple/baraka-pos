@@ -164,13 +164,13 @@ export function createContactRepository(db: DbAdapter, uuid: () => string, enque
      * Telegram message and must NOT have this cutoff).
      */
     debtStatement(contactId: number): {
-      debts: Array<{ label: string; date: string; amount: number }>
+      debts: Array<{ saleId: number; label: string; date: string; amount: number }>
       payments: Array<{ date: string; amount: number }>
     } {
       const since = lastClearedSql('?')
       const debts = db
-        .all<{ label: string; date: string; amount: number }>(
-          `SELECT s.invoice_number as label, s.created_at as date, SUM(pt.amount) as amount
+        .all<{ saleId: number; label: string; date: string; amount: number }>(
+          `SELECT s.id as saleId, s.invoice_number as label, s.created_at as date, SUM(pt.amount) as amount
            FROM sales s
            JOIN payment_transactions pt ON pt.sale_id = s.id AND pt.payment_method = 'Debt'
            WHERE s.contact_id = ? AND s.status != 'cancelled' AND s.created_at > ${since}
@@ -178,7 +178,7 @@ export function createContactRepository(db: DbAdapter, uuid: () => string, enque
            ORDER BY s.created_at`,
           [contactId, contactId]
         )
-        .map((r) => ({ label: r.label, date: r.date, amount: Number(r.amount) || 0 }))
+        .map((r) => ({ saleId: Number(r.saleId), label: r.label, date: r.date, amount: Number(r.amount) || 0 }))
       const payments = db
         .all<{ date: string; amount: number }>(
           `SELECT created_at as date, amount FROM cash_logs

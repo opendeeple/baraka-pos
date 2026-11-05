@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
-import type { ContactListItem } from '@baraka/data'
+import type { ContactListItem, SaleReceiptData } from '@baraka/data'
 import {
   applyNumKey,
   Badge,
@@ -12,6 +12,7 @@ import {
   Input,
   ListRow,
   NumPad,
+  SaleDetailSheet,
   Sheet,
   toast,
   useTheme,
@@ -122,6 +123,13 @@ function DebtorPayPanel({
   const [entry, setEntry] = useState('')
   const [method, setMethod] = useState<'Cash' | 'Card' | 'Click'>('Cash')
   const [paying, setPaying] = useState(false)
+  const [saleDetail, setSaleDetail] = useState<SaleReceiptData | null>(null)
+
+  function openSale(saleId: number) {
+    const data = repos.sales.receiptData(saleId)
+    if (data) setSaleDetail(data)
+    else toast.error(t('saleDetail.notFound'))
+  }
 
   const hasHistory = statement.debts.length > 0 || statement.payments.length > 0
   const fullyPaid = balance <= 0
@@ -190,24 +198,47 @@ function DebtorPayPanel({
   }
 
   return (
-    <Sheet visible onClose={onClose} title={contact.name}>
+    <Sheet
+      visible
+      onClose={onClose}
+      title={contact.name}
+      footer={
+        <View style={styles.form}>
+          <View style={[styles.summaryBox, { borderColor: fullyPaid ? theme.success : theme.danger }]}>
+            <Text style={[typeScale.md, { color: fullyPaid ? theme.success : theme.danger, fontWeight: '700' }]}>
+              {fullyPaid ? t('debt.fullyPaid') : t('debt.remaining', { amount: fmtUZS(Math.max(0, balance)) })}
+            </Text>
+          </View>
+          {!fullyPaid && (
+            <Button title={t('debt.payDebt')} icon="banknote" onPress={() => setView('pay')} fullWidth />
+          )}
+        </View>
+      }
+    >
       <View style={styles.form}>
         <Button title={t('pos.backToList')} variant="ghost" onPress={onBack} />
         {!hasHistory ? (
           <Text style={[typeScale.sm, { color: theme.textFaint }]}>{t('debt.noRecords')}</Text>
         ) : (
-          <ScrollView style={styles.historyList} contentContainerStyle={styles.historyListInner}>
+          <View style={styles.historyListInner}>
             {statement.debts.length > 0 && (
               <>
                 <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('debt.debtsTaken')}</Text>
                 {statement.debts.map((d, i) => (
-                  <View key={i} style={[styles.rowItem, { borderColor: theme.border }]}>
+                  <Pressable
+                    key={i}
+                    accessibilityRole="button"
+                    accessibilityLabel={d.label}
+                    onPress={() => openSale(d.saleId)}
+                    style={({ pressed }) => [styles.rowItem, { borderColor: theme.border, opacity: pressed ? 0.7 : 1 }]}
+                  >
                     <View style={styles.flex1}>
-                      <Text style={[typeScale.sm, { color: theme.text }]}>{d.label}</Text>
+                      <Text style={[typeScale.sm, { color: theme.text }]} numberOfLines={1}>{d.label}</Text>
                       <Text style={[typeScale.xs, { color: theme.textFaint }]}>{String(d.date).slice(0, 16).replace('T', ' ')}</Text>
                     </View>
                     <Text style={[typeScale.sm, { color: theme.warning, fontWeight: '700' }]}>{fmtUZS(d.amount)}</Text>
-                  </View>
+                    <Icon name="chevronRight" size={16} color={theme.textFaint} />
+                  </Pressable>
                 ))}
               </>
             )}
@@ -222,19 +253,10 @@ function DebtorPayPanel({
                 ))}
               </>
             )}
-          </ScrollView>
-        )}
-
-        <View style={[styles.summaryBox, { borderColor: fullyPaid ? theme.success : theme.danger }]}>
-          <Text style={[typeScale.md, { color: fullyPaid ? theme.success : theme.danger, fontWeight: '700' }]}>
-            {fullyPaid ? t('debt.fullyPaid') : t('debt.remaining', { amount: fmtUZS(Math.max(0, balance)) })}
-          </Text>
-        </View>
-
-        {!fullyPaid && (
-          <Button title={t('debt.payDebt')} icon="banknote" onPress={() => setView('pay')} fullWidth />
+          </View>
         )}
       </View>
+      <SaleDetailSheet data={saleDetail} onClose={() => setSaleDetail(null)} formatMoney={fmtUZS} />
     </Sheet>
   )
 }
@@ -245,7 +267,6 @@ const styles = StyleSheet.create({
   listInner: { gap: spacing.xs },
   chipRow: { flexDirection: 'row', gap: spacing.xs },
   summaryBox: { borderWidth: 1, borderRadius: 8, padding: spacing.sm, gap: spacing.xs },
-  historyList: { maxHeight: 320 },
   historyListInner: { gap: spacing.xs },
   rowItem: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',

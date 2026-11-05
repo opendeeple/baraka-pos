@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { FlatList, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { EmployeeForm, EmployeeRole, EmployeeRow, SalaryRecordRow } from '@baraka/data'
@@ -207,8 +207,8 @@ function EmployeeDetailSheet({
   const [confirmDeactivate, setConfirmDeactivate] = useState(false)
 
   return (
-    <Sheet visible onClose={onClose} title={employee.name}>
-      <ScrollView style={styles.formScroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+    <Sheet visible onClose={onClose} title={employee.name} scrollBody>
+      <View style={styles.form}>
         <Badge label={t(ROLE_I18N[employee.role] ?? employee.role)} tone={ROLE_TONE[employee.role] ?? 'neutral'} />
         {employee.email && <Text style={[typeScale.sm, { color: theme.textMuted }]}>{employee.email}</Text>}
         {employee.phone && <Text style={[typeScale.sm, { color: theme.textMuted }]}>{employee.phone}</Text>}
@@ -251,7 +251,7 @@ function EmployeeDetailSheet({
             </View>
           ))
         )}
-      </ScrollView>
+      </View>
 
       {showSalaryForm && (
         <SalaryPaymentSheet
@@ -330,7 +330,6 @@ const styles = StyleSheet.create({
   searchWrap: { flex: 1 },
   list: { padding: spacing.md, gap: spacing.sm, flexGrow: 1 },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  formScroll: { maxHeight: 480 },
   form: { gap: spacing.sm, paddingBottom: spacing.sm },
   row2: { flexDirection: 'row', gap: spacing.sm },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },

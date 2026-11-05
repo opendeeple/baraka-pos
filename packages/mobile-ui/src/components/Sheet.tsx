@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Animated,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
@@ -63,6 +64,13 @@ export function Sheet({
   const { height: windowHeight } = useWindowDimensions()
   const [topChromeHeight, setTopChromeHeight] = useState(0)
   const [footerHeight, setFooterHeight] = useState(0)
+  // Measured height of the scrollable body's content. The ScrollView gets
+  // an EXPLICIT height (content, capped) — left to flex inside this
+  // auto-height sheet, Yoga collapsed it to ~0 and forms/lists rendered as
+  // a thin sliver above the footer.
+  const [contentHeight, setContentHeight] = useState(0)
+  // Top edge of the soft keyboard in window coordinates, null when hidden.
+  const [keyboardTop, setKeyboardTop] = useState<number | null>(null)
   const slide = useRef(new Animated.Value(0)).current
   // Separate from `slide` (open/close) — 0 is the normal capped height, 1 is
   // the dragged-open full-screen height. Only used when expandable.
@@ -74,7 +82,19 @@ export function Sheet({
   const expandedHeight = Math.round(windowHeight - Math.max(insets.top, spacing.lg) - spacing.lg)
   const dragRange = Math.max(expandedHeight - collapsedHeight, 1)
   const verticalPadding = spacing.sm + Math.max(insets.bottom, spacing.lg)
-  const bodyCapHeight = Math.max(collapsedHeight - topChromeHeight - footerHeight - verticalPadding, 120)
+  const available =
+    keyboardTop != null
+      ? Math.min(collapsedHeight, keyboardTop - Math.max(insets.top, spacing.lg) - spacing.lg)
+      : collapsedHeight
+  const bodyCapHeight = Math.max(available - topChromeHeight - footerHeight - verticalPadding, 96)
+  const bodyHeight = contentHeight > 0 ? Math.min(contentHeight, bodyCapHeight) : undefined
+
+  useEffect(() => {
+    if (!visible || !(footer || scrollBody)) return
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKeyboardTop(e.endCoordinates.screenY))
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardTop(null))
+    return () => { show.remove(); hide.remove() }
+  }, [visible, !!(footer || scrollBody)])
 
   const panResponder = useRef(
     PanResponder.create({
@@ -112,7 +132,13 @@ export function Sheet({
     <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={[styles.overlay, { backgroundColor: theme.overlay }]}>
         <Pressable style={styles.scrimTouch} accessibilityLabel="Close" onPress={onClose} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        {/* 'padding' lifts the sheet above the keyboard; 'height' (the old
+            Android choice) shrank a bottom-anchored sheet by the keyboard's
+            height and clipped it. The scroll body's cap already accounts
+            for the keyboard, so the lifted sheet fits. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' || footer || scrollBody ? 'padding' : 'height'}
+        >
           <Animated.View
             style={[
               styles.sheet,
@@ -150,10 +176,11 @@ export function Sheet({
             </View>
             {footer || scrollBody ? (
               <ScrollView
-                style={{ maxHeight: bodyCapHeight }}
+                style={[styles.scroll, bodyHeight != null ? { height: bodyHeight } : { maxHeight: bodyCapHeight }]}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator
-                contentContainerStyle={styles.scrollBody}
+                nestedScrollEnabled
+                onContentSizeChange={(_, h) => setContentHeight(Math.ceil(h))}
               >
                 {children}
               </ScrollView>
@@ -199,5 +226,5 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   title: { flex: 1 },
-  scrollBody: { flexGrow: 1 },
+  scroll: { flexGrow: 0, flexShrink: 0 },
 })

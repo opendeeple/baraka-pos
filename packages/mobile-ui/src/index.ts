@@ -28,3 +28,4 @@ export { SyncStatusBadge, type SyncState, type SyncStatusBadgeProps } from './co
 export { NumPad, applyNumKey } from './components/NumPad'
 export { PinConfirmModal, type PinConfirmModalProps } from './components/PinConfirmModal'
 export { BarcodeScannerModal, type BarcodeScannerModalProps } from './components/BarcodeScannerModal'
+export { SaleDetailSheet, type SaleDetailData, type SaleDetailSheetProps } from './components/SaleDetailSheet'

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS, renderReceiptText, type ReceiptDoc } from '@baraka/app-core'
 import type { SaleHistoryItem } from '@baraka/data'
@@ -108,7 +108,15 @@ export function SalesHistoryScreen() {
           const isReturn = item.saleType === 'return'
           const refundable = !isReturn && item.status === 'completed'
           return (
-            <View style={[styles.card, { backgroundColor: theme.surfaceRaised, borderColor: theme.border }]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={item.invoiceNumber}
+              onPress={() => openReceipt(item)}
+              style={({ pressed }) => [
+                styles.card,
+                { backgroundColor: theme.surfaceRaised, borderColor: theme.border, opacity: pressed ? 0.8 : 1 },
+              ]}
+            >
               <View style={styles.topRow}>
                 <Text style={[typeScale.md, styles.flex1, { color: theme.text, fontWeight: '600' }]} numberOfLines={1}>
                   {item.invoiceNumber}
@@ -151,7 +159,7 @@ export function SalesHistoryScreen() {
                   />
                 ) : null}
               </View>
-            </View>
+            </Pressable>
           )
         }}
         ListEmptyComponent={

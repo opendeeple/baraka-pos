@@ -2,8 +2,8 @@ import { useCallback, useState } from 'react'
 import { FlatList, StyleSheet, Text } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
-import type { SaleHistoryItem } from '@baraka/data'
-import { Badge, EmptyState, ListRow, Screen, useTheme } from '@baraka/mobile-ui'
+import type { SaleHistoryItem, SaleReceiptData } from '@baraka/data'
+import { Badge, EmptyState, ListRow, SaleDetailSheet, Screen, toast, useTheme } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
@@ -13,6 +13,13 @@ export function SalesScreen() {
   const { t } = useTranslation()
   const { repos } = getServices()
   const [sales, setSales] = useState<SaleHistoryItem[]>([])
+  const [detail, setDetail] = useState<SaleReceiptData | null>(null)
+
+  function openSale(id: number) {
+    const data = repos.sales.receiptData(id)
+    if (data) setDetail(data)
+    else toast.error(t('saleDetail.notFound'))
+  }
 
   const load = useCallback(() => {
     setSales(repos.sales.history({ limit: 100 }))
@@ -29,6 +36,7 @@ export function SalesScreen() {
         renderItem={({ item }) => (
           <ListRow
             title={item.invoiceNumber}
+            onPress={() => openSale(item.id)}
             subtitle={`${String(item.saleTime).slice(0, 16).replace('T', ' ')}${item.contactName ? ` · ${item.contactName}` : ''}`}
             meta={
               <>
@@ -55,6 +63,7 @@ export function SalesScreen() {
           <EmptyState icon="sales" title={t('sales.noSalesYet')} message={t('sales.noSalesOfficeHint')} />
         }
       />
+      <SaleDetailSheet data={detail} onClose={() => setDetail(null)} formatMoney={fmtUZS} />
     </Screen>
   )
 }

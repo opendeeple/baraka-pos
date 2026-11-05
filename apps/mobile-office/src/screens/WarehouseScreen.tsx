@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { FlatList, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import type { StocktakeRow, WarehouseStockRow, StockLocation, WriteOffReason } from '@baraka/data'
 import {
@@ -328,7 +328,7 @@ function StocktakeSheet({ onClose, onDone }: { onClose: () => void; onDone: (cha
           <>
             <Input value={search} onChangeText={setSearch} placeholder={t('warehouse.searchPlaceholder')} left={<Icon name="search" size={16} color={theme.textFaint} />} />
             <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('warehouse.countedOfTotal', { counted: counted.length, total: items.length })}</Text>
-            <ScrollView style={styles.stocktakeList} contentContainerStyle={styles.stocktakeListInner} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+            <View style={styles.stocktakeListInner}>
               {visible.map((r) => {
                 const d = diffOf(r)
                 return (
@@ -349,7 +349,7 @@ function StocktakeSheet({ onClose, onDone }: { onClose: () => void; onDone: (cha
                   </View>
                 )
               })}
-            </ScrollView>
+            </View>
             <Input label={t('common.noteOptional')} value={note} onChangeText={setNote} />
           </>
         )}
@@ -413,7 +413,7 @@ function WriteOffSheet({
         {!picked ? (
           <>
             <Input value={search} onChangeText={setSearch} placeholder={t('warehouse.searchPlaceholder')} left={<Icon name="search" size={16} color={theme.textFaint} />} autoFocus />
-            <ScrollView style={styles.stocktakeList} contentContainerStyle={styles.stocktakeListInner} keyboardShouldPersistTaps="handled">
+            <View style={styles.stocktakeListInner}>
               {matches.map((p) => (
                 <ListRow
                   key={p.id}
@@ -422,7 +422,7 @@ function WriteOffSheet({
                   onPress={() => setPicked(p)}
                 />
               ))}
-            </ScrollView>
+            </View>
           </>
         ) : (
           <>

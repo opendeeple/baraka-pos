@@ -54,7 +54,8 @@
     "employees": "Сотрудники",
     "journal": "Журнал",
     "reports": "Отчёты",
-    "dashboardTab": "Главная"
+    "dashboardTab": "Главная",
+    "productsTab": "Товары"
   },
   "categories": {
     "searchPlaceholder": "Поиск категорий…",
@@ -678,5 +679,16 @@
     "method_Debt": "В долг",
     "expected": "Должно быть в кассе",
     "counted": "Пересчитано"
+  },
+  "saleDetail": {
+    "items": "Купленные товары",
+    "noItems": "Товары не найдены",
+    "discount": "Скидка",
+    "total": "Итого",
+    "payments": "Оплаты",
+    "change": "Сдача",
+    "customer": "Клиент",
+    "qtyPrice": "{{qty}} × {{price}}",
+    "notFound": "Данные продажи не найдены"
   }
 }

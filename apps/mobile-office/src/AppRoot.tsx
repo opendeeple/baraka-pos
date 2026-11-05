@@ -107,6 +107,7 @@ function MainTabs({ onOpenMenu }: { onOpenMenu: () => void }) {
         // 1/5-width tab and got ellipsized.
         tabBarLabel:
           route.name === 'Dashboard' ? t('nav.dashboardTab')
+          : route.name === 'Products' ? t('nav.productsTab')
           : TAB_TITLES[route.name] ? t(TAB_TITLES[route.name]) : route.name,
         tabBarLabelStyle: styles.tabLabel,
         tabBarAllowFontScaling: false,

@@ -54,7 +54,8 @@
     "employees": "Employees",
     "journal": "Journal",
     "reports": "Reports",
-    "dashboardTab": "Home"
+    "dashboardTab": "Home",
+    "productsTab": "Products"
   },
   "categories": {
     "searchPlaceholder": "Search categories…",
@@ -678,5 +679,16 @@
     "method_Debt": "On credit",
     "expected": "Expected in drawer",
     "counted": "Counted"
+  },
+  "saleDetail": {
+    "items": "Items purchased",
+    "noItems": "No items found",
+    "discount": "Discount",
+    "total": "Total",
+    "payments": "Payments",
+    "change": "Change",
+    "customer": "Customer",
+    "qtyPrice": "{{qty}} × {{price}}",
+    "notFound": "Sale details not found"
   }
 }
