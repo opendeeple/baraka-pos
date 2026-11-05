@@ -1,9 +1,9 @@
 import { memo, useCallback } from 'react'
-import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Image, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Pressable } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
 import type { CategoryItem, ProductListItem } from '@baraka/data'
-import { Badge, Chip, EmptyState, useTheme } from '@baraka/mobile-ui'
+import { Badge, Chip, EmptyState, Icon, useTheme } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { opacity, radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 
@@ -39,6 +39,13 @@ const ProductTile = memo(function ProductTile({
         pressed && { opacity: opacity.pressed, transform: [{ scale: 0.98 }] },
       ]}
     >
+      <View style={[styles.thumb, { backgroundColor: theme.surface }]}>
+        {item.imageUrl ? (
+          <Image source={{ uri: item.imageUrl }} style={styles.thumbImg} resizeMode="cover" />
+        ) : (
+          <Icon name="package" size={24} color={theme.textFaint} />
+        )}
+      </View>
       <Text style={[typeScale.sm, { color: theme.text, fontWeight: '600' }]} numberOfLines={2}>
         {item.isFeatured ? '★ ' : ''}
         {item.name}
@@ -98,7 +105,7 @@ export function ProductGrid({ products, categories, categoryId, onCategory, onAd
 
 const styles = StyleSheet.create({
   chips: { flexGrow: 0, marginBottom: spacing.sm },
-  chipsInner: { gap: spacing.sm },
+  chipsInner: { gap: spacing.sm, paddingRight: spacing.lg },
   columnGap: { gap: spacing.sm },
   listInner: { gap: spacing.sm, paddingBottom: 96, flexGrow: 1 },
   tile: {
@@ -106,8 +113,20 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     padding: spacing.md,
-    minHeight: 96,
+    minHeight: 160,
     justifyContent: 'space-between',
     gap: spacing.xs,
+  },
+  thumb: {
+    width: '100%',
+    height: 64,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  thumbImg: {
+    width: '100%',
+    height: '100%',
   },
 })

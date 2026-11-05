@@ -6,7 +6,7 @@ import { fmtUZS } from '@baraka/app-core'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
 import { useSyncSocket } from '@baraka/mobile-shell'
 import type { CategoryItem, ProductListItem } from '@baraka/data'
-import { BarcodeScannerModal, Button, Dialog, Icon, IconButton, Input, Screen, Sheet, toast, useTheme } from '@baraka/mobile-ui'
+import { BarcodeScannerModal, Dialog, Icon, IconButton, Input, Screen, Sheet, toast, useTheme } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { breakpoints, opacity, radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
@@ -16,6 +16,7 @@ import { DiscountDialog } from './register/DiscountDialog'
 import { UnitCalculatorModal, type CalculatorLine } from '../components/UnitCalculatorModal'
 import { QuickAddProductModal } from '../components/QuickAddProductModal'
 import { DebtorsModal } from '../components/DebtorsModal'
+import { ScanConfirmModal } from '../components/ScanConfirmModal'
 import type { RootStackParamList } from '../navigation'
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>
@@ -39,6 +40,7 @@ export function RegisterScreen({ navigation }: Props) {
   const [calculatorProduct, setCalculatorProduct] = useState<ProductListItem | null>(null)
   const [quickAddBarcode, setQuickAddBarcode] = useState<string | null>(null)
   const [debtorsOpen, setDebtorsOpen] = useState(false)
+  const [scanConfirmProduct, setScanConfirmProduct] = useState<ProductListItem | null>(null)
 
   // Selector subscriptions: the coordinator needs only the cart-bar numbers,
   // not the whole store (kills the old full-screen re-render per keystroke).
@@ -174,10 +176,26 @@ export function RegisterScreen({ navigation }: Props) {
     [cartItems, addItem]
   )
 
+  // A scan match gets its own confirm step (photo, name, price, a quantity
+  // to enter) instead of silently dropping one unit in the cart — tapping a
+  // tile on the grid is already a deliberate, visible choice and stays
+  // instant; a scan happens too fast to see what it hit.
+  const addScanned = useCallback(
+    (p: ProductListItem) => {
+      if (!p.batchId) return
+      if (p.unit === 'kg' || p.unit === 'box') {
+        setCalculatorProduct(p)
+        return
+      }
+      setScanConfirmProduct(p)
+    },
+    []
+  )
+
   function submitBarcode(code: string): boolean {
     const hit = repos.products.findByBarcode(code.trim())
     if (hit) {
-      addProduct(hit)
+      addScanned(hit)
       return true
     }
     return false
@@ -198,7 +216,14 @@ export function RegisterScreen({ navigation }: Props) {
             else if (search.trim()) setQuickAddBarcode(search.trim())
           }}
         />
-        <Button title={t('common.scan')} icon="scan" onPress={() => setScannerOpen(true)} />
+        <IconButton
+          icon="scan"
+          size={24}
+          color={theme.primary}
+          variant="outline"
+          accessibilityLabel={t('common.scan')}
+          onPress={() => setScannerOpen(true)}
+        />
         <IconButton
           icon="banknote"
           size={24}
@@ -252,6 +277,28 @@ export function RegisterScreen({ navigation }: Props) {
           onAdd={(lines) => {
             addCalculatorLines(calculatorProduct, lines)
             setCalculatorProduct(null)
+          }}
+        />
+      )}
+      {scanConfirmProduct && (
+        <ScanConfirmModal
+          product={scanConfirmProduct}
+          inCartQty={cartItems
+            .filter((i) => i.productId === scanConfirmProduct.id && i.batchId === scanConfirmProduct.batchId)
+            .reduce((s, i) => s + i.quantity, 0)}
+          onClose={() => setScanConfirmProduct(null)}
+          onConfirm={(qty) => {
+            addItem({
+              productId: scanConfirmProduct.id,
+              batchId: scanConfirmProduct.batchId,
+              name: scanConfirmProduct.name,
+              quantity: qty,
+              unitPrice: scanConfirmProduct.price,
+              unitCost: scanConfirmProduct.cost,
+              discount: 0,
+              maxStock: scanConfirmProduct.isStockManaged ? scanConfirmProduct.stock : undefined,
+            } as never)
+            setScanConfirmProduct(null)
           }}
         />
       )}

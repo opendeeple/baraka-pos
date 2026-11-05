@@ -1,9 +1,11 @@
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { useState } from 'react'
+import { FlatList, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
 import { Button, EmptyState, IconButton, toast, useTheme } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { radius, spacing, touch, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../../platform/services'
+import { HeldOrdersModal } from '../../components/HeldOrdersModal'
 
 interface CartPanelProps {
   onPay: () => void
@@ -18,13 +20,14 @@ interface CartPanelProps {
 export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
   const theme = useTheme()
   const { t } = useTranslation()
+  const { height: windowHeight } = useWindowDimensions()
   const { useCartStore } = getServices()
   const items = useCartStore((s) => s.items)
   const discount = useCartStore((s) => s.discount)
   const heldCarts = useCartStore((s) => s.heldCarts)
   const setQuantity = useCartStore((s) => s.setQuantity)
-  const restoreHeld = useCartStore((s) => s.restoreHeld)
   const getFinalTotal = useCartStore((s) => s.getFinalTotal)
+  const [heldOrdersOpen, setHeldOrdersOpen] = useState(false)
 
   const total = getFinalTotal()
   const itemCount = items.reduce((s, i) => s + i.quantity, 0)
@@ -35,6 +38,12 @@ export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
       <FlatList
         data={items}
         keyExtractor={(_, i) => String(i)}
+        // Sheet (the bottom-sheet modal this renders inside, on phones) caps
+        // its own height but never gives children a definite one to flex
+        // against, so a bare FlatList here measures to nothing and the cart
+        // looks empty even with items in it. A fixed-pixel cap sidesteps
+        // that Yoga ambiguity in both the Sheet and the two-pane sidebar.
+        style={{ maxHeight: windowHeight * 0.38 }}
         contentContainerStyle={styles.listInner}
         renderItem={({ item, index }) => (
           <View style={[styles.row, { backgroundColor: theme.surfaceRaised }]}>
@@ -95,7 +104,7 @@ export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
             variant="secondary"
             size="sm"
             icon="pause"
-            onPress={() => restoreHeld(heldCarts[heldCarts.length - 1].id)}
+            onPress={() => setHeldOrdersOpen(true)}
             style={styles.heldBtn}
           />
         )}
@@ -110,6 +119,7 @@ export function CartPanel({ onPay, onHold, onDiscountPress }: CartPanelProps) {
           />
         </View>
       </View>
+      {heldOrdersOpen && <HeldOrdersModal onClose={() => setHeldOrdersOpen(false)} />}
     </View>
   )
 }
