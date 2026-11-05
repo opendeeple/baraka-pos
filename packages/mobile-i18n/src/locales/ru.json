@@ -322,7 +322,9 @@
     "actionContactDelete": "Клиент удалён",
     "actionShiftClose": "Смена закрыта",
     "actionSettingsChange": "Настройка изменена",
-    "actionDebtReminder": "Отправлено напоминание о долге"
+    "actionDebtReminder": "Отправлено напоминание о долге",
+    "actionDrawerOpen": "Денежный ящик открыт",
+    "actionDiscount": "Предоставлена скидка"
   },
   "reports": {
     "days7": "7 дней",

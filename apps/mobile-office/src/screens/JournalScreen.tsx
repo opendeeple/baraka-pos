@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { FlatList, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { JOURNAL_ATTENTION, type JournalEntry, type JournalGroup } from '@baraka/data'
 import { Chip, EmptyState, Input, ListRow, Screen, useTheme } from '@baraka/mobile-ui'
@@ -38,6 +38,8 @@ const ACTION_I18N: Record<string, string> = {
   debt_reminder: 'journal.actionDebtReminder',
   shift_close: 'journal.actionShiftClose',
   settings_change: 'journal.actionSettingsChange',
+  drawer_open: 'journal.actionDrawerOpen',
+  discount: 'journal.actionDiscount',
 }
 
 const money = (v: unknown) => `UZS ${Math.round(Number(v) || 0).toLocaleString('en-US')}`
@@ -115,16 +117,16 @@ export function JournalScreen() {
   return (
     <Screen padded={false}>
       <View style={styles.filterArea}>
-        <View style={styles.chipRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
           {GROUPS.map((g) => (
             <Chip key={g} label={t(GROUP_I18N[g])} selected={group === g} onPress={() => setGroup(g)} />
           ))}
-        </View>
-        <View style={styles.chipRow}>
+        </ScrollView>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
           {PERIODS.map((p) => (
             <Chip key={String(p.value)} label={t(p.i18nKey)} selected={period === p.value} onPress={() => setPeriod(p.value)} />
           ))}
-        </View>
+        </ScrollView>
         <Input
           value={search}
           onChangeText={setSearch}
@@ -157,6 +159,6 @@ export function JournalScreen() {
 
 const styles = StyleSheet.create({
   filterArea: { padding: spacing.md, gap: spacing.sm },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  chipRow: { flexDirection: 'row', gap: spacing.xs, paddingRight: spacing.lg },
   list: { paddingHorizontal: spacing.md, paddingBottom: spacing.md, gap: spacing.sm },
 })

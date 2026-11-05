@@ -322,7 +322,9 @@
     "actionContactDelete": "Mijoz o'chirildi",
     "actionShiftClose": "Smena yopildi",
     "actionSettingsChange": "Sozlama o'zgardi",
-    "actionDebtReminder": "Qarz eslatmasi yuborildi"
+    "actionDebtReminder": "Qarz eslatmasi yuborildi",
+    "actionDrawerOpen": "Kassa qutisi ochildi",
+    "actionDiscount": "Chegirma berildi"
   },
   "reports": {
     "days7": "7 kun",

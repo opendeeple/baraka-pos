@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { FlatList, StyleSheet, Switch, Text, View } from 'react-native'
+import { useCallback, useMemo, useState } from 'react'
+import { FlatList, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { CategoryItem, ProductListItem } from '@baraka/data'
@@ -51,6 +51,7 @@ export function ProductsScreen() {
   // or start a new one pre-filled with it) vs 'fill' (the form's own Barcode
   // field — scan a physical label straight into it instead of typing it).
   const [scanMode, setScanMode] = useState<'lookup' | 'fill' | null>(null)
+  const [categorySearch, setCategorySearch] = useState('')
 
   const load = useCallback(() => {
     setProducts(repos.products.list({ search: search || undefined, limit: 300 }))
@@ -59,9 +60,15 @@ export function ProductsScreen() {
 
   useFocusEffect(load)
 
+  const filteredCategories = useMemo(() => {
+    const q = categorySearch.trim().toLowerCase()
+    return q ? categories.filter((c) => c.name.toLowerCase().includes(q)) : categories
+  }, [categories, categorySearch])
+
   function openCreate() {
     setEditId(null)
     setForm(EMPTY_FORM)
+    setCategorySearch('')
     setShowForm(true)
   }
 
@@ -76,6 +83,7 @@ export function ProductsScreen() {
       isStockManaged: p.isStockManaged,
       categoryId: p.categoryId,
     })
+    setCategorySearch('')
     setShowForm(true)
   }
 
@@ -205,9 +213,19 @@ export function ProductsScreen() {
             <Input label={t('products.sku')} value={form.sku} onChangeText={(v) => set('sku', v)} containerStyle={styles.flex1} />
           </View>
           <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('products.category')}</Text>
-          <View style={styles.chipRow}>
-            <Chip label={t('products.none')} selected={form.categoryId === null} onPress={() => setForm((p) => ({ ...p, categoryId: null }))} />
-            {categories.map((c) => (
+          {categories.length > 6 && (
+            <Input
+              value={categorySearch}
+              onChangeText={setCategorySearch}
+              placeholder={t('categories.searchPlaceholder')}
+              left={<Icon name="search" size={16} color={theme.textFaint} />}
+            />
+          )}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+            {!categorySearch.trim() && (
+              <Chip label={t('products.none')} selected={form.categoryId === null} onPress={() => setForm((p) => ({ ...p, categoryId: null }))} />
+            )}
+            {filteredCategories.map((c) => (
               <Chip
                 key={c.id}
                 label={c.name}
@@ -215,7 +233,7 @@ export function ProductsScreen() {
                 onPress={() => setForm((p) => ({ ...p, categoryId: c.id }))}
               />
             ))}
-          </View>
+          </ScrollView>
           <View style={styles.row2}>
             <Input
               label={t('products.lowStockAlertAt')}
@@ -257,7 +275,7 @@ const styles = StyleSheet.create({
   rowRight: { alignItems: 'flex-end', gap: spacing.xs },
   form: { gap: spacing.sm, paddingBottom: spacing.sm },
   row2: { flexDirection: 'row', gap: spacing.sm },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  chipRow: { flexDirection: 'row', gap: spacing.xs, paddingRight: spacing.lg },
   flex1: { flex: 1 },
   flex2: { flex: 2 },
   switchCol: { alignItems: 'flex-start', justifyContent: 'space-between', paddingVertical: spacing.xs },

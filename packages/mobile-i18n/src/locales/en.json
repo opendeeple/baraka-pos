@@ -322,7 +322,9 @@
     "actionContactDelete": "Customer deleted",
     "actionShiftClose": "Shift closed",
     "actionSettingsChange": "Setting changed",
-    "actionDebtReminder": "Debt reminder sent"
+    "actionDebtReminder": "Debt reminder sent",
+    "actionDrawerOpen": "Cash drawer opened",
+    "actionDiscount": "Discount given"
   },
   "reports": {
     "days7": "7 days",
