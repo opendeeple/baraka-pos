@@ -38,6 +38,17 @@ export interface SaleHistoryItem {
   contactName: string | null
 }
 
+export interface SaleReceiptData {
+  invoiceNumber: string
+  saleTime: string
+  customerName: string | null
+  discount: number
+  total: number
+  change: number
+  items: Array<{ name: string; quantity: number; price: number; discount: number }>
+  payments: Array<{ method: string; amount: number }>
+}
+
 export interface SaleItemRow {
   description: string
   quantity: number
@@ -312,6 +323,42 @@ export function createSaleRepository(db: DbAdapter, uuid: () => string, enqueue:
           quantity: Number(r.quantity) || 0,
           unitPrice: Number(r.unit_price) || 0,
         }))
+    },
+
+    /** Everything needed to rebuild a past sale's receipt (reprint / PDF
+     *  from sales history). Null if the sale no longer exists locally. */
+    receiptData(saleId: number): SaleReceiptData | null {
+      const sale = db.get<Record<string, any>>(
+        `SELECT s.invoice_number, s.sale_time, s.discount, s.total_amount, s.change_amount,
+                c.name AS contact_name
+         FROM sales s LEFT JOIN contacts c ON c.id = s.contact_id WHERE s.id=?`,
+        [saleId]
+      )
+      if (!sale) return null
+      const items = db.all<Record<string, any>>(
+        `SELECT description, quantity, unit_price, COALESCE(discount, 0) AS discount
+         FROM sale_items WHERE sale_id=? ORDER BY id`,
+        [saleId]
+      )
+      const payments = db.all<Record<string, any>>(
+        `SELECT payment_method, amount FROM payment_transactions WHERE sale_id=? ORDER BY id`,
+        [saleId]
+      )
+      return {
+        invoiceNumber: sale.invoice_number,
+        saleTime: sale.sale_time,
+        customerName: sale.contact_name ?? null,
+        discount: Number(sale.discount) || 0,
+        total: Number(sale.total_amount) || 0,
+        change: Number(sale.change_amount) || 0,
+        items: items.map((r) => ({
+          name: r.description,
+          quantity: Number(r.quantity) || 0,
+          price: Number(r.unit_price) || 0,
+          discount: Number(r.discount) || 0,
+        })),
+        payments: payments.map((r) => ({ method: r.payment_method, amount: Number(r.amount) || 0 })),
+      }
     },
   }
 }

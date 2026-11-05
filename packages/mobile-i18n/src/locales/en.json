@@ -469,7 +469,9 @@
     "refundSuccess": "Refunded {{invoice}} — {{amount}}",
     "refundFailed": "Refund failed — please retry",
     "ownerPinForRefund": "Owner PIN required to refund",
-    "noSalesOfficeHint": "Completed sales appear here as they sync"
+    "noSalesOfficeHint": "Completed sales appear here as they sync",
+    "viewReceipt": "Receipt",
+    "receiptNotFound": "Receipt for this sale not found"
   },
   "pos": {
     "searchPlaceholder": "Search or scan barcode…",
@@ -642,5 +644,39 @@
     "offline": "Offline",
     "error": "Sync error",
     "statusA11y": "Sync status: {{label}}"
+  },
+  "journalDesc": {
+    "reason": "Reason",
+    "warehouseToShop": "warehouse → shop",
+    "variance": "difference",
+    "stocktakeLine": "{{counted}} counted, {{changed}} changed",
+    "linesCount": "{{count}} products",
+    "stockLeft": "stock was {{qty}}",
+    "debtLeft": "still owes UZS {{amount}}",
+    "setting_receipt_template": "Receipt text",
+    "setting_telegram_config": "Telegram bot",
+    "setting_sms_config": "SMS gateway",
+    "setting_auto_reminder_config": "Automatic debt reminders",
+    "setting_debt_sale_notify_config": "Debt-sale message",
+    "setting_creditor_reminder_config": "Creditor due-date reminders",
+    "setting_owner_expense_pin": "Owner PIN",
+    "setting_scale_barcode_config": "Scale setup",
+    "toShop": "Shop",
+    "toWarehouse": "Warehouse",
+    "shortage": "Shortage",
+    "surplus": "Surplus",
+    "loss": "Loss",
+    "wo_damaged": "Broken / damaged",
+    "wo_expired": "Expired",
+    "wo_lost": "Lost / stolen",
+    "wo_internal": "Used by the shop",
+    "wo_other": "Other",
+    "method_Cash": "Cash",
+    "method_Card": "Card",
+    "method_Click": "Click",
+    "method_Transfer": "Bank transfer",
+    "method_Debt": "On credit",
+    "expected": "Expected in drawer",
+    "counted": "Counted"
   }
 }

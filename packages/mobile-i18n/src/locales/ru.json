@@ -469,7 +469,9 @@
     "refundSuccess": "Возврат {{invoice}} — {{amount}}",
     "refundFailed": "Возврат не удался — попробуйте ещё раз",
     "ownerPinForRefund": "Для возврата нужен PIN владельца",
-    "noSalesOfficeHint": "Завершённые продажи появятся здесь после синхронизации"
+    "noSalesOfficeHint": "Завершённые продажи появятся здесь после синхронизации",
+    "viewReceipt": "Чек",
+    "receiptNotFound": "Чек этой продажи не найден"
   },
   "pos": {
     "searchPlaceholder": "Поиск или сканирование штрих-кода…",
@@ -642,5 +644,39 @@
     "offline": "Офлайн",
     "error": "Ошибка синхр.",
     "statusA11y": "Статус синхронизации: {{label}}"
+  },
+  "journalDesc": {
+    "reason": "Причина",
+    "warehouseToShop": "со склада в магазин",
+    "variance": "разница",
+    "stocktakeLine": "пересчитано {{counted}}, изменено {{changed}}",
+    "linesCount": "{{count}} товаров",
+    "stockLeft": "остаток был {{qty}}",
+    "debtLeft": "остаток долга UZS {{amount}}",
+    "setting_receipt_template": "Текст чека",
+    "setting_telegram_config": "Telegram-бот",
+    "setting_sms_config": "SMS-шлюз",
+    "setting_auto_reminder_config": "Автонапоминание о долге",
+    "setting_debt_sale_notify_config": "Сообщение о продаже в долг",
+    "setting_creditor_reminder_config": "Напоминания о возврате клиентам",
+    "setting_owner_expense_pin": "PIN владельца",
+    "setting_scale_barcode_config": "Настройка весов",
+    "toShop": "В магазин",
+    "toWarehouse": "На склад",
+    "shortage": "Недостача",
+    "surplus": "Излишек",
+    "loss": "Убыток",
+    "wo_damaged": "Бой / повреждение",
+    "wo_expired": "Истёк срок годности",
+    "wo_lost": "Потеря / кража",
+    "wo_internal": "Нужды магазина",
+    "wo_other": "Другая причина",
+    "method_Cash": "Наличные",
+    "method_Card": "Карта",
+    "method_Click": "Click",
+    "method_Transfer": "Перечисление",
+    "method_Debt": "В долг",
+    "expected": "Должно быть в кассе",
+    "counted": "Пересчитано"
   }
 }

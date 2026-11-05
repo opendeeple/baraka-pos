@@ -1,22 +1,25 @@
 import { useCallback, useState } from 'react'
 import { FlatList, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
-import { fmtUZS } from '@baraka/app-core'
+import { fmtUZS, renderReceiptText, type ReceiptDoc } from '@baraka/app-core'
 import type { SaleHistoryItem } from '@baraka/data'
-import { Badge, Button, Dialog, EmptyState, PinConfirmModal, Screen, toast, useTheme } from '@baraka/mobile-ui'
+import { Badge, Button, Dialog, EmptyState, PinConfirmModal, Screen, Sheet, toast, useTheme } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
+import { printViaSystemDialog, shareReceiptPdf } from '../printing/systemPrint'
 
 export function SalesHistoryScreen() {
   const theme = useTheme()
   const { t } = useTranslation()
   const { repos, engine } = getServices()
-  const { user, session } = useAuthStore()
+  const { user, session, store } = useAuthStore()
   const [sales, setSales] = useState<SaleHistoryItem[]>([])
   const [refundTarget, setRefundTarget] = useState<SaleHistoryItem | null>(null)
   const [pinTarget, setPinTarget] = useState<SaleHistoryItem | null>(null)
+  const [receiptDoc, setReceiptDoc] = useState<ReceiptDoc | null>(null)
+  const [receiptBusy, setReceiptBusy] = useState<'print' | 'pdf' | null>(null)
   // Same settings key as desktop's owner_expense_pin gate — set once in
   // desktop Settings, synced down, and checked here too (M0's H4 left this
   // refund flow explicitly ungated pending this).
@@ -27,6 +30,44 @@ export function SalesHistoryScreen() {
   }, [])
 
   useFocusEffect(load)
+
+  // Rebuilds a past sale's receipt from local data so it can be reprinted
+  // or shared as PDF — same system print / PDF path as the post-sale sheet.
+  function openReceipt(sale: SaleHistoryItem) {
+    const data = repos.sales.receiptData(sale.id)
+    if (!data) {
+      toast.error(t('sales.receiptNotFound'))
+      return
+    }
+    setReceiptDoc({
+      invoiceNumber: data.invoiceNumber,
+      storeName: store?.name ?? t('receipt.storeFallback'),
+      storeAddress: store?.address,
+      storePhone: store?.phone,
+      customerName: data.customerName,
+      timestamp: data.saleTime,
+      items: data.items,
+      charges: [],
+      discount: data.discount,
+      total: data.total,
+      payments: data.payments,
+      change: data.change,
+      openDrawer: false,
+    })
+  }
+
+  async function runReceipt(kind: 'print' | 'pdf') {
+    if (!receiptDoc || receiptBusy) return
+    setReceiptBusy(kind)
+    try {
+      if (kind === 'print') await printViaSystemDialog(receiptDoc)
+      else await shareReceiptPdf(receiptDoc)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t(kind === 'print' ? 'payment.printFailed' : 'payment.pdfFailed'))
+    } finally {
+      setReceiptBusy(null)
+    }
+  }
 
   function performRefund(sale: SaleHistoryItem) {
     // Refund money is always a current-shift drawer movement, so there must
@@ -93,6 +134,13 @@ export function SalesHistoryScreen() {
                     tone={item.syncStatus === 'synced' ? 'success' : 'warning'}
                   />
                 </View>
+                <Button
+                  title={t('sales.viewReceipt')}
+                  variant="secondary"
+                  size="sm"
+                  icon="receipt"
+                  onPress={() => openReceipt(item)}
+                />
                 {refundable ? (
                   <Button
                     title={t('sales.refund')}
@@ -138,6 +186,39 @@ export function SalesHistoryScreen() {
         ]}
       />
 
+      <Sheet
+        visible={receiptDoc !== null}
+        onClose={() => setReceiptDoc(null)}
+        title={receiptDoc?.invoiceNumber}
+        footer={
+          <View style={styles.receiptActions}>
+            <Button
+              title={t('payment.print')}
+              variant="secondary"
+              icon="printer"
+              loading={receiptBusy === 'print'}
+              disabled={receiptBusy !== null && receiptBusy !== 'print'}
+              onPress={() => runReceipt('print')}
+              style={styles.flex1}
+            />
+            <Button
+              title={t('payment.savePdf')}
+              icon="send"
+              loading={receiptBusy === 'pdf'}
+              disabled={receiptBusy !== null && receiptBusy !== 'pdf'}
+              onPress={() => runReceipt('pdf')}
+              style={styles.flex1}
+            />
+          </View>
+        }
+      >
+        {receiptDoc && (
+          <View style={[styles.receiptBox, { backgroundColor: theme.bg, borderColor: theme.border }]}>
+            <Text style={[styles.receiptText, { color: theme.textMuted }]}>{renderReceiptText(receiptDoc, 32)}</Text>
+          </View>
+        )}
+      </Sheet>
+
       <PinConfirmModal
         visible={pinTarget !== null}
         expectedPin={ownerPin}
@@ -158,7 +239,10 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: radius.md, padding: spacing.md, gap: spacing.xs },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   amount: { flexShrink: 0, maxWidth: '55%' },
-  bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginTop: spacing.xxs },
+  bottomRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.xxs },
   badges: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs, flex: 1 },
   flex1: { flex: 1 },
+  receiptActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  receiptBox: { borderWidth: 1, borderRadius: radius.md, padding: spacing.md },
+  receiptText: { fontFamily: 'monospace', fontSize: 11, lineHeight: 16 },
 })

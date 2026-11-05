@@ -43,40 +43,45 @@ const ACTION_I18N: Record<string, string> = {
 }
 
 const money = (v: unknown) => `UZS ${Math.round(Number(v) || 0).toLocaleString('en-US')}`
-const place = (loc: unknown) => (loc === 'warehouse' ? 'warehouse' : 'shop')
+type TFn = (key: string, opts?: Record<string, unknown>) => string
+
+const place = (t: TFn, loc: unknown) => (loc === 'warehouse' ? t('journalDesc.toWarehouse') : t('journalDesc.toShop'))
+const method = (t: TFn, m: unknown) => (m ? t(`journalDesc.method_${m}`, { defaultValue: String(m) }) : '')
 
 /** One readable line per journal entry — ported from desktop's JournalScreen.tsx describe(). */
-function describe(e: JournalEntry, d: Record<string, any>): string {
+function describe(t: TFn, e: JournalEntry, d: Record<string, any>): string {
   switch (e.action) {
     case 'sale_void':
-      return `${e.entityId} · ${money(d.total)} · reason: ${d.reason ?? '—'}`
+      return `${e.entityId} · ${money(d.total)} · ${t('journalDesc.reason')}: ${d.reason ?? '—'}`
     case 'sale_return':
-      return `${e.entityId} → ${d.returnInvoice} · ${money(d.refund)} (${d.method ?? ''})`
+      return `${e.entityId} → ${d.returnInvoice} · ${money(d.refund)} (${method(t, d.method)})`
         + (Array.isArray(d.lines) ? ` · ${d.lines.map((l: any) => `${l.product} ×${l.qty}`).join(', ')}` : '')
     case 'stock_receive':
-      return `${d.product ?? ''} +${d.qty} → ${place(d.location)}${d.reason ? ` · ${d.reason}` : ''}`
+      return `${d.product ?? ''} +${d.qty} → ${place(t, d.location)}${d.reason ? ` · ${d.reason}` : ''}`
     case 'stock_transfer':
-      return `${d.product ?? ''}: ${d.qty} · warehouse to shop`
+      return `${d.product ?? ''}: ${d.qty} · ${t('journalDesc.warehouseToShop')}`
     case 'stocktake':
-      return `${place(d.location)} · counted ${d.counted}, changed ${d.changed} · shortage ${money(d.shortageValue)} · surplus ${money(d.surplusValue)}`
+      return `${place(t, d.location)} · ${t('journalDesc.stocktakeLine', { counted: d.counted, changed: d.changed })}`
+        + ` · ${t('journalDesc.shortage')} ${money(d.shortageValue)} · ${t('journalDesc.surplus')} ${money(d.surplusValue)}`
     case 'writeoff':
-      return `${d.product}: −${d.qty} (${place(d.location)}) · ${d.reason ?? ''}${d.note ? ` — ${d.note}` : ''} · loss ${money(d.value)}`
+      return `${d.product}: −${d.qty} (${place(t, d.location)}) · ${t(`journalDesc.wo_${d.reason}`, { defaultValue: d.reason ?? '' })}`
+        + `${d.note ? ` — ${d.note}` : ''} · ${t('journalDesc.loss')} ${money(d.value)}`
     case 'purchase_order':
-      return `${e.entityId} · ${d.lines} line(s) · ${money(d.total)}`
+      return `${e.entityId} · ${t('journalDesc.linesCount', { count: d.lines })} · ${money(d.total)}`
     case 'purchase_receive':
-      return `${e.entityId} → ${place(d.location)}${d.total != null ? ` · ${money(d.total)}` : ''}`
+      return `${e.entityId} → ${place(t, d.location)}${d.total != null ? ` · ${money(d.total)}` : ''}`
     case 'supplier_payment':
-      return `${d.supplier ? `${d.supplier}: ` : ''}${money(d.amount)} · ${d.method ?? ''}${Array.isArray(d.orders) ? ` · ${d.orders.join(', ')}` : ''}`
+      return `${d.supplier ? `${d.supplier}: ` : ''}${money(d.amount)} · ${method(t, d.method)}${Array.isArray(d.orders) ? ` · ${d.orders.join(', ')}` : ''}`
     case 'price_change':
       return `${d.product}: ${money(d.from)} → ${money(d.to)}`
     case 'product_create':
       return `${d.product} · ${money(d.price)}`
     case 'product_delete':
-      return `${d.product}${d.stock != null ? ` · ${d.stock} left in stock` : ''}`
+      return `${d.product}${d.stock != null ? ` · ${t('journalDesc.stockLeft', { qty: d.stock })}` : ''}`
     case 'expense':
       return `${d.category ?? ''} · ${money(d.amount)}${d.description ? ` · ${d.description}` : ''}`
     case 'debt_payment':
-      return `${d.customer}: ${money(d.amount)} (${d.method ?? ''}) · ${money(d.balanceAfter)} left`
+      return `${d.customer}: ${money(d.amount)} (${method(t, d.method)}) · ${t('journalDesc.debtLeft', { amount: Math.round(Number(d.balanceAfter) || 0).toLocaleString('en-US') })}`
     case 'debt_clear':
       return `${d.customer}: ${money(d.totalDebt)}`
     case 'contact_delete':
@@ -84,9 +89,9 @@ function describe(e: JournalEntry, d: Record<string, any>): string {
     case 'debt_reminder':
       return `${d.customer}: ${money(d.balance)}`
     case 'shift_close':
-      return `expected ${money(d.expected)} · counted ${money(d.counted)} · variance ${money(d.variance)}`
+      return `${t('journalDesc.expected')} ${money(d.expected)} · ${t('journalDesc.counted')} ${money(d.counted)} · ${t('journalDesc.variance')} ${money(d.variance)}`
     case 'settings_change':
-      return e.entityId ?? ''
+      return t(`journalDesc.setting_${e.entityId}`, { defaultValue: e.entityId ?? '' })
     default:
       return ''
   }
@@ -111,8 +116,8 @@ export function JournalScreen() {
     let d: Record<string, any> = {}
     try { d = e.details ? JSON.parse(e.details) : {} } catch { /* keep empty */ }
     const shortShift = e.action === 'shift_close' && Number(d.variance) < 0
-    return { e, text: describe(e, d), attention: JOURNAL_ATTENTION.has(e.action) || shortShift }
-  }), [entries])
+    return { e, text: describe(t as TFn, e, d), attention: JOURNAL_ATTENTION.has(e.action) || shortShift }
+  }), [entries, t])
 
   return (
     <Screen padded={false}>
@@ -144,10 +149,12 @@ export function JournalScreen() {
           <ListRow
             title={ACTION_I18N[e.action] ? t(ACTION_I18N[e.action]) : e.action}
             subtitle={`${String(e.occurredAt).slice(0, 16).replace('T', ' ')} · ${e.userName ?? '—'}`}
-            right={
-              <Text style={[typeScale.sm, { color: attention ? theme.danger : theme.textMuted, maxWidth: 160, textAlign: 'right' }]} numberOfLines={3}>
-                {text}
-              </Text>
+            meta={
+              text ? (
+                <Text style={[typeScale.sm, { color: attention ? theme.danger : theme.textMuted, flexShrink: 1 }]} numberOfLines={4}>
+                  {text}
+                </Text>
+              ) : null
             }
           />
         )}

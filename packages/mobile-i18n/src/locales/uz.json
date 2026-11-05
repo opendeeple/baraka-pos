@@ -469,7 +469,9 @@
     "refundSuccess": "{{invoice}} qaytarildi — {{amount}}",
     "refundFailed": "Qaytarish amalga oshmadi — qaytadan urinib ko'ring",
     "ownerPinForRefund": "Qaytarish uchun egasi PIN-kodi kerak",
-    "noSalesOfficeHint": "Yakunlangan sotuvlar sinxronlanganda shu yerda ko'rinadi"
+    "noSalesOfficeHint": "Yakunlangan sotuvlar sinxronlanganda shu yerda ko'rinadi",
+    "viewReceipt": "Chek",
+    "receiptNotFound": "Bu sotuv cheki topilmadi"
   },
   "pos": {
     "searchPlaceholder": "Qidirish yoki shtrix-kodni skanerlash…",
@@ -642,5 +644,39 @@
     "offline": "Oflayn",
     "error": "Sinxron xatosi",
     "statusA11y": "Sinxronlash holati: {{label}}"
+  },
+  "journalDesc": {
+    "reason": "Sabab",
+    "warehouseToShop": "ombordan do'konga",
+    "variance": "farq",
+    "stocktakeLine": "{{counted}} ta sanaldi, {{changed}} tasi o'zgardi",
+    "linesCount": "{{count}} ta mahsulot",
+    "stockLeft": "qoldiq {{qty}} edi",
+    "debtLeft": "qolgan qarz UZS {{amount}}",
+    "setting_receipt_template": "Chek matni",
+    "setting_telegram_config": "Telegram bot",
+    "setting_sms_config": "SMS shlyuz",
+    "setting_auto_reminder_config": "Avtomatik qarz eslatmasi",
+    "setting_debt_sale_notify_config": "Qarzga sotuv xabari",
+    "setting_creditor_reminder_config": "Haqdorlar muddati eslatmasi",
+    "setting_owner_expense_pin": "Egasining PIN-kodi",
+    "setting_scale_barcode_config": "Tarozi sozlamasi",
+    "toShop": "Do'konga",
+    "toWarehouse": "Omborxonaga",
+    "shortage": "Kamomad",
+    "surplus": "Ortiqcha",
+    "loss": "Yo'qotish",
+    "wo_damaged": "Singan / shikastlangan",
+    "wo_expired": "Muddati o'tgan",
+    "wo_lost": "Yo'qolgan / o'g'irlangan",
+    "wo_internal": "Do'kon ehtiyoji uchun",
+    "wo_other": "Boshqa sabab",
+    "method_Cash": "Naqd",
+    "method_Card": "Karta",
+    "method_Click": "Click",
+    "method_Transfer": "O'tkazma",
+    "method_Debt": "Qarzga",
+    "expected": "Kassada bo'lishi kerak",
+    "counted": "Sanalgan"
   }
 }
