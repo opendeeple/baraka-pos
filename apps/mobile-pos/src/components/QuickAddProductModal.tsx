@@ -89,7 +89,17 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
   if (step === 'confirm') {
     const exactDup = similar.find((p) => isExactDuplicate(p, name, barcodeValue))
     return (
-      <Sheet visible onClose={onClose} title={t('pos.confirmNewProduct')}>
+      <Sheet
+        visible
+        onClose={onClose}
+        title={t('pos.confirmNewProduct')}
+        footer={
+          <View style={styles.actions}>
+            <Button title={t('common.back')} variant="secondary" onPress={() => setStep('form')} style={styles.flex1} />
+            <Button title={t('common.create')} onPress={confirmCreate} loading={saving} disabled={!!exactDup} style={styles.flex2} />
+          </View>
+        }
+      >
         <View style={styles.body}>
           <View style={[styles.banner, { backgroundColor: exactDup ? theme.danger + '1a' : theme.warning + '1a', borderColor: exactDup ? theme.danger : theme.warning }]}>
             <Icon name="alert" size={16} color={exactDup ? theme.danger : theme.warning} />
@@ -119,27 +129,17 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
               {barcodeValue || '—'} · {price} UZS · qty {qtyNum}
             </Text>
           </View>
-
-          <View style={styles.actions}>
-            <Button title={t('common.back')} variant="secondary" onPress={() => setStep('form')} style={styles.flex1} />
-            <Button title={t('common.create')} onPress={confirmCreate} loading={saving} disabled={!!exactDup} style={styles.flex2} />
-          </View>
         </View>
       </Sheet>
     )
   }
 
   return (
-    <Sheet visible onClose={onClose} title={t('pos.newProduct')}>
-      <View style={styles.body}>
-        <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('pos.noMatchBarcode', { barcode })}</Text>
-        <Input label={t('pos.productName')} value={name} onChangeText={setName} autoFocus />
-        <Input label={t('pos.barcode')} value={barcodeValue} onChangeText={setBarcodeValue} />
-        <View style={styles.row2}>
-          <Input label={t('pos.priceLabel')} value={price} onChangeText={setPrice} keyboardType="numeric" containerStyle={styles.flex1} />
-          <Input label={t('pos.costLabel')} value={cost} onChangeText={setCost} keyboardType="numeric" containerStyle={styles.flex1} />
-        </View>
-        <Input label={t('pos.quantityOnHand')} value={qty} onChangeText={setQty} keyboardType="decimal-pad" placeholder="0" />
+    <Sheet
+      visible
+      onClose={onClose}
+      title={t('pos.newProduct')}
+      footer={
         <View style={styles.actions}>
           <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
           <Button
@@ -149,6 +149,17 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
             style={styles.flex2}
           />
         </View>
+      }
+    >
+      <View style={styles.body}>
+        <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('pos.noMatchBarcode', { barcode })}</Text>
+        <Input label={t('pos.productName')} value={name} onChangeText={setName} autoFocus />
+        <Input label={t('pos.barcode')} value={barcodeValue} onChangeText={setBarcodeValue} />
+        <View style={styles.row2}>
+          <Input label={t('pos.priceLabel')} value={price} onChangeText={setPrice} keyboardType="numeric" containerStyle={styles.flex1} />
+          <Input label={t('pos.costLabel')} value={cost} onChangeText={setCost} keyboardType="numeric" containerStyle={styles.flex1} />
+        </View>
+        <Input label={t('pos.quantityOnHand')} value={qty} onChangeText={setQty} keyboardType="decimal-pad" placeholder="0" />
       </View>
     </Sheet>
   )

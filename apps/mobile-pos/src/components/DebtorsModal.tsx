@@ -151,7 +151,17 @@ function DebtorPayPanel({
 
   if (view === 'pay') {
     return (
-      <Sheet visible onClose={() => setView('statement')} title={t('debt.payDebtTitle', { name: contact.name })}>
+      <Sheet
+        visible
+        onClose={() => setView('statement')}
+        title={t('debt.payDebtTitle', { name: contact.name })}
+        footer={
+          <View style={styles.actions}>
+            <Button title={t('common.back')} variant="secondary" onPress={() => setView('statement')} style={styles.flex1} />
+            <Button title={t('debt.confirmPayment')} onPress={confirmPay} loading={paying} disabled={!entered} style={styles.flex2} />
+          </View>
+        }
+      >
         <View style={styles.form}>
           <View style={styles.chipRow}>
             {(['Cash', 'Card', 'Click'] as const).map((m) => (
@@ -174,10 +184,6 @@ function DebtorPayPanel({
               </View>
             </View>
           )}
-          <View style={styles.actions}>
-            <Button title={t('common.back')} variant="secondary" onPress={() => setView('statement')} style={styles.flex1} />
-            <Button title={t('debt.confirmPayment')} onPress={confirmPay} loading={paying} disabled={!entered} style={styles.flex2} />
-          </View>
         </View>
       </Sheet>
     )

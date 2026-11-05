@@ -125,16 +125,22 @@ export function SuppliersScreen() {
         }
       />
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? t('suppliers.editSupplier') : t('suppliers.newSupplier')}>
+      <Sheet
+        visible={showForm}
+        onClose={() => setShowForm(false)}
+        title={editId ? t('suppliers.editSupplier') : t('suppliers.newSupplier')}
+        footer={
+          <View style={styles.actions}>
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title={t('common.save')} onPress={save} style={styles.flex2} />
+          </View>
+        }
+      >
         <View style={styles.form}>
           <Input label={t('common.name')} value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} autoFocus />
           <Input label={t('common.phone')} value={form.phone ?? ''} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} keyboardType="phone-pad" />
           <Input label={t('common.address')} value={form.address ?? ''} onChangeText={(v) => setForm((p) => ({ ...p, address: v }))} />
           <Input label={t('common.note')} value={form.notes ?? ''} onChangeText={(v) => setForm((p) => ({ ...p, notes: v }))} />
-          <View style={styles.actions}>
-            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
-            <Button title={t('common.save')} onPress={save} style={styles.flex2} />
-          </View>
         </View>
       </Sheet>
 
@@ -186,7 +192,7 @@ function SupplierDetailSheet({
   const [payments] = useState<SupplierPaymentRow[]>(() => repos.suppliers.payments(supplier.id))
 
   return (
-    <Sheet visible onClose={onClose} title={supplier.name}>
+    <Sheet visible onClose={onClose} title={supplier.name} scrollBody>
       <View style={styles.form}>
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
@@ -260,7 +266,17 @@ function SupplierPaySheet({
   const valid = Number.isFinite(value) && value > 0 && value <= supplier.owed + 0.001
 
   return (
-    <Sheet visible onClose={onClose} title={t('suppliers.payTitle', { name: supplier.name })}>
+    <Sheet
+      visible
+      onClose={onClose}
+      title={t('suppliers.payTitle', { name: supplier.name })}
+      footer={
+        <View style={styles.actions}>
+          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button title={t('suppliers.pay')} disabled={!valid} onPress={() => onPaid(value, method, note)} style={styles.flex2} />
+        </View>
+      }
+    >
       <View style={styles.form}>
         <View style={[styles.statCard, styles.fullWidthCard]}>
           <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('suppliers.weOwe')}</Text>
@@ -280,10 +296,6 @@ function SupplierPaySheet({
           ))}
         </View>
         <Input label={t('common.noteOptional')} value={note} onChangeText={setNote} />
-        <View style={styles.actions}>
-          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
-          <Button title={t('suppliers.pay')} disabled={!valid} onPress={() => onPaid(value, method, note)} style={styles.flex2} />
-        </View>
       </View>
     </Sheet>
   )

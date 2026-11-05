@@ -137,7 +137,17 @@ export function ExpensesScreen() {
         )}
       </View>
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={t('expenses.newExpense')}>
+      <Sheet
+        visible={showForm}
+        onClose={() => setShowForm(false)}
+        title={t('expenses.newExpense')}
+        footer={
+          <View style={styles.actions}>
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title={t('common.save')} onPress={handleSaveClick} style={styles.flex2} />
+          </View>
+        }
+      >
         <View style={styles.form}>
           <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('expenses.category')}</Text>
           <View style={styles.chipRow}>
@@ -159,10 +169,6 @@ export function ExpensesScreen() {
             ))}
           </View>
           <Input label={t('expenses.referenceOptional')} value={form.reference} onChangeText={(v) => set('reference', v)} />
-          <View style={styles.actions}>
-            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
-            <Button title={t('common.save')} onPress={handleSaveClick} style={styles.flex2} />
-          </View>
         </View>
       </Sheet>
 

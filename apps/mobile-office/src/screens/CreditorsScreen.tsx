@@ -195,7 +195,17 @@ export function CreditorsScreen() {
         ListEmptyComponent={<EmptyState icon="banknote" title={t('creditors.none')} message={t('more.creditorsSubtitle')} />}
       />
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? t('creditors.editCreditor') : t('creditors.newCreditor')}>
+      <Sheet
+        visible={showForm}
+        onClose={() => setShowForm(false)}
+        title={editId ? t('creditors.editCreditor') : t('creditors.newCreditor')}
+        footer={
+          <View style={styles.actions}>
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title={t('common.save')} disabled={!formValid} onPress={save} style={styles.flex2} />
+          </View>
+        }
+      >
         <View style={styles.form}>
           <Input label={t('common.name')} value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} autoFocus />
           <Input label={t('common.phone')} value={form.phone} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} keyboardType="phone-pad" />
@@ -225,10 +235,6 @@ export function CreditorsScreen() {
             keyboardType="numeric"
           />
           <Input label={t('common.noteOptional')} value={form.note} onChangeText={(v) => setForm((p) => ({ ...p, note: v }))} />
-          <View style={styles.actions}>
-            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
-            <Button title={t('common.save')} disabled={!formValid} onPress={save} style={styles.flex2} />
-          </View>
         </View>
       </Sheet>
 

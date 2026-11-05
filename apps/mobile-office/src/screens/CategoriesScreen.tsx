@@ -114,14 +114,20 @@ export function CategoriesScreen() {
         }
       />
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? t('categories.editCategory') : t('categories.newCategory')}>
-        <View style={styles.form}>
-          <Input label={t('common.name')} value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} autoFocus />
-          <Input label={t('common.descriptionOptional')} value={form.description} onChangeText={(v) => setForm((p) => ({ ...p, description: v }))} />
+      <Sheet
+        visible={showForm}
+        onClose={() => setShowForm(false)}
+        title={editId ? t('categories.editCategory') : t('categories.newCategory')}
+        footer={
           <View style={styles.actions}>
             <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
             <Button title={t('common.save')} onPress={save} style={styles.flex2} />
           </View>
+        }
+      >
+        <View style={styles.form}>
+          <Input label={t('common.name')} value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} autoFocus />
+          <Input label={t('common.descriptionOptional')} value={form.description} onChangeText={(v) => setForm((p) => ({ ...p, description: v }))} />
         </View>
       </Sheet>
 

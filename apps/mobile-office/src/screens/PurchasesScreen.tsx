@@ -134,7 +134,22 @@ function NewOrderSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (
   const total = cart.reduce((s, l) => s + l.qty * l.unitCost, 0)
 
   return (
-    <Sheet visible onClose={onClose} title={t('purchases.newOrder')}>
+    <Sheet
+      visible
+      onClose={onClose}
+      title={t('purchases.newOrder')}
+      footer={
+        <View style={styles.actions}>
+          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button
+            title={t('purchases.createOrder', { total: fmtUZS(total) })}
+            disabled={cart.length === 0}
+            onPress={() => onCreate(cart.map((l) => ({ productId: l.productId, batchId: l.batchId, qty: l.qty, unitCost: l.unitCost })))}
+            style={styles.flex2}
+          />
+        </View>
+      }
+    >
       <Input
         value={search}
         onChangeText={runSearch}
@@ -143,19 +158,16 @@ function NewOrderSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (
         returnKeyType="search"
       />
       {results.length > 0 && (
-        <FlatList
-          data={results}
-          keyExtractor={(p) => String(p.id)}
-          style={styles.searchResults}
-          keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => (
+        <View style={styles.searchResults}>
+          {results.map((item) => (
             <ListRow
+              key={item.id}
               title={item.name}
               subtitle={t('purchases.costStock', { cost: fmtUZS(item.cost), stock: item.stock })}
               onPress={() => item.batchId && setQtyTarget(item)}
             />
-          )}
-        />
+          ))}
+        </View>
       )}
 
       <View style={styles.cartSection}>
@@ -179,16 +191,6 @@ function NewOrderSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (
             </View>
           ))
         )}
-      </View>
-
-      <View style={styles.actions}>
-        <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
-        <Button
-          title={t('purchases.createOrder', { total: fmtUZS(total) })}
-          disabled={cart.length === 0}
-          onPress={() => onCreate(cart.map((l) => ({ productId: l.productId, batchId: l.batchId, qty: l.qty, unitCost: l.unitCost })))}
-          style={styles.flex2}
-        />
       </View>
 
       {qtyTarget && (
@@ -267,7 +269,26 @@ function ReceiveOrderSheet({
   )
 
   return (
-    <Sheet visible onClose={onClose} title={t('purchases.receiveTitle', { ref: order.referenceNumber ?? order.id })}>
+    <Sheet
+      visible
+      onClose={onClose}
+      title={t('purchases.receiveTitle', { ref: order.referenceNumber ?? order.id })}
+      footer={
+        <View style={styles.actions}>
+          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button
+            title={t('purchases.markReceived')}
+            onPress={() =>
+              onReceived(
+                location,
+                items.map((item) => ({ itemId: item.id, receivedQty: Number(qtys[item.id]) || 0 }))
+              )
+            }
+            style={styles.flex2}
+          />
+        </View>
+      }
+    >
       <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('purchases.receiveInto')}</Text>
       <View style={styles.chipRow}>
         <Chip label={t('warehouse.shop')} selected={location === 'shop'} onPress={() => setLocation('shop')} />
@@ -290,20 +311,6 @@ function ReceiveOrderSheet({
           </View>
         ))}
       </View>
-
-      <View style={styles.actions}>
-        <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
-        <Button
-          title={t('purchases.markReceived')}
-          onPress={() =>
-            onReceived(
-              location,
-              items.map((item) => ({ itemId: item.id, receivedQty: Number(qtys[item.id]) || 0 }))
-            )
-          }
-          style={styles.flex2}
-        />
-      </View>
     </Sheet>
   )
 }
@@ -315,7 +322,12 @@ function OrderDetailSheet({ order, onClose }: { order: PurchaseListItem; onClose
   const [items] = useState<PurchaseItemRow[]>(() => repos.purchases.items(order.id))
 
   return (
-    <Sheet visible onClose={onClose} title={order.referenceNumber ?? `#${order.id}`}>
+    <Sheet
+      visible
+      onClose={onClose}
+      title={order.referenceNumber ?? `#${order.id}`}
+      footer={<Button title={t('purchases.close')} variant="secondary" onPress={onClose} style={styles.gapTop} />}
+    >
       <View style={styles.cartSection}>
         {items.map((item) => (
           <View key={item.id} style={[styles.cartRow, { borderColor: theme.border }]}>
@@ -324,7 +336,6 @@ function OrderDetailSheet({ order, onClose }: { order: PurchaseListItem; onClose
           </View>
         ))}
       </View>
-      <Button title={t('purchases.close')} variant="secondary" onPress={onClose} style={styles.gapTop} />
     </Sheet>
   )
 }
@@ -333,7 +344,7 @@ const styles = StyleSheet.create({
   toolbar: { padding: spacing.md },
   list: { paddingHorizontal: spacing.md, paddingBottom: spacing.md, gap: spacing.sm },
   rowRight: { alignItems: 'flex-end', gap: spacing.xs },
-  searchResults: { maxHeight: 220, marginTop: spacing.sm },
+  searchResults: { gap: spacing.xs, marginTop: spacing.sm },
   cartSection: { gap: spacing.sm, marginTop: spacing.md },
   cartRow: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,

@@ -149,7 +149,17 @@ export function CustomersScreen() {
         }
       />
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? t('customers.editCustomer') : t('customers.newCustomer')}>
+      <Sheet
+        visible={showForm}
+        onClose={() => setShowForm(false)}
+        title={editId ? t('customers.editCustomer') : t('customers.newCustomer')}
+        footer={
+          <View style={styles.actions}>
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title={t('common.save')} onPress={save} style={styles.flex2} />
+          </View>
+        }
+      >
         <View style={styles.form}>
           <Input label={t('common.name')} value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} />
           <Input
@@ -167,10 +177,6 @@ export function CustomersScreen() {
             keyboardType="email-address"
           />
           <Input label={t('common.address')} value={form.address} onChangeText={(v) => setForm((p) => ({ ...p, address: v }))} />
-          <View style={styles.actions}>
-            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
-            <Button title={t('common.save')} onPress={save} style={styles.flex2} />
-          </View>
         </View>
       </Sheet>
 
@@ -222,7 +228,24 @@ function MessageSheet({ contact, onClose }: { contact: ContactListItem; onClose:
   }
 
   return (
-    <Sheet visible onClose={onClose} title={t('customers.messageTitle', { name: contact.name })}>
+    <Sheet
+      visible
+      onClose={onClose}
+      title={t('customers.messageTitle', { name: contact.name })}
+      footer={
+        <View style={styles.actions}>
+          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button
+            title={t('customers.send')}
+            icon="send"
+            onPress={send}
+            loading={sending}
+            disabled={!configured || !contact.telegramChatId}
+            style={styles.flex2}
+          />
+        </View>
+      }
+    >
       <View style={styles.form}>
         {!configured ? (
           <Text style={[typeScale.sm, { color: theme.warning }]}>
@@ -243,17 +266,6 @@ function MessageSheet({ contact, onClose }: { contact: ContactListItem; onClose:
             </View>
           </>
         )}
-        <View style={styles.actions}>
-          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
-          <Button
-            title={t('customers.send')}
-            icon="send"
-            onPress={send}
-            loading={sending}
-            disabled={!configured || !contact.telegramChatId}
-            style={styles.flex2}
-          />
-        </View>
       </View>
     </Sheet>
   )
@@ -334,7 +346,17 @@ function DebtHistorySheet({
 
   if (view === 'pay') {
     return (
-      <Sheet visible onClose={() => setView('statement')} title={t('debt.payDebtTitle', { name: contact.name })}>
+      <Sheet
+        visible
+        onClose={() => setView('statement')}
+        title={t('debt.payDebtTitle', { name: contact.name })}
+        footer={
+          <View style={styles.actions}>
+            <Button title={t('common.back')} variant="secondary" onPress={() => setView('statement')} style={styles.flex1} />
+            <Button title={t('debt.confirmPayment')} onPress={confirmPay} loading={paying} disabled={!entered} style={styles.flex2} />
+          </View>
+        }
+      >
         <View style={styles.form}>
           <View style={styles.chipRow}>
             {(['Cash', 'Card', 'Click'] as const).map((m) => (
@@ -357,17 +379,13 @@ function DebtHistorySheet({
               </View>
             </View>
           )}
-          <View style={styles.actions}>
-            <Button title={t('common.back')} variant="secondary" onPress={() => setView('statement')} style={styles.flex1} />
-            <Button title={t('debt.confirmPayment')} onPress={confirmPay} loading={paying} disabled={!entered} style={styles.flex2} />
-          </View>
         </View>
       </Sheet>
     )
   }
 
   return (
-    <Sheet visible onClose={onClose} title={contact.name}>
+    <Sheet visible onClose={onClose} title={contact.name} scrollBody>
       <View style={styles.form}>
         {!hasHistory ? (
           <Text style={[typeScale.sm, { color: theme.textFaint }]}>{t('debt.noRecords')}</Text>

@@ -176,7 +176,17 @@ export function ProductsScreen() {
         }
       />
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? t('products.editProduct') : t('products.newProduct')}>
+      <Sheet
+        visible={showForm}
+        onClose={() => setShowForm(false)}
+        title={editId ? t('products.editProduct') : t('products.newProduct')}
+        footer={
+          <View style={styles.actions}>
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title={t('common.save')} onPress={save} style={styles.flex2} />
+          </View>
+        }
+      >
         <View style={styles.form}>
           <Input label={t('common.name')} value={form.name} onChangeText={(v) => set('name', v)} />
           <View style={styles.row2}>
@@ -251,10 +261,6 @@ export function ProductsScreen() {
                 trackColor={{ true: theme.primary, false: theme.border }}
               />
             </View>
-          </View>
-          <View style={styles.actions}>
-            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
-            <Button title={t('common.save')} onPress={save} style={styles.flex2} />
           </View>
         </View>
       </Sheet>

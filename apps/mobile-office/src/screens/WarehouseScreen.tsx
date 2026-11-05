@@ -192,7 +192,17 @@ function ReceiveSheet({
   }
 
   return (
-    <Sheet visible onClose={onClose} title={t('warehouse.receiveTitle', { name: product.name })}>
+    <Sheet
+      visible
+      onClose={onClose}
+      title={t('warehouse.receiveTitle', { name: product.name })}
+      footer={
+        <View style={styles.actions}>
+          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button title={t('common.save')} onPress={confirm} style={styles.flex2} />
+        </View>
+      }
+    >
       <View style={styles.form}>
         <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('warehouse.whereTo')}</Text>
         <View style={styles.chipRow}>
@@ -202,10 +212,6 @@ function ReceiveSheet({
         <Input label={t('warehouse.quantity')} value={qty} onChangeText={setQty} keyboardType="numeric" autoFocus />
         <Input label={t('warehouse.unitCostOptional')} value={cost} onChangeText={setCost} keyboardType="numeric" />
         <Input label={t('warehouse.reasonOptional')} value={reason} onChangeText={setReason} />
-        <View style={styles.actions}>
-          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
-          <Button title={t('common.save')} onPress={confirm} style={styles.flex2} />
-        </View>
       </View>
     </Sheet>
   )
@@ -236,14 +242,20 @@ function TransferSheet({
   }
 
   return (
-    <Sheet visible onClose={onClose} title={t('warehouse.transferTitle', { name: product.name })}>
-      <View style={styles.form}>
-        <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('warehouse.availableInWarehouse', { count: product.warehouseQty })}</Text>
-        <Input label={t('warehouse.quantity')} value={qty} onChangeText={setQty} keyboardType="numeric" autoFocus />
+    <Sheet
+      visible
+      onClose={onClose}
+      title={t('warehouse.transferTitle', { name: product.name })}
+      footer={
         <View style={styles.actions}>
           <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
           <Button title={t('warehouse.transfer')} onPress={confirm} style={styles.flex2} />
         </View>
+      }
+    >
+      <View style={styles.form}>
+        <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('warehouse.availableInWarehouse', { count: product.warehouseQty })}</Text>
+        <Input label={t('warehouse.quantity')} value={qty} onChangeText={setQty} keyboardType="numeric" autoFocus />
       </View>
     </Sheet>
   )
@@ -285,8 +297,20 @@ function StocktakeSheet({ onClose, onDone }: { onClose: () => void; onDone: (cha
     onDone(result.changed)
   }
 
+  const footer = !location ? undefined : confirming ? (
+    <View style={styles.actions}>
+      <Button title={t('warehouse.back')} variant="secondary" onPress={() => setConfirming(false)} style={styles.flex1} />
+      <Button title={t('warehouse.finish')} onPress={finish} style={styles.flex2} />
+    </View>
+  ) : (
+    <View style={styles.actions}>
+      <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
+      <Button title={t('warehouse.finish')} disabled={counted.length === 0} onPress={() => setConfirming(true)} style={styles.flex2} />
+    </View>
+  )
+
   return (
-    <Sheet visible onClose={onClose} title={t('warehouse.stocktake')}>
+    <Sheet visible onClose={onClose} title={t('warehouse.stocktake')} footer={footer}>
       <View style={styles.form}>
         {!location ? (
           <>
@@ -297,20 +321,14 @@ function StocktakeSheet({ onClose, onDone }: { onClose: () => void; onDone: (cha
             </View>
           </>
         ) : confirming ? (
-          <>
-            <Text style={[typeScale.sm, { color: theme.text }]}>
-              {t('warehouse.willBeAdjusted', { count: counted.length })}
-            </Text>
-            <View style={styles.actions}>
-              <Button title={t('warehouse.back')} variant="secondary" onPress={() => setConfirming(false)} style={styles.flex1} />
-              <Button title={t('warehouse.finish')} onPress={finish} style={styles.flex2} />
-            </View>
-          </>
+          <Text style={[typeScale.sm, { color: theme.text }]}>
+            {t('warehouse.willBeAdjusted', { count: counted.length })}
+          </Text>
         ) : (
           <>
             <Input value={search} onChangeText={setSearch} placeholder={t('warehouse.searchPlaceholder')} left={<Icon name="search" size={16} color={theme.textFaint} />} />
             <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('warehouse.countedOfTotal', { counted: counted.length, total: items.length })}</Text>
-            <ScrollView style={styles.stocktakeList} contentContainerStyle={styles.stocktakeListInner} keyboardShouldPersistTaps="handled">
+            <ScrollView style={styles.stocktakeList} contentContainerStyle={styles.stocktakeListInner} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
               {visible.map((r) => {
                 const d = diffOf(r)
                 return (
@@ -333,10 +351,6 @@ function StocktakeSheet({ onClose, onDone }: { onClose: () => void; onDone: (cha
               })}
             </ScrollView>
             <Input label={t('common.noteOptional')} value={note} onChangeText={setNote} />
-            <View style={styles.actions}>
-              <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
-              <Button title={t('warehouse.finish')} disabled={counted.length === 0} onPress={() => setConfirming(true)} style={styles.flex2} />
-            </View>
           </>
         )}
       </View>
@@ -386,8 +400,15 @@ function WriteOffSheet({
     onDone(picked.name, n)
   }
 
+  const footer = picked ? (
+    <View style={styles.actions}>
+      <Button title={t('warehouse.back')} variant="secondary" onPress={() => setPicked(null)} style={styles.flex1} />
+      <Button title={t('common.save')} disabled={!valid} onPress={save} style={styles.flex2} />
+    </View>
+  ) : undefined
+
   return (
-    <Sheet visible onClose={onClose} title={t('warehouse.writeOff')}>
+    <Sheet visible onClose={onClose} title={t('warehouse.writeOff')} footer={footer}>
       <View style={styles.form}>
         {!picked ? (
           <>
@@ -428,10 +449,6 @@ function WriteOffSheet({
               value={note}
               onChangeText={setNote}
             />
-            <View style={styles.actions}>
-              <Button title={t('warehouse.back')} variant="secondary" onPress={() => setPicked(null)} style={styles.flex1} />
-              <Button title={t('common.save')} disabled={!valid} onPress={save} style={styles.flex2} />
-            </View>
           </>
         )}
       </View>

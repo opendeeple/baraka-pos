@@ -131,8 +131,18 @@ export function EmployeesScreen() {
         }
       />
 
-      <Sheet visible={showForm} onClose={() => setShowForm(false)} title={editId ? t('employees.editEmployee') : t('employees.newEmployee')}>
-        <ScrollView style={styles.formScroll} contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
+      <Sheet
+        visible={showForm}
+        onClose={() => setShowForm(false)}
+        title={editId ? t('employees.editEmployee') : t('employees.newEmployee')}
+        footer={
+          <View style={styles.actions}>
+            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
+            <Button title={t('common.save')} onPress={save} style={styles.flex2} />
+          </View>
+        }
+      >
+        <View style={styles.form}>
           <Input label={t('common.name')} value={form.name} onChangeText={(v) => setForm((p) => ({ ...p, name: v }))} autoFocus />
           <Input label={t('common.email')} value={form.email} onChangeText={(v) => setForm((p) => ({ ...p, email: v }))} autoCapitalize="none" keyboardType="email-address" />
           <Input label={t('common.phone')} value={form.phone} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} keyboardType="phone-pad" />
@@ -153,11 +163,7 @@ export function EmployeesScreen() {
             <Input label={t('employees.monthlySalary')} value={form.salary} onChangeText={(v) => setForm((p) => ({ ...p, salary: v }))} keyboardType="numeric" containerStyle={styles.flex1} />
             <Input label={t('employees.hireDate')} value={form.hireDate} onChangeText={(v) => setForm((p) => ({ ...p, hireDate: v }))} containerStyle={styles.flex1} />
           </View>
-          <View style={styles.actions}>
-            <Button title={t('common.cancel')} variant="secondary" onPress={() => setShowForm(false)} style={styles.flex1} />
-            <Button title={t('common.save')} onPress={save} style={styles.flex2} />
-          </View>
-        </ScrollView>
+        </View>
       </Sheet>
 
       {detailTarget && (
@@ -296,7 +302,17 @@ function SalaryPaymentSheet({
   }
 
   return (
-    <Sheet visible onClose={onClose} title={t('employees.payTitle', { name: employee.name })}>
+    <Sheet
+      visible
+      onClose={onClose}
+      title={t('employees.payTitle', { name: employee.name })}
+      footer={
+        <View style={styles.actions}>
+          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button title={t('employees.record')} disabled={!valid} onPress={save} style={styles.flex2} />
+        </View>
+      }
+    >
       <View style={styles.form}>
         <Input label={t('employees.amountUzs')} value={amount} onChangeText={setAmount} keyboardType="numeric" autoFocus />
         <View style={styles.row2}>
@@ -304,10 +320,6 @@ function SalaryPaymentSheet({
           <Input label={t('employees.periodTo')} value={periodTo} onChangeText={setPeriodTo} containerStyle={styles.flex1} />
         </View>
         <Input label={t('common.noteOptional')} value={note} onChangeText={setNote} />
-        <View style={styles.actions}>
-          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
-          <Button title={t('employees.record')} disabled={!valid} onPress={save} style={styles.flex2} />
-        </View>
       </View>
     </Sheet>
   )

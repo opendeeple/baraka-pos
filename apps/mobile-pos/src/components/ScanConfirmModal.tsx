@@ -39,7 +39,17 @@ export function ScanConfirmModal({ product, inCartQty, onClose, onConfirm }: Pro
   }
 
   return (
-    <Sheet visible onClose={onClose} title={t('pos.confirmNewProduct')}>
+    <Sheet
+      visible
+      onClose={onClose}
+      title={t('pos.confirmNewProduct')}
+      footer={
+        <View style={styles.actions}>
+          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
+          <Button title={t('pos.addToCart')} onPress={confirm} disabled={overStock} style={styles.flex2} />
+        </View>
+      }
+    >
       <View style={styles.body}>
         <View style={styles.productRow}>
           <View style={[styles.thumb, { backgroundColor: theme.surface }]}>
@@ -81,11 +91,6 @@ export function ScanConfirmModal({ product, inCartQty, onClose, onConfirm }: Pro
             {t('pos.onlyInStock', { stock: room, name: product.name })}
           </Text>
         )}
-
-        <View style={styles.actions}>
-          <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
-          <Button title={t('pos.addToCart')} onPress={confirm} disabled={overStock} style={styles.flex2} />
-        </View>
       </View>
     </Sheet>
   )

@@ -312,19 +312,11 @@ export function PaymentScreen({ navigation }: Props) {
         visible={receipt !== null}
         onClose={() => { setReceipt(null); navigation.goBack() }}
         title={t('payment.saleComplete')}
-      >
-        {receipt && (
-          <>
-            {receipt.change > 0 && (
-              <Card style={styles.changeCard}>
-                <Row label={t('payment.changeDue')} value={fmtUZS(receipt.change)} big valueColor={theme.success} />
-              </Card>
-            )}
-            <View style={[styles.receiptBox, { backgroundColor: theme.bg, borderColor: theme.border }]}>
-              <Text style={[styles.receiptText, { color: theme.textMuted }]}>
-                {renderReceiptText(receipt.doc, 32)}
-              </Text>
-            </View>
+        // Long receipts used to push Print/PDF/Done off the bottom of the
+        // capped sheet — the receipt now scrolls and the actions stay pinned.
+        footer={
+          receipt ? (
+            <>
             <View style={styles.receiptActions}>
               <Button
                 title={t('payment.print')}
@@ -353,6 +345,22 @@ export function PaymentScreen({ navigation }: Props) {
               style={styles.doneBtn}
               testID="receipt-done"
             />
+            </>
+          ) : undefined
+        }
+      >
+        {receipt && (
+          <>
+            {receipt.change > 0 && (
+              <Card style={styles.changeCard}>
+                <Row label={t('payment.changeDue')} value={fmtUZS(receipt.change)} big valueColor={theme.success} />
+              </Card>
+            )}
+            <View style={[styles.receiptBox, { backgroundColor: theme.bg, borderColor: theme.border }]}>
+              <Text style={[styles.receiptText, { color: theme.textMuted }]}>
+                {renderReceiptText(receipt.doc, 32)}
+              </Text>
+            </View>
           </>
         )}
       </Sheet>

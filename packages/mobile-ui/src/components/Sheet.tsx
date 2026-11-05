@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Animated,
   KeyboardAvoidingView,
@@ -6,6 +6,7 @@ import {
   PanResponder,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -27,6 +28,18 @@ export interface SheetProps {
   expandable?: boolean
   /** Fires after a drag settles, with the new expanded state. */
   onExpandChange?: (expanded: boolean) => void
+  /**
+   * Rendered below the body, pinned to the bottom (e.g. Cancel/Save buttons)
+   * so it stays reachable regardless of how long the body is. When set,
+   * `children` scrolls internally instead of being clipped by maxHeightRatio
+   * — forms with many fields were otherwise cutting off their own save
+   * button with no way to reach it.
+   */
+  footer?: ReactNode
+  /** Scrolls `children` internally even without a `footer` — for bodies
+   * (e.g. a detail view with a growing list) that have no action row of
+   * their own but can still outgrow maxHeightRatio. */
+  scrollBody?: boolean
 }
 
 /**
@@ -42,10 +55,14 @@ export function Sheet({
   maxHeightRatio = 0.85,
   expandable = false,
   onExpandChange,
+  footer,
+  scrollBody = false,
 }: SheetProps) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   const { height: windowHeight } = useWindowDimensions()
+  const [topChromeHeight, setTopChromeHeight] = useState(0)
+  const [footerHeight, setFooterHeight] = useState(0)
   const slide = useRef(new Animated.Value(0)).current
   // Separate from `slide` (open/close) — 0 is the normal capped height, 1 is
   // the dragged-open full-screen height. Only used when expandable.
@@ -56,6 +73,8 @@ export function Sheet({
   const collapsedHeight = Math.round(windowHeight * maxHeightRatio)
   const expandedHeight = Math.round(windowHeight - Math.max(insets.top, spacing.lg) - spacing.lg)
   const dragRange = Math.max(expandedHeight - collapsedHeight, 1)
+  const verticalPadding = spacing.sm + Math.max(insets.bottom, spacing.lg)
+  const bodyCapHeight = Math.max(collapsedHeight - topChromeHeight - footerHeight - verticalPadding, 120)
 
   const panResponder = useRef(
     PanResponder.create({
@@ -112,16 +131,36 @@ export function Sheet({
               },
             ]}
           >
-            <View style={styles.grabberHit} {...(expandable ? panResponder.panHandlers : {})}>
-              <View style={styles.grabber} />
-            </View>
-            {title ? (
-              <View style={styles.header}>
-                <Text style={[type.lg, { color: theme.text }]}>{title}</Text>
-                <IconButton icon="x" size={20} accessibilityLabel="Close" onPress={onClose} />
+            <View
+              onLayout={
+                footer || scrollBody ? (e) => setTopChromeHeight(e.nativeEvent.layout.height) : undefined
+              }
+            >
+              <View style={styles.grabberHit} {...(expandable ? panResponder.panHandlers : {})}>
+                <View style={styles.grabber} />
               </View>
+              {title ? (
+                <View style={styles.header}>
+                  <Text style={[type.lg, { color: theme.text }]}>{title}</Text>
+                  <IconButton icon="x" size={20} accessibilityLabel="Close" onPress={onClose} />
+                </View>
+              ) : null}
+            </View>
+            {footer || scrollBody ? (
+              <ScrollView
+                style={{ maxHeight: bodyCapHeight }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator
+                contentContainerStyle={styles.scrollBody}
+              >
+                {children}
+              </ScrollView>
+            ) : (
+              children
+            )}
+            {footer ? (
+              <View onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}>{footer}</View>
             ) : null}
-            {children}
           </Animated.View>
         </KeyboardAvoidingView>
       </View>
@@ -156,4 +195,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.sm,
   },
+  scrollBody: { flexGrow: 1 },
 })
