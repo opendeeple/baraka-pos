@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { FlatList, StyleSheet, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { OrderLineInput, ProductListItem, PurchaseItemRow, PurchaseListItem, StockLocation } from '@baraka/data'
@@ -17,6 +17,7 @@ import {
   Sheet,
   toast,
   useTheme,
+  Text,
 } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
@@ -67,14 +68,16 @@ export function PurchasesScreen() {
             title={item.referenceNumber ?? `#${item.id}`}
             subtitle={`${item.vendorName ?? t('purchases.noSupplier')} · ${String(item.createdAt).slice(0, 16).replace('T', ' ')}`}
             onPress={() => (item.status === 'pending' ? setReceiveTarget(item) : setViewTarget(item))}
+            meta={
+              <Badge
+                label={item.status === 'received' ? t('purchases.received') : t('purchases.pending')}
+                tone={item.status === 'received' ? 'success' : 'warning'}
+              />
+            }
             right={
-              <View style={styles.rowRight}>
-                <Text style={[typeScale.money, { color: theme.text }]}>{fmtUZS(item.totalAmount)}</Text>
-                <Badge
-                  label={item.status === 'received' ? t('purchases.received') : t('purchases.pending')}
-                  tone={item.status === 'received' ? 'success' : 'warning'}
-                />
-              </View>
+              <Text style={[typeScale.money, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                {fmtUZS(item.totalAmount)}
+              </Text>
             }
           />
         )}
@@ -139,14 +142,22 @@ function NewOrderSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (
       onClose={onClose}
       title={t('purchases.newOrder')}
       footer={
+        <View>
+          <View style={[styles.totalRow, { borderTopColor: theme.border }]}>
+            <Text style={[typeScale.md, { color: theme.textMuted }]}>{t('purchases.orderTotal')}</Text>
+            <Text style={[typeScale.moneyLg, styles.totalValue, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+              {fmtUZS(total)}
+            </Text>
+          </View>
         <View style={styles.actions}>
           <Button title={t('common.cancel')} variant="secondary" onPress={onClose} style={styles.flex1} />
           <Button
-            title={t('purchases.createOrder', { total: fmtUZS(total) })}
+            title={t('purchases.createOrderShort')}
             disabled={cart.length === 0}
             onPress={() => onCreate(cart.map((l) => ({ productId: l.productId, batchId: l.batchId, qty: l.qty, unitCost: l.unitCost })))}
             style={styles.flex2}
           />
+        </View>
         </View>
       }
     >
@@ -178,9 +189,10 @@ function NewOrderSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (
           cart.map((l) => (
             <View key={l.productId} style={[styles.cartRow, { borderColor: theme.border }]}>
               <View style={styles.flex1}>
-                <Text style={[typeScale.sm, { color: theme.text }]}>{l.name}</Text>
-                <Text style={[typeScale.sm, { color: theme.textMuted }]}>{l.qty} × {fmtUZS(l.unitCost)}</Text>
+                <Text style={[typeScale.sm, { color: theme.text, fontWeight: '600' }]} numberOfLines={2}>{l.name}</Text>
+                <Text style={[typeScale.xs, { color: theme.textMuted }]}>{l.qty} × {fmtUZS(l.unitCost)}</Text>
               </View>
+              <Text style={[typeScale.sm, { color: theme.text, fontWeight: '700' }]}>{fmtUZS(l.qty * l.unitCost)}</Text>
               <IconButton
                 icon="x"
                 size={20}
@@ -331,10 +343,19 @@ function OrderDetailSheet({ order, onClose }: { order: PurchaseListItem; onClose
       <View style={styles.cartSection}>
         {items.map((item) => (
           <View key={item.id} style={[styles.cartRow, { borderColor: theme.border }]}>
-            <Text style={[typeScale.sm, { color: theme.text }]}>{item.productName}</Text>
-            <Text style={[typeScale.sm, { color: theme.textMuted }]}>{item.quantity} × {fmtUZS(item.unitCost)}</Text>
+            <View style={styles.flex1}>
+              <Text style={[typeScale.sm, { color: theme.text, fontWeight: '600' }]} numberOfLines={2}>{item.productName}</Text>
+              <Text style={[typeScale.xs, { color: theme.textMuted }]}>{item.quantity} × {fmtUZS(item.unitCost)}</Text>
+            </View>
+            <Text style={[typeScale.sm, { color: theme.text, fontWeight: '700' }]}>{fmtUZS(item.quantity * item.unitCost)}</Text>
           </View>
         ))}
+        <View style={[styles.totalRow, { borderTopColor: theme.border }]}>
+          <Text style={[typeScale.md, { color: theme.textMuted }]}>{t('purchases.orderTotal')}</Text>
+          <Text style={[typeScale.moneyLg, styles.totalValue, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
+            {fmtUZS(order.totalAmount)}
+          </Text>
+        </View>
       </View>
     </Sheet>
   )
@@ -352,8 +373,17 @@ const styles = StyleSheet.create({
   },
   qtyInput: { width: 80 },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
-  chipRow: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.xs },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
   flex1: { flex: 1 },
   flex2: { flex: 2 },
   gapTop: { marginTop: spacing.sm },
+  totalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    borderTopWidth: 1,
+    paddingTop: spacing.sm,
+  },
+  totalValue: { flexShrink: 1, textAlign: 'right' },
 })

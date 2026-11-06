@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Animated, StyleSheet, Text, View } from 'react-native'
+import { Text } from '../components/Text'
+import { Animated, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { motion, radius, spacing, type } from '@baraka/ui-tokens'
 import { useTheme } from '../theme/ThemeProvider'
 import { Icon, type IconName } from '../components/Icon'
-import { _attach, type ToastItem } from './toast'
+import { _getItems, _isTopHost, _registerHost, _subscribe, type ToastItem } from './toast'
 
 const KIND_ICON: Record<ToastItem['kind'], IconName> = {
   success: 'check',
@@ -14,25 +15,33 @@ const KIND_ICON: Record<ToastItem['kind'], IconName> = {
 
 /** Mount once near the app root, AFTER SafeAreaProvider. */
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<ToastItem[]>([])
-
-  useEffect(
-    () =>
-      _attach((item) => {
-        setItems((prev) => [...prev.slice(-2), item])
-        setTimeout(() => {
-          setItems((prev) => prev.filter((t) => t.id !== item.id))
-        }, item.duration)
-      }),
-    []
-  )
-
   return (
     <View style={styles.fill}>
       {children}
-      <ToastStack items={items} />
+      <ToastHost />
     </View>
   )
+}
+
+/**
+ * Draws the shared toast list — but only while it is the topmost mounted
+ * host. Sheet and Dialog mount one inside their Modal so toasts show above
+ * an open sheet instead of behind it.
+ */
+export function ToastHost() {
+  const [, force] = useState(0)
+  const [hostId, setHostId] = useState(0)
+  useEffect(() => {
+    const unsub = _subscribe(() => force((n) => n + 1))
+    const host = _registerHost()
+    setHostId(host.id)
+    return () => {
+      host.unregister()
+      unsub()
+    }
+  }, [])
+  if (!hostId || !_isTopHost(hostId)) return null
+  return <ToastStack items={_getItems()} />
 }
 
 function ToastStack({ items }: { items: ToastItem[] }) {

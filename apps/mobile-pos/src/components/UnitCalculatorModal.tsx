@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
 import type { ProductListItem } from '@baraka/data'
-import { Chip, Dialog, Input, useTheme } from '@baraka/mobile-ui'
+import { Chip, Dialog, Input, useTheme, Text } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 

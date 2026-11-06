@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Text } from './Text'
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 import { opacity, radius, spacing, touch, type } from '@baraka/ui-tokens'
 import { useTheme } from '../theme/ThemeProvider'
 import { Icon, type IconName } from './Icon'

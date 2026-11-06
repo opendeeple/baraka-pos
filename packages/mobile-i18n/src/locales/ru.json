@@ -291,7 +291,9 @@
     "receiveInto": "Принять в",
     "ordered": "Заказано {{count}}",
     "markReceived": "Отметить как полученный",
-    "close": "Закрыть"
+    "close": "Закрыть",
+    "createOrderShort": "Создать заказ",
+    "orderTotal": "Итого"
   },
   "journal": {
     "groupAll": "Все",

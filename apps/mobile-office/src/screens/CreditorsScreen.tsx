@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { FlatList, StyleSheet, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import {
   daysUntil, fmtCreditorAmount, todayYmd,
@@ -19,6 +19,7 @@ import {
   Sheet,
   toast,
   useTheme,
+  Text,
 } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
@@ -162,8 +163,8 @@ export function CreditorsScreen() {
 
       {(totalUzs > 0 || totalUsd > 0) && (
         <View style={styles.totalBar}>
-          <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('creditors.totalWeOwe')}</Text>
-          <Text style={[typeScale.md, { color: theme.warning, fontWeight: '700' }]}>
+          <Text style={[typeScale.sm, { color: theme.textMuted }]} numberOfLines={1}>{t('creditors.totalWeOwe')}</Text>
+          <Text style={[typeScale.md, styles.totalValue, { color: theme.warning, fontWeight: '700' }]} numberOfLines={2}>
             {totalUzs > 0 ? fmtCreditorAmount(totalUzs, 'UZS') : ''}
             {totalUzs > 0 && totalUsd > 0 ? ' + ' : ''}
             {totalUsd > 0 ? fmtCreditorAmount(totalUsd, 'USD') : ''}
@@ -211,23 +212,21 @@ export function CreditorsScreen() {
           <Input label={t('common.phone')} value={form.phone} onChangeText={(v) => setForm((p) => ({ ...p, phone: v }))} keyboardType="phone-pad" />
           <View style={styles.row2}>
             <Input label={t('creditors.amount')} value={form.amount} onChangeText={(v) => setForm((p) => ({ ...p, amount: v }))} keyboardType="numeric" containerStyle={styles.flex1} />
-            <View style={styles.chipRow}>
+            <View style={styles.currencyRow}>
               <Chip label="UZS" selected={form.currency === 'UZS'} onPress={() => setForm((p) => ({ ...p, currency: 'UZS' }))} />
               <Chip label="USD" selected={form.currency === 'USD'} onPress={() => setForm((p) => ({ ...p, currency: 'USD' }))} />
             </View>
           </View>
           <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('creditors.returnAs')}</Text>
-          <View style={styles.chipRow}>
+          <View style={styles.formChips}>
             <Chip label={t('creditors.asMoney')} selected={form.returnType === 'money'} onPress={() => setForm((p) => ({ ...p, returnType: 'money' }))} />
             <Chip label={t('creditors.asGoods')} selected={form.returnType === 'product'} onPress={() => setForm((p) => ({ ...p, returnType: 'product' }))} />
           </View>
           {form.returnType === 'product' && (
             <Input label={t('creditors.whichGoods')} value={form.productNote} onChangeText={(v) => setForm((p) => ({ ...p, productNote: v }))} />
           )}
-          <View style={styles.row2}>
-            <Input label={t('creditors.receivedOn', { format: 'YYYY-MM-DD' })} value={form.receivedAt} onChangeText={(v) => setForm((p) => ({ ...p, receivedAt: v }))} containerStyle={styles.flex1} />
-            <Input label={t('creditors.dueDate', { format: 'YYYY-MM-DD' })} value={form.dueDate} onChangeText={(v) => setForm((p) => ({ ...p, dueDate: v }))} containerStyle={styles.flex1} />
-          </View>
+          <Input label={t('creditors.receivedOn', { format: 'YYYY-MM-DD' })} value={form.receivedAt} onChangeText={(v) => setForm((p) => ({ ...p, receivedAt: v }))} placeholder="2026-01-31" />
+          <Input label={t('creditors.dueDate', { format: 'YYYY-MM-DD' })} value={form.dueDate} onChangeText={(v) => setForm((p) => ({ ...p, dueDate: v }))} placeholder="2026-01-31" />
           <Input
             label={t('creditors.remindDays')}
             value={form.remindDays}
@@ -264,14 +263,17 @@ export function CreditorsScreen() {
 }
 
 const styles = StyleSheet.create({
-  toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'flex-start' },
+  toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'center' },
   searchWrap: { flex: 1 },
   chipRow: { flexDirection: 'row', gap: spacing.xs, paddingHorizontal: spacing.md, paddingTop: spacing.sm, flexWrap: 'wrap' },
-  totalBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingTop: spacing.sm },
+  totalBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.sm },
   list: { padding: spacing.md, gap: spacing.sm, flexGrow: 1 },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   form: { gap: spacing.sm, paddingBottom: spacing.sm },
   row2: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-end' },
+  currencyRow: { flexDirection: 'row', gap: spacing.xs, paddingBottom: 6 },
+  formChips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  totalValue: { flexShrink: 1, textAlign: 'right' },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   flex1: { flex: 1 },
   flex2: { flex: 2 },

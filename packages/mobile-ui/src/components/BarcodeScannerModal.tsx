@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { Modal, StyleSheet, Text, View } from 'react-native'
+import { Text } from './Text'
+import { Modal, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useTranslation } from '@baraka/mobile-i18n'

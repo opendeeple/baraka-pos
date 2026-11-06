@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { FlatList, StyleSheet, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import type { StocktakeRow, WarehouseStockRow, StockLocation, WriteOffReason } from '@baraka/data'
 import {
@@ -14,9 +14,10 @@ import {
   Sheet,
   toast,
   useTheme,
+  Text,
 } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
-import { spacing, type as typeScale } from '@baraka/ui-tokens'
+import { radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 import { useAuthStore } from '../platform/authStore'
 
@@ -52,12 +53,12 @@ export function WarehouseScreen() {
   return (
     <Screen padded={false}>
       <View style={styles.totals}>
-        <View style={styles.totalCard}>
-          <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('warehouse.inShop')}</Text>
+        <View style={[styles.totalCard, { backgroundColor: theme.surfaceRaised, borderColor: theme.border }]}>
+          <Text style={[typeScale.sm, { color: theme.textMuted }]} numberOfLines={1}>{t('warehouse.inShop')}</Text>
           <Text style={[typeScale.lg, { color: theme.text, fontWeight: '700' }]}>{totals.shop}</Text>
         </View>
-        <View style={styles.totalCard}>
-          <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('warehouse.inWarehouse')}</Text>
+        <View style={[styles.totalCard, { backgroundColor: theme.surfaceRaised, borderColor: theme.border }]}>
+          <Text style={[typeScale.sm, { color: theme.textMuted }]} numberOfLines={1}>{t('warehouse.inWarehouse')}</Text>
           <Text style={[typeScale.lg, { color: theme.text, fontWeight: '700' }]}>{totals.warehouse}</Text>
         </View>
       </View>
@@ -458,7 +459,7 @@ function WriteOffSheet({
 
 const styles = StyleSheet.create({
   totals: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0 },
-  totalCard: { flex: 1 },
+  totalCard: { flex: 1, borderWidth: 1, borderRadius: radius.md, padding: spacing.md, gap: spacing.xxs },
   toolbar: { padding: spacing.md },
   actionRow: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
   stocktakeList: { maxHeight: 360 },
@@ -470,7 +471,7 @@ const styles = StyleSheet.create({
   qtyInput: { width: 70 },
   list: { paddingHorizontal: spacing.md, paddingBottom: spacing.md, gap: spacing.sm },
   form: { gap: spacing.sm, paddingBottom: spacing.sm },
-  chipRow: { flexDirection: 'row', gap: spacing.xs },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   flex1: { flex: 1 },
   flex2: { flex: 2 },

@@ -1,22 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import {
-  Animated,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  PanResponder,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native'
+import { Text } from './Text'
+import { Animated, Dimensions, Keyboard, KeyboardAvoidingView, Modal, PanResponder, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { motion, radius, spacing, type } from '@baraka/ui-tokens'
 import { useTheme } from '../theme/ThemeProvider'
 import { IconButton } from './IconButton'
+import { ToastHost } from '../toast/ToastProvider'
 
 export interface SheetProps {
   visible: boolean
@@ -71,6 +60,11 @@ export function Sheet({
   const [contentHeight, setContentHeight] = useState(0)
   // Top edge of the soft keyboard in window coordinates, null when hidden.
   const [keyboardTop, setKeyboardTop] = useState<number | null>(null)
+  // The Modal's REAL drawable height. useWindowDimensions() disagrees with
+  // it on Android (system nav bar / status bar handling inside a
+  // statusBarTranslucent Modal), and sizing from the window pushed the
+  // pinned footer ~80px past the sheet's bottom edge on a real phone.
+  const [overlayHeight, setOverlayHeight] = useState(0)
   const slide = useRef(new Animated.Value(0)).current
   // Separate from `slide` (open/close) — 0 is the normal capped height, 1 is
   // the dragged-open full-screen height. Only used when expandable.
@@ -78,23 +72,30 @@ export function Sheet({
   const expandedRef = useRef(false)
   const expandLiveRef = useRef(0)
 
-  const collapsedHeight = Math.round(windowHeight * maxHeightRatio)
-  const expandedHeight = Math.round(windowHeight - Math.max(insets.top, spacing.lg) - spacing.lg)
+  const areaHeight = overlayHeight || windowHeight
+  // Gap kept above the sheet (status bar + breathing room).
+  const topLimit = Math.max(insets.top, spacing.lg) + spacing.sm
+  // Only pad for the gesture/nav bar when the Modal actually draws under it.
+  const drawsUnderNavBar = areaHeight >= Dimensions.get('screen').height - 1
+  const bottomPad = drawsUnderNavBar ? Math.max(insets.bottom, spacing.lg) : spacing.lg
+  const collapsedHeight = Math.round(Math.min(areaHeight * maxHeightRatio, areaHeight - topLimit))
+  const expandedHeight = Math.round(areaHeight - topLimit)
   const dragRange = Math.max(expandedHeight - collapsedHeight, 1)
-  const verticalPadding = spacing.sm + Math.max(insets.bottom, spacing.lg)
+  // PanResponder below is created once; read the latest range through a ref.
+  const dragRangeRef = useRef(dragRange)
+  dragRangeRef.current = dragRange
+  const verticalPadding = spacing.sm + bottomPad
   const available =
-    keyboardTop != null
-      ? Math.min(collapsedHeight, keyboardTop - Math.max(insets.top, spacing.lg) - spacing.lg)
-      : collapsedHeight
+    keyboardTop != null ? Math.min(collapsedHeight, keyboardTop - topLimit) : collapsedHeight
   const bodyCapHeight = Math.max(available - topChromeHeight - footerHeight - verticalPadding, 96)
   const bodyHeight = contentHeight > 0 ? Math.min(contentHeight, bodyCapHeight) : undefined
 
   useEffect(() => {
-    if (!visible || !(footer || scrollBody)) return
+    if (!visible) return
     const show = Keyboard.addListener('keyboardDidShow', (e) => setKeyboardTop(e.endCoordinates.screenY))
     const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardTop(null))
     return () => { show.remove(); hide.remove() }
-  }, [visible, !!(footer || scrollBody)])
+  }, [visible])
 
   const panResponder = useRef(
     PanResponder.create({
@@ -102,7 +103,7 @@ export function Sheet({
       onMoveShouldSetPanResponderCapture: (_, g) => Math.abs(g.dy) > 4,
       onPanResponderMove: (_, g) => {
         const base = expandedRef.current ? 1 : 0
-        const next = Math.min(1, Math.max(0, base - g.dy / dragRange))
+        const next = Math.min(1, Math.max(0, base - g.dy / dragRangeRef.current))
         expandLiveRef.current = next
         expand.setValue(next)
       },
@@ -130,24 +131,29 @@ export function Sheet({
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <View style={[styles.overlay, { backgroundColor: theme.overlay }]}>
+      <View
+        style={[styles.overlay, { backgroundColor: theme.overlay }]}
+        onLayout={(e) => setOverlayHeight(Math.round(e.nativeEvent.layout.height))}
+      >
         <Pressable style={styles.scrimTouch} accessibilityLabel="Close" onPress={onClose} />
-        {/* 'padding' lifts the sheet above the keyboard; 'height' (the old
-            Android choice) shrank a bottom-anchored sheet by the keyboard's
-            height and clipped it. The scroll body's cap already accounts
-            for the keyboard, so the lifted sheet fits. */}
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' || footer || scrollBody ? 'padding' : 'height'}
-        >
+        {/* 'padding' lifts the sheet above the keyboard ('height' shrank a
+            bottom-anchored sheet by the keyboard's height and clipped it);
+            maxHeight below already accounts for the keyboard, so it fits.
+            Lists inside non-scroll sheets use flexShrink to give way. */}
+        <KeyboardAvoidingView behavior="padding">
           <Animated.View
             style={[
               styles.sheet,
               {
                 backgroundColor: theme.surface,
-                paddingBottom: Math.max(insets.bottom, spacing.lg),
+                paddingBottom: bottomPad,
+                // Pixel cap from the measured area (a % here resolved
+                // against the unsized KeyboardAvoidingView, i.e. nothing).
                 maxHeight: expandable
                   ? expand.interpolate({ inputRange: [0, 1], outputRange: [collapsedHeight, expandedHeight] })
-                  : (`${Math.round(maxHeightRatio * 100)}%` as `${number}%`),
+                  : keyboardTop != null
+                    ? Math.max(available, 160)
+                    : collapsedHeight,
                 transform: [
                   {
                     translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [48, 0] }),
@@ -192,6 +198,7 @@ export function Sheet({
             ) : null}
           </Animated.View>
         </KeyboardAvoidingView>
+        <ToastHost />
       </View>
     </Modal>
   )
@@ -205,6 +212,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
+    // Safety net: nothing may ever paint outside the rounded sheet.
+    overflow: 'hidden',
   },
   grabberHit: {
     alignSelf: 'stretch',

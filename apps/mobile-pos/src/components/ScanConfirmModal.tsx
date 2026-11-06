@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Image, StyleSheet, Text, View } from 'react-native'
+import { Image, StyleSheet, View } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
 import type { ProductListItem } from '@baraka/data'
-import { Button, Icon, IconButton, Sheet, toast, useTheme } from '@baraka/mobile-ui'
+import { Button, Icon, IconButton, Sheet, toast, useTheme, Text } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { radius, spacing, touch, type as typeScale } from '@baraka/ui-tokens'
 

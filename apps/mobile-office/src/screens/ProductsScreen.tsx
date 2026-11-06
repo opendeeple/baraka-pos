@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { FlatList, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { FlatList, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { CategoryItem, ProductListItem } from '@baraka/data'
@@ -17,9 +17,10 @@ import {
   Sheet,
   toast,
   useTheme,
+  Text,
 } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
-import { spacing, type as typeScale } from '@baraka/ui-tokens'
+import { radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
 
 interface FormState {
@@ -205,23 +206,23 @@ export function ProductsScreen() {
               containerStyle={styles.flex1}
             />
           </View>
-          <View style={styles.row2}>
-            <Input
-              label={t('pos.barcode')}
-              value={form.barcode}
-              onChangeText={(v) => set('barcode', v)}
-              right={
-                <IconButton
-                  icon="scan"
-                  size={20}
-                  accessibilityLabel={t('products.scanBarcode')}
-                  onPress={() => setScanMode('fill')}
-                />
-              }
-              containerStyle={styles.flex1}
-            />
-            <Input label={t('products.sku')} value={form.sku} onChangeText={(v) => set('sku', v)} containerStyle={styles.flex1} />
-          </View>
+          {/* Barcode gets the full width: half a row minus the scan button
+              left ~100px for a 13-digit code. */}
+          <Input
+            label={t('pos.barcode')}
+            value={form.barcode}
+            onChangeText={(v) => set('barcode', v)}
+            keyboardType="number-pad"
+            right={
+              <IconButton
+                icon="scan"
+                size={20}
+                accessibilityLabel={t('products.scanBarcode')}
+                onPress={() => setScanMode('fill')}
+              />
+            }
+          />
+          <Input label={t('products.sku')} value={form.sku} onChangeText={(v) => set('sku', v)} />
           <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('products.category')}</Text>
           {categories.length > 6 && (
             <Input
@@ -244,24 +245,23 @@ export function ProductsScreen() {
               />
             ))}
           </ScrollView>
-          <View style={styles.row2}>
+          <View style={[styles.switchRow, { borderColor: theme.border, backgroundColor: theme.surfaceRaised }]}>
+            <Text style={[typeScale.md, styles.flex1, { color: theme.text, fontWeight: '600' }]}>{t('products.trackStock')}</Text>
+            <Switch
+              value={form.isStockManaged}
+              onValueChange={(v) => set('isStockManaged', v)}
+              trackColor={{ true: theme.primary, false: theme.border }}
+            />
+          </View>
+          {form.isStockManaged && (
             <Input
               label={t('products.lowStockAlertAt')}
               value={form.alertQuantity}
               onChangeText={(v) => set('alertQuantity', v)}
               keyboardType="numeric"
               helperText={t('products.lowStockAlertHint')}
-              containerStyle={styles.flex1}
             />
-            <View style={[styles.flex1, styles.switchCol]}>
-              <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('products.trackStock')}</Text>
-              <Switch
-                value={form.isStockManaged}
-                onValueChange={(v) => set('isStockManaged', v)}
-                trackColor={{ true: theme.primary, false: theme.border }}
-              />
-            </View>
-          </View>
+          )}
         </View>
       </Sheet>
 
@@ -275,15 +275,23 @@ export function ProductsScreen() {
 }
 
 const styles = StyleSheet.create({
-  toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'flex-start' },
+  toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'center' },
   searchWrap: { flex: 1 },
   list: { padding: spacing.md, gap: spacing.sm, flexGrow: 1 },
   rowRight: { alignItems: 'flex-end', gap: spacing.xs },
   form: { gap: spacing.sm, paddingBottom: spacing.sm },
-  row2: { flexDirection: 'row', gap: spacing.sm },
+  row2: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-end' },
   chipRow: { flexDirection: 'row', gap: spacing.xs, paddingRight: spacing.lg },
   flex1: { flex: 1 },
   flex2: { flex: 2 },
-  switchCol: { alignItems: 'flex-start', justifyContent: 'space-between', paddingVertical: spacing.xs },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    minHeight: 52,
+  },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
 })

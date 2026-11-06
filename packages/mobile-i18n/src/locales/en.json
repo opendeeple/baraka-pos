@@ -291,7 +291,9 @@
     "receiveInto": "Receive into",
     "ordered": "Ordered {{count}}",
     "markReceived": "Mark received",
-    "close": "Close"
+    "close": "Close",
+    "createOrderShort": "Create order",
+    "orderTotal": "Total"
   },
   "journal": {
     "groupAll": "All",

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { FlatList, StyleSheet, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import type { CategoryRow } from '@baraka/data'
 import {
@@ -14,6 +14,7 @@ import {
   Sheet,
   toast,
   useTheme,
+  Text,
 } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
@@ -150,7 +151,7 @@ export function CategoriesScreen() {
 }
 
 const styles = StyleSheet.create({
-  toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'flex-start' },
+  toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'center' },
   searchWrap: { flex: 1 },
   list: { padding: spacing.md, gap: spacing.sm, flexGrow: 1 },
   form: { gap: spacing.sm, paddingBottom: spacing.sm },

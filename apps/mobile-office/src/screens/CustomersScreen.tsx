@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { FlatList, Pressable, StyleSheet, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { ContactListItem, SaleReceiptData } from '@baraka/data'
@@ -20,6 +20,7 @@ import {
   Sheet,
   toast,
   useTheme,
+  Text,
 } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
@@ -371,7 +372,15 @@ function DebtHistorySheet({
               <Chip key={m} label={t(METHOD_I18N[m])} selected={method === m} onPress={() => setMethod(m)} />
             ))}
           </View>
-          <Text style={[typeScale.moneyLg, { color: theme.text, textAlign: 'center' }]}>
+          <Text style={[typeScale.sm, { color: theme.textMuted, textAlign: 'center' }]} numberOfLines={1}>
+            {t('debt.remaining', { amount: fmtUZS(Math.max(0, balance)) })}
+          </Text>
+          <Text
+            style={[typeScale.moneyDisplay, { color: theme.text, textAlign: 'center' }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}
+          >
             {entry ? fmtUZS(entered) : fmtUZS(0)}
           </Text>
           <NumPad onKey={(k) => setEntry((v) => applyNumKey(v, k))} />
@@ -489,12 +498,12 @@ function DebtHistorySheet({
 }
 
 const styles = StyleSheet.create({
-  toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'flex-start' },
+  toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'center' },
   searchWrap: { flex: 1 },
   list: { padding: spacing.md, gap: spacing.sm, flexGrow: 1 },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   form: { gap: spacing.sm, paddingBottom: spacing.sm },
-  chipRow: { flexDirection: 'row', gap: spacing.xs },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   preview: { borderWidth: 1, borderRadius: 8, padding: spacing.sm, maxHeight: 220 },
   summaryBox: { borderWidth: 1, borderRadius: 8, padding: spacing.sm, gap: spacing.xs },
   footer: { gap: spacing.sm, marginTop: spacing.sm },
@@ -503,7 +512,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     borderWidth: 1, borderRadius: 8, padding: spacing.sm,
   },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between' },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   flex1: { flex: 1 },
   flex2: { flex: 2 },

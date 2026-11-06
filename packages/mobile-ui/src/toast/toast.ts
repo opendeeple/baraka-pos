@@ -7,25 +7,64 @@ export interface ToastItem {
   duration: number
 }
 
-type Listener = (item: ToastItem) => void
+/*
+ * Toasts live in one shared list; every host (the root ToastProvider plus
+ * one inside each Sheet/Dialog Modal) subscribes, but only the TOPMOST
+ * mounted host draws them. A Modal is a separate native window, so a toast
+ * drawn by the root provider was hidden behind any open sheet — form
+ * validation errors were invisible and buttons looked dead. When a sheet
+ * closes, its host unmounts and the host below picks the same toasts up,
+ * so "close sheet, then toast.success()" still shows.
+ */
 
 let nextId = 1
-let listener: Listener | null = null
-const queue: ToastItem[] = []
+let items: ToastItem[] = []
+const subscribers = new Set<() => void>()
+const hostStack: number[] = []
+let nextHostId = 1
 
-/** Wired by ToastProvider on mount; queues fire once a provider attaches. */
-export function _attach(fn: Listener): () => void {
-  listener = fn
-  while (queue.length) fn(queue.shift()!)
+function emit() {
+  subscribers.forEach((fn) => fn())
+}
+
+export function _getItems(): ToastItem[] {
+  return items
+}
+
+export function _subscribe(fn: () => void): () => void {
+  subscribers.add(fn)
   return () => {
-    if (listener === fn) listener = null
+    subscribers.delete(fn)
   }
+}
+
+/** Registers a host; returns its id and an unregister function. */
+export function _registerHost(): { id: number; unregister: () => void } {
+  const id = nextHostId++
+  hostStack.push(id)
+  emit()
+  return {
+    id,
+    unregister: () => {
+      const i = hostStack.indexOf(id)
+      if (i >= 0) hostStack.splice(i, 1)
+      emit()
+    },
+  }
+}
+
+export function _isTopHost(id: number): boolean {
+  return hostStack[hostStack.length - 1] === id
 }
 
 function push(kind: ToastKind, message: string, duration = 2600): void {
   const item: ToastItem = { id: nextId++, kind, message, duration }
-  if (listener) listener(item)
-  else queue.push(item)
+  items = [...items.slice(-2), item]
+  emit()
+  setTimeout(() => {
+    items = items.filter((t) => t.id !== item.id)
+    emit()
+  }, duration)
 }
 
 /**

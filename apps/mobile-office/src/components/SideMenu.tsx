@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { Animated, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Icon, IconButton, ListRow, useTheme, type IconName } from '@baraka/mobile-ui'
+import { Icon, IconButton, ListRow, useTheme, type IconName, Text } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { motion, radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 import type { RootStackParamList } from '../navigation'
@@ -73,7 +73,7 @@ export function SideMenu({ visible, onClose, onNavigate }: SideMenuProps) {
         ]}
       >
         <View style={styles.header}>
-          <Text style={[typeScale.lg, { color: theme.text, fontWeight: '700' }]}>{t('nav.moreMenu')}</Text>
+          <Text style={[typeScale.lg, { color: theme.text, fontWeight: '700', flex: 1 }]} numberOfLines={1}>{t('nav.moreMenu')}</Text>
           <IconButton icon="x" size={20} accessibilityLabel={t('common.close')} onPress={onClose} />
         </View>
         <ScrollView contentContainerStyle={styles.list}>

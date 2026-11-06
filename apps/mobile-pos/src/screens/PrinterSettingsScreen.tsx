@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
-import { Button, Card, Chip, Input, Row, Screen, toast, useTheme } from '@baraka/mobile-ui'
+import { StyleSheet, View } from 'react-native'
+import { Button, Card, Chip, Input, Row, Screen, toast, useTheme, Text } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'

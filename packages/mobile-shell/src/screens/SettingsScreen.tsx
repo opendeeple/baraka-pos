@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
 import { DEFAULT_SERVER_URL } from '@baraka/shared'
 import {
@@ -14,6 +14,7 @@ import {
   SyncStatusBadge,
   toast,
   useTheme,
+  Text,
 } from '@baraka/mobile-ui'
 import { LANGUAGES, setAppLanguage, useTranslation, type AppLanguage } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
@@ -183,7 +184,12 @@ export function SettingsScreen({ extras }: { extras?: React.ReactNode }) {
       <Card style={styles.gapTop}>
         <Row label={t('settings.pending')} value={String(pending)} />
         <Row label={t('settings.failedDead')} value={String(dead)} valueColor={dead > 0 ? theme.danger : undefined} />
-        {lastResult ? <Row label={t('settings.lastSync')} value={lastResult} /> : null}
+        {lastResult ? (
+          <View style={styles.lastSync}>
+            <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('settings.lastSync')}</Text>
+            <Text style={[typeScale.sm, { color: theme.text }]}>{lastResult}</Text>
+          </View>
+        ) : null}
       </Card>
       <Button
         title={syncing ? t('settings.syncing') : t('settings.syncNow')}
@@ -248,4 +254,5 @@ const styles = StyleSheet.create({
   gapTop: { marginTop: spacing.sm },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
   logoutWrap: { marginTop: spacing.x3l },
+  lastSync: { gap: spacing.xxs },
 })

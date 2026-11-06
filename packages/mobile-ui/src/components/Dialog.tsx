@@ -1,8 +1,10 @@
 import { type ReactNode } from 'react'
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Text } from './Text'
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { radius, spacing, type } from '@baraka/ui-tokens'
 import { useTheme } from '../theme/ThemeProvider'
 import { Button } from './Button'
+import { ToastHost } from '../toast/ToastProvider'
 
 export interface DialogAction {
   label: string
@@ -64,6 +66,7 @@ export function Dialog({ visible, onClose, title, message, children, actions, ma
             ))}
           </View>
         </View>
+        <ToastHost />
       </KeyboardAvoidingView>
     </Modal>
   )

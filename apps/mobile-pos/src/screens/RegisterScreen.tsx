@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import { fmtUZS } from '@baraka/app-core'
 import { PULL_TABLE_ORDER } from '@baraka/sync-engine'
 import { useSyncSocket } from '@baraka/mobile-shell'
 import type { CategoryItem, ProductListItem } from '@baraka/data'
-import { BarcodeScannerModal, Dialog, Icon, IconButton, Input, Screen, Sheet, toast, useTheme } from '@baraka/mobile-ui'
+import { BarcodeScannerModal, Dialog, Icon, IconButton, Input, Screen, Sheet, toast, useTheme, Text } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { breakpoints, opacity, radius, spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
@@ -386,7 +386,7 @@ export function RegisterScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   containerRow: { flex: 1, flexDirection: 'row' },
   gridPane: { flex: 1, padding: spacing.md },
-  searchRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm, alignItems: 'flex-start' },
+  searchRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm, alignItems: 'center' },
   searchWrap: { flex: 1 },
   cartPane: { width: 360, borderLeftWidth: 1, padding: spacing.lg },
   cartBar: {

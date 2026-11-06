@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { StyleSheet, Text } from 'react-native'
+import { StyleSheet } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
-import { Dialog, NumPad, applyNumKey, toast, useTheme } from '@baraka/mobile-ui'
+import { Dialog, NumPad, applyNumKey, toast, useTheme, Text } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 
@@ -39,7 +39,12 @@ export function DiscountDialog({ visible, initial, maxAmount, onApply, onClose }
         { label: t('discount.apply'), tone: 'primary', onPress: apply },
       ]}
     >
-      <Text style={[typeScale.moneyDisplay, styles.entry, { color: theme.text }]}>
+      <Text
+        style={[typeScale.moneyDisplay, styles.entry, { color: theme.text }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.6}
+      >
         {entry ? fmtUZS(Number(entry)) : fmtUZS(0)}
       </Text>
       <NumPad onKey={(k) => setEntry((v) => applyNumKey(v, k))} />

@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { DeadStockRow, LossRow, ProductSalesRow } from '@baraka/data'
-import { Badge, Chip, Screen, useTheme } from '@baraka/mobile-ui'
+import { Badge, Chip, Screen, useTheme, Text } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
@@ -108,8 +108,10 @@ export function ReportsScreen() {
             onPress={() => setAbcFilter(abcFilter === s.cls ? 'all' : s.cls)}
           >
             <Badge label={`${s.cls} · ${s.count}`} tone={ABC_TONE[s.cls]} />
-            <Text style={[typeScale.sm, { color: theme.text, fontWeight: '700' }]}>{fmtUZS(s.revenue)}</Text>
-            <Text style={[typeScale.xs, { color: theme.success }]}>{t('reports.profit', { amount: fmtUZS(s.profit) })}</Text>
+            <Text style={[typeScale.sm, { color: theme.text, fontWeight: '700' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {fmtUZS(s.revenue)}
+            </Text>
+            <Text style={[typeScale.xs, { color: theme.success }]} numberOfLines={2}>{t('reports.profit', { amount: fmtUZS(s.profit) })}</Text>
           </Pressable>
         ))}
       </View>
@@ -123,7 +125,7 @@ export function ReportsScreen() {
                 <Badge label={r.cls} tone={ABC_TONE[r.cls]} />
                 <Text style={[typeScale.sm, { color: theme.text, flex: 1, marginLeft: spacing.sm }]} numberOfLines={1}>{r.name}</Text>
               </View>
-              <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('reports.sold', { qty: Math.round(r.qty * 1000) / 1000, pct: r.pct.toFixed(1) })}</Text>
+              <Text style={[typeScale.xs, { color: theme.textFaint }]} numberOfLines={1}>{t('reports.sold', { qty: Math.round(r.qty * 1000) / 1000, pct: r.pct.toFixed(1) })}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={[typeScale.sm, { color: theme.text, fontWeight: '700' }]}>{fmtUZS(r.revenue)}</Text>
@@ -163,12 +165,12 @@ export function ReportsScreen() {
       <Text style={[typeScale.lg, { color: theme.text, fontWeight: '700' }, styles.sectionTitle]}>{t('reports.lossesTitle')}</Text>
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
-          <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('reports.writeOffs')}</Text>
-          <Text style={[typeScale.md, { color: theme.danger, fontWeight: '700' }]}>{fmtUZS(writeoffTotal)}</Text>
+          <Text style={[typeScale.xs, { color: theme.textFaint }]} numberOfLines={1}>{t('reports.writeOffs')}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[typeScale.md, { color: theme.danger, fontWeight: '700' }]}>{fmtUZS(writeoffTotal)}</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('reports.stocktakeNet', { count: losses.stocktakeCount })}</Text>
-          <Text style={[typeScale.md, { color: losses.stocktakeSurplus - losses.stocktakeShortage >= 0 ? theme.success : theme.danger, fontWeight: '700' }]}>
+          <Text style={[typeScale.xs, { color: theme.textFaint }]} numberOfLines={1}>{t('reports.stocktakeNet', { count: losses.stocktakeCount })}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[typeScale.md, { color: losses.stocktakeSurplus - losses.stocktakeShortage >= 0 ? theme.success : theme.danger, fontWeight: '700' }]}>
             {fmtUZS(losses.stocktakeSurplus - losses.stocktakeShortage)}
           </Text>
         </View>
@@ -178,7 +180,7 @@ export function ReportsScreen() {
       ) : (
         losses.byReason.map((l) => (
           <View key={l.reason} style={styles.rowBetween}>
-            <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t(WRITEOFF_REASON_I18N[l.reason] ?? l.reason)} ×{l.count}</Text>
+            <Text style={[typeScale.sm, { color: theme.textMuted, flex: 1 }]} numberOfLines={1}>{t(WRITEOFF_REASON_I18N[l.reason] ?? l.reason)} ×{l.count}</Text>
             <Text style={[typeScale.sm, { color: theme.danger, fontWeight: '700' }]}>{fmtUZS(l.value)}</Text>
           </View>
         ))

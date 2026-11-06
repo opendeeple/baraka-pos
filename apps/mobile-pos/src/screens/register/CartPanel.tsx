@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { FlatList, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
+import { FlatList, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
-import { Button, EmptyState, IconButton, toast, useTheme } from '@baraka/mobile-ui'
+import { Button, EmptyState, IconButton, toast, useTheme, Text } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { radius, spacing, touch, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../../platform/services'
@@ -47,7 +47,7 @@ export function CartPanel({ onPay, onHold, onDiscountPress, expanded = false }: 
         // that Yoga ambiguity in both the Sheet and the two-pane sidebar.
         // Widened when the sheet is dragged open to full screen so the
         // extra height isn't wasted.
-        style={{ maxHeight: windowHeight * (expanded ? 0.62 : 0.38) }}
+        style={{ maxHeight: windowHeight * (expanded ? 0.62 : 0.38), flexShrink: 1 }}
         contentContainerStyle={styles.listInner}
         renderItem={({ item, index }) => (
           <View style={[styles.row, { backgroundColor: theme.surfaceRaised }]}>

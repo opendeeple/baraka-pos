@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { FlatList, StyleSheet, View } from 'react-native'
 import { fmtUZS } from '@baraka/app-core'
 import type { HeldCart } from '@baraka/data'
-import { Button, Dialog, EmptyState, IconButton, Sheet, useTheme } from '@baraka/mobile-ui'
+import { Button, Dialog, EmptyState, IconButton, Sheet, useTheme, Text } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
@@ -62,7 +62,7 @@ export function HeldOrdersModal({ onClose }: Props) {
               </View>
               {cart.items.slice(0, 3).map((i, idx) => (
                 <View key={idx} style={styles.previewRow}>
-                  <Text style={[typeScale.sm, { color: theme.textMuted }]} numberOfLines={1}>
+                  <Text style={[typeScale.sm, { color: theme.textMuted, flex: 1 }]} numberOfLines={1}>
                     {i.quantity}× {i.name}
                   </Text>
                   <Text style={[typeScale.sm, { color: theme.textMuted }]}>{fmtUZS(i.quantity * i.unitPrice)}</Text>
@@ -106,11 +106,11 @@ export function HeldOrdersModal({ onClose }: Props) {
 }
 
 const styles = StyleSheet.create({
-  list: { maxHeight: 480 },
+  list: { maxHeight: 480, flexShrink: 1 },
   listInner: { gap: spacing.sm, paddingBottom: spacing.sm },
   card: { borderWidth: 1, borderRadius: 12, padding: spacing.md, gap: spacing.xs },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.xs },
-  previewRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.xs },
+  previewRow: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   cardActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   flex1: { flex: 1 },
 })

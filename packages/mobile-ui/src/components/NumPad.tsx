@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Text } from './Text'
+import { Pressable, StyleSheet, View } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { opacity, radius, spacing } from '@baraka/ui-tokens'
 import { useTheme } from '../theme/ThemeProvider'

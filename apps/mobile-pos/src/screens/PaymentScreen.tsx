@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import { fmtUZS, renderReceiptText, type ReceiptDoc } from '@baraka/app-core'
 import type { PaymentMethod } from '@baraka/shared'
@@ -17,6 +17,7 @@ import {
   applyNumKey,
   toast,
   useTheme,
+  Text,
 } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { radius, spacing, type as typeScale } from '@baraka/ui-tokens'

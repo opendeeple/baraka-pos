@@ -291,7 +291,9 @@
     "receiveInto": "Qabul qilinadigan joy",
     "ordered": "Buyurtma qilingan: {{count}}",
     "markReceived": "Qabul qilindi deb belgilash",
-    "close": "Yopish"
+    "close": "Yopish",
+    "createOrderShort": "Buyurtma yaratish",
+    "orderTotal": "Jami"
   },
   "journal": {
     "groupAll": "Hammasi",

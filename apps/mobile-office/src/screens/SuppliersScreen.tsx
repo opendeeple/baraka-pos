@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { FlatList, StyleSheet, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { PayMethod, SupplierForm, SupplierOrderRow, SupplierPaymentRow, SupplierRow } from '@baraka/data'
@@ -15,6 +15,7 @@ import {
   Sheet,
   toast,
   useTheme,
+  Text,
 } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
@@ -92,7 +93,7 @@ export function SuppliersScreen() {
       {totalOwed > 0 && (
         <View style={styles.totalBar}>
           <Text style={[typeScale.sm, { color: theme.textMuted }]}>{t('suppliers.totalWeOwe')}</Text>
-          <Text style={[typeScale.md, { color: theme.danger, fontWeight: '700' }]}>{fmtUZS(totalOwed)}</Text>
+          <Text style={[typeScale.md, { color: theme.danger, fontWeight: '700', flexShrink: 1, textAlign: 'right' }]} numberOfLines={1} adjustsFontSizeToFit>{fmtUZS(totalOwed)}</Text>
         </View>
       )}
 
@@ -196,12 +197,12 @@ function SupplierDetailSheet({
       <View style={styles.form}>
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('suppliers.bought')}</Text>
-            <Text style={[typeScale.md, { color: theme.text, fontWeight: '700' }]}>{fmtUZS(supplier.bought)}</Text>
+            <Text style={[typeScale.xs, { color: theme.textFaint }]} numberOfLines={1}>{t('suppliers.bought')}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[typeScale.md, { color: theme.text, fontWeight: '700' }]}>{fmtUZS(supplier.bought)}</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('suppliers.weOwe')}</Text>
-            <Text style={[typeScale.md, { color: supplier.owed > 0 ? theme.danger : theme.success, fontWeight: '700' }]}>
+            <Text style={[typeScale.xs, { color: theme.textFaint }]} numberOfLines={1}>{t('suppliers.weOwe')}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[typeScale.md, { color: supplier.owed > 0 ? theme.danger : theme.success, fontWeight: '700' }]}>
               {fmtUZS(supplier.owed)}
             </Text>
           </View>
@@ -219,7 +220,7 @@ function SupplierDetailSheet({
             const due = o.totalAmount - o.amountPaid
             return (
               <View key={o.id} style={[styles.rowItem, { borderColor: theme.border }]}>
-                <Text style={[typeScale.sm, { color: theme.text }]}>{o.referenceNumber ?? o.id}</Text>
+                <Text style={[typeScale.sm, { color: theme.text, flex: 1 }]} numberOfLines={1}>{o.referenceNumber ?? o.id}</Text>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={[typeScale.sm, { color: theme.text }]}>{fmtUZS(o.totalAmount)}</Text>
                   <Text style={[typeScale.xs, { color: o.status !== 'received' ? theme.warning : due > 0.001 ? theme.danger : theme.success }]}>
@@ -236,7 +237,7 @@ function SupplierDetailSheet({
             <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('suppliers.payments')}</Text>
             {payments.map((p) => (
               <View key={p.id} style={[styles.rowItem, { borderColor: theme.border }]}>
-                <Text style={[typeScale.sm, { color: theme.textMuted }]}>
+                <Text style={[typeScale.sm, { color: theme.textMuted, flex: 1 }]} numberOfLines={1}>
                   {String(p.createdAt).slice(0, 10)} · {t(METHOD_I18N[(p.paymentMethod as PayMethod) ?? 'Cash'])}
                 </Text>
                 <Text style={[typeScale.sm, { color: theme.success, fontWeight: '600' }]}>{fmtUZS(p.amount)}</Text>
@@ -279,8 +280,8 @@ function SupplierPaySheet({
     >
       <View style={styles.form}>
         <View style={[styles.statCard, styles.fullWidthCard]}>
-          <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('suppliers.weOwe')}</Text>
-          <Text style={[typeScale.lg, { color: theme.danger, fontWeight: '700' }]}>{fmtUZS(supplier.owed)}</Text>
+          <Text style={[typeScale.xs, { color: theme.textFaint }]} numberOfLines={1}>{t('suppliers.weOwe')}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[typeScale.lg, { color: theme.danger, fontWeight: '700' }]}>{fmtUZS(supplier.owed)}</Text>
         </View>
         <Input
           label={t('suppliers.amount')}
@@ -302,9 +303,9 @@ function SupplierPaySheet({
 }
 
 const styles = StyleSheet.create({
-  toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'flex-start' },
+  toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'center' },
   searchWrap: { flex: 1 },
-  totalBar: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingTop: spacing.sm },
+  totalBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.sm },
   list: { padding: spacing.md, gap: spacing.sm, flexGrow: 1 },
   form: { gap: spacing.sm, paddingBottom: spacing.sm },
   statsRow: { flexDirection: 'row', gap: spacing.sm },

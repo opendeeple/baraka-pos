@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import { fmtUZS } from '@baraka/app-core'
 import {
@@ -11,6 +11,7 @@ import {
   Screen,
   applyNumKey,
   useTheme,
+  Text,
 } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'

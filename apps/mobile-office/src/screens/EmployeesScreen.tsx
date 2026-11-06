@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { FlatList, StyleSheet, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { fmtUZS } from '@baraka/app-core'
 import type { EmployeeForm, EmployeeRole, EmployeeRow, SalaryRecordRow } from '@baraka/data'
@@ -16,6 +16,7 @@ import {
   Sheet,
   toast,
   useTheme,
+  Text,
 } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
@@ -161,7 +162,7 @@ export function EmployeesScreen() {
           />
           <View style={styles.row2}>
             <Input label={t('employees.monthlySalary')} value={form.salary} onChangeText={(v) => setForm((p) => ({ ...p, salary: v }))} keyboardType="numeric" containerStyle={styles.flex1} />
-            <Input label={t('employees.hireDate')} value={form.hireDate} onChangeText={(v) => setForm((p) => ({ ...p, hireDate: v }))} containerStyle={styles.flex1} />
+            <Input label={t('employees.hireDate')} placeholder="YYYY-MM-DD" value={form.hireDate} onChangeText={(v) => setForm((p) => ({ ...p, hireDate: v }))} containerStyle={styles.flex1} />
           </View>
         </View>
       </Sheet>
@@ -215,12 +216,12 @@ function EmployeeDetailSheet({
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('employees.monthlySalary')}</Text>
-            <Text style={[typeScale.md, { color: theme.text, fontWeight: '700' }]}>{employee.salary ? fmtUZS(employee.salary) : '—'}</Text>
+            <Text style={[typeScale.xs, { color: theme.textFaint }]} numberOfLines={1}>{t('employees.monthlySalary')}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[typeScale.md, { color: theme.text, fontWeight: '700' }]}>{employee.salary ? fmtUZS(employee.salary) : '—'}</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={[typeScale.xs, { color: theme.textFaint }]}>{t('employees.hired')}</Text>
-            <Text style={[typeScale.md, { color: theme.text, fontWeight: '700' }]}>{employee.hireDate ?? '—'}</Text>
+            <Text style={[typeScale.xs, { color: theme.textFaint }]} numberOfLines={1}>{t('employees.hired')}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[typeScale.md, { color: theme.text, fontWeight: '700' }]}>{employee.hireDate ?? '—'}</Text>
           </View>
         </View>
 
@@ -235,7 +236,7 @@ function EmployeeDetailSheet({
         </View>
 
         <View style={styles.rowBetween}>
-          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600' }]}>{t('employees.salaryPayments')}</Text>
+          <Text style={[typeScale.sm, { color: theme.textMuted, fontWeight: '600', flex: 1 }]} numberOfLines={2}>{t('employees.salaryPayments')}</Text>
           <Button title={t('employees.recordPayment')} icon="plus" size="sm" variant="secondary" onPress={() => setShowSalaryForm(true)} />
         </View>
         {records.length === 0 ? (
@@ -316,8 +317,8 @@ function SalaryPaymentSheet({
       <View style={styles.form}>
         <Input label={t('employees.amountUzs')} value={amount} onChangeText={setAmount} keyboardType="numeric" autoFocus />
         <View style={styles.row2}>
-          <Input label={t('employees.periodFrom')} value={periodFrom} onChangeText={setPeriodFrom} containerStyle={styles.flex1} />
-          <Input label={t('employees.periodTo')} value={periodTo} onChangeText={setPeriodTo} containerStyle={styles.flex1} />
+          <Input label={t('employees.periodFrom')} placeholder="YYYY-MM-DD" value={periodFrom} onChangeText={setPeriodFrom} containerStyle={styles.flex1} />
+          <Input label={t('employees.periodTo')} placeholder="YYYY-MM-DD" value={periodTo} onChangeText={setPeriodTo} containerStyle={styles.flex1} />
         </View>
         <Input label={t('common.noteOptional')} value={note} onChangeText={setNote} />
       </View>
@@ -326,16 +327,16 @@ function SalaryPaymentSheet({
 }
 
 const styles = StyleSheet.create({
-  toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'flex-start' },
+  toolbar: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md, paddingBottom: 0, alignItems: 'center' },
   searchWrap: { flex: 1 },
   list: { padding: spacing.md, gap: spacing.sm, flexGrow: 1 },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   form: { gap: spacing.sm, paddingBottom: spacing.sm },
-  row2: { flexDirection: 'row', gap: spacing.sm },
+  row2: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-end' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   statsRow: { flexDirection: 'row', gap: spacing.sm },
   statCard: { flex: 1, borderRadius: 8, padding: spacing.sm, backgroundColor: 'rgba(255,255,255,0.04)' },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.sm },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
   rowItem: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     borderWidth: 1, borderRadius: 8, padding: spacing.sm,

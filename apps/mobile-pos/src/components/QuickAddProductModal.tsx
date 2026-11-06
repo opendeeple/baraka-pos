@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import type { ProductListItem } from '@baraka/data'
-import { Button, Icon, Input, Sheet, toast, useTheme } from '@baraka/mobile-ui'
+import { Button, Icon, Input, Sheet, toast, useTheme, Text } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { spacing, type as typeScale } from '@baraka/ui-tokens'
 import { getServices } from '../platform/services'
@@ -167,7 +167,7 @@ export function QuickAddProductModal({ barcode, onClose, onCreated }: Props) {
 
 const styles = StyleSheet.create({
   body: { gap: spacing.sm, paddingBottom: spacing.sm },
-  row2: { flexDirection: 'row', gap: spacing.sm },
+  row2: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-end' },
   banner: { flexDirection: 'row', gap: spacing.sm, borderWidth: 1, borderRadius: 8, padding: spacing.sm, alignItems: 'flex-start' },
   similarList: { gap: spacing.xs },
   similarRow: { borderWidth: 1, borderRadius: 8, padding: spacing.sm },

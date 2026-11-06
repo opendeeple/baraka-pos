@@ -1,4 +1,5 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native'
+import { Text } from './Text'
+import { ActivityIndicator, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { opacity, radius, spacing, touch, type } from '@baraka/ui-tokens'
 import { useTheme } from '../theme/ThemeProvider'

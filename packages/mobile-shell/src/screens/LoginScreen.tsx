@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import type { AuthUser } from '@baraka/shared'
-import { Button, Input, Screen, useTheme } from '@baraka/mobile-ui'
+import { Button, Input, Screen, useTheme, Text } from '@baraka/mobile-ui'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { type as typeScale, spacing } from '@baraka/ui-tokens'
 import { DEFAULT_SERVER_URL } from '@baraka/shared'
@@ -87,10 +87,10 @@ export function LoginScreen({ subtitle }: LoginScreenProps) {
   }
 
   return (
-    <Screen keyboard="avoid" edges={['top', 'bottom', 'left', 'right']}>
+    <Screen scroll keyboard="avoid" edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.center}>
         <Text style={[styles.logo, { color: theme.primary }]}>BarakaPOS</Text>
-        <Text style={[typeScale.sm, styles.subtitle, { color: theme.textMuted }]}>{subtitle}</Text>
+        <Text style={[typeScale.sm, styles.subtitle, { color: theme.textMuted, textAlign: 'center' }]}>{subtitle}</Text>
 
         {restoring ? (
           <ActivityIndicator color={theme.primary} />
@@ -133,7 +133,7 @@ export function LoginScreen({ subtitle }: LoginScreenProps) {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  logo: { fontSize: 40, fontWeight: 'bold' },
+  logo: { fontSize: 36, lineHeight: 44, fontWeight: 'bold' },
   subtitle: { marginBottom: spacing.x3l },
   form: { width: '100%', maxWidth: 380, gap: spacing.md },
   submit: { marginTop: spacing.sm },

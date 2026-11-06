@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { Text } from './Text'
+import { StyleSheet, View } from 'react-native'
 import { useTranslation } from '@baraka/mobile-i18n'
 import { radius, spacing, type } from '@baraka/ui-tokens'
 import { useTheme } from '../theme/ThemeProvider'

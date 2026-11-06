@@ -92,7 +92,7 @@ export function CustomerPickerModal({ visible, onClose, onSelect }: Props) {
 }
 
 const styles = StyleSheet.create({
-  results: { maxHeight: 320, marginTop: spacing.sm },
+  results: { maxHeight: 320, flexShrink: 1, marginTop: spacing.sm },
   resultsInner: { gap: spacing.xs },
   createBox: { marginTop: spacing.sm, gap: spacing.sm },
   createActions: { flexDirection: 'row', gap: spacing.sm },
